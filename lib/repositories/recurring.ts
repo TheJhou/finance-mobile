@@ -1,0 +1,140 @@
+import { generateId, getDb } from "@/lib/db";
+import type {
+  Category,
+  Frequency,
+  PaymentMethod,
+  RecurringTransaction,
+  TransactionType,
+} from "@/lib/types";
+
+interface RecurringRow {
+  id: string;
+  description: string;
+  amount: number;
+  type: TransactionType;
+  frequency: Frequency;
+  payment_method: PaymentMethod;
+  is_active: number;
+  start_date: string;
+  end_date: string | null;
+  next_due_date: string;
+  category_id: string;
+  created_at: string;
+  updated_at: string;
+  category_name: string | null;
+  category_color: string | null;
+  category_icon: string | null;
+  category_is_default: number | null;
+}
+
+function mapRecurring(row: RecurringRow): RecurringTransaction {
+  const category: Category | undefined = row.category_name
+    ? {
+        id: row.category_id,
+        name: row.category_name,
+        color: row.category_color ?? "#6366f1",
+        icon: row.category_icon ?? "tag",
+        isDefault: (row.category_is_default ?? 0) === 1,
+      }
+    : undefined;
+  return {
+    id: row.id,
+    description: row.description,
+    amount: row.amount,
+    type: row.type,
+    frequency: row.frequency,
+    paymentMethod: row.payment_method,
+    isActive: row.is_active === 1,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    nextDueDate: row.next_due_date,
+    categoryId: row.category_id,
+    category,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+const BASE_SELECT = `
+  SELECT
+    r.id, r.description, r.amount, r.type, r.frequency, r.payment_method,
+    r.is_active, r.start_date, r.end_date, r.next_due_date,
+    r.category_id, r.created_at, r.updated_at,
+    c.name as category_name, c.color as category_color,
+    c.icon as category_icon, c.is_default as category_is_default
+  FROM recurring_transactions r
+  LEFT JOIN categories c ON c.id = r.category_id
+`;
+
+export async function listRecurring(): Promise<RecurringTransaction[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<RecurringRow>(
+    `${BASE_SELECT} ORDER BY r.is_active DESC, r.next_due_date ASC`
+  );
+  return rows.map(mapRecurring);
+}
+
+export async function getRecurring(
+  id: string
+): Promise<RecurringTransaction | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<RecurringRow>(
+    `${BASE_SELECT} WHERE r.id = ?`,
+    [id]
+  );
+  return row ? mapRecurring(row) : null;
+}
+
+export async function createRecurring(data: {
+  description: string;
+  amount: number;
+  type: TransactionType;
+  frequency: Frequency;
+  paymentMethod?: PaymentMethod;
+  isActive?: boolean;
+  startDate: string;
+  endDate?: string | null;
+  nextDueDate: string;
+  categoryId: string;
+}): Promise<RecurringTransaction> {
+  const db = await getDb();
+  const id = generateId();
+  await db.runAsync(
+    `INSERT INTO recurring_transactions
+      (id, description, amount, type, frequency, payment_method, is_active,
+       start_date, end_date, next_due_date, category_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      id,
+      data.description,
+      data.amount,
+      data.type,
+      data.frequency,
+      data.paymentMethod ?? "CASH",
+      data.isActive === false ? 0 : 1,
+      data.startDate,
+      data.endDate ?? null,
+      data.nextDueDate,
+      data.categoryId,
+    ]
+  );
+  const created = await getRecurring(id);
+  if (!created) throw new Error("Failed to create recurring transaction");
+  return created;
+}
+
+export async function deleteRecurring(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync("DELETE FROM recurring_transactions WHERE id = ?", [id]);
+}
+
+export async function toggleRecurringActive(
+  id: string,
+  isActive: boolean
+): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    "UPDATE recurring_transactions SET is_active = ?, updated_at = datetime('now') WHERE id = ?",
+    [isActive ? 1 : 0, id]
+  );
+}
