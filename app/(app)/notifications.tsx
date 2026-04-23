@@ -12,8 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import BankNotifications from "@/modules/bank-notifications";
-import type { BankNotificationEvent } from "@/modules/bank-notifications/src/BankNotifications.types";
+import BankNotifications, {
+  type BankNotificationEvent,
+} from "@/modules/bank-notifications";
 import {
   parseNotification,
   type ParsedTransaction,
