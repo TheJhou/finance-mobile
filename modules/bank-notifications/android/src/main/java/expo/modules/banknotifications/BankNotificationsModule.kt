@@ -24,10 +24,12 @@ class BankNotificationsModule : Module() {
     }
 
     Function("openPermissionSettings") {
-      val context = appContext.reactContext ?: return@Function
-      val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-      intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-      context.startActivity(intent)
+      val context = appContext.reactContext
+      if (context != null) {
+        val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+      }
     }
 
     OnStartObserving("onNotification") {
