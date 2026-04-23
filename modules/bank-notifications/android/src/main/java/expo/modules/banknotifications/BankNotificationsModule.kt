@@ -4,6 +4,7 @@ import android.content.Intent
 import android.provider.Settings
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.lang.ref.WeakReference
 
 class BankNotificationsModule : Module() {
   override fun definition() = ModuleDefinition {
@@ -16,10 +17,10 @@ class BankNotificationsModule : Module() {
       val enabledListeners = Settings.Secure.getString(
         context.contentResolver,
         "enabled_notification_listeners"
-      )
+      ) ?: return@Function false
       val componentName =
         "${context.packageName}/${BankNotificationListenerService::class.java.name}"
-      enabledListeners != null && enabledListeners.contains(componentName)
+      enabledListeners.split(":").any { it == componentName }
     }
 
     Function("openPermissionSettings") {
@@ -30,8 +31,9 @@ class BankNotificationsModule : Module() {
     }
 
     OnStartObserving("onNotification") {
+      val weakModule = WeakReference(this@BankNotificationsModule)
       BankNotificationListenerService.listener = { payload ->
-        sendEvent("onNotification", payload)
+        weakModule.get()?.sendEvent("onNotification", payload)
       }
     }
 

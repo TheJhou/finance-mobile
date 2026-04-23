@@ -36,11 +36,22 @@ export function isKnownBank(packageName: string): boolean {
 }
 
 function parseAmount(source: string): number | null {
-  const match = source.match(/R?\$?\s*([\d]{1,3}(?:\.\d{3})*,\d{2}|[\d]+,\d{2})/);
-  if (!match) return null;
-  const normalized = match[1].replace(/\./g, "").replace(",", ".");
-  const num = parseFloat(normalized);
-  return Number.isFinite(num) && num > 0 ? num : null;
+  // Primary: with decimals (Brazilian format: 1.234,56 or 45,90)
+  let match = source.match(
+    /R?\$?\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/
+  );
+  if (match) {
+    const normalized = match[1].replace(/\./g, "").replace(",", ".");
+    const num = parseFloat(normalized);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  // Fallback: integer values (rare but possible, e.g., "R$ 100")
+  match = source.match(/R\$\s*(\d+)(?!\d*[.,])/);
+  if (match) {
+    const num = parseInt(match[1], 10);
+    if (Number.isFinite(num) && num > 0) return num;
+  }
+  return null;
 }
 
 type PartialParsed = Omit<ParsedTransaction, "bank">;
