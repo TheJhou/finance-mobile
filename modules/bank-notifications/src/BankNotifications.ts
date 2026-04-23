@@ -6,4 +6,11 @@ declare class BankNotificationsModule extends NativeModule<BankNotificationsModu
   openPermissionSettings(): void;
 }
 
-export default requireNativeModule<BankNotificationsModule>("BankNotifications");
+let mod: BankNotificationsModule | null = null;
+try {
+  mod = requireNativeModule<BankNotificationsModule>("BankNotifications");
+} catch {
+  // Native module unavailable (Expo Go)
+}
+
+export default mod;

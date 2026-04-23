@@ -22,10 +22,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.financeapp"
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
+    "platforms": ["android", "ios"],
     "plugins": [
       "expo-router",
       [

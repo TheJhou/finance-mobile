@@ -41,9 +41,11 @@ export default function NotificationsScreen() {
   );
   const seenRef = useRef<Set<string>>(new Set());
 
+  const moduleAvailable = BankNotifications != null;
+
   const checkPermission = useCallback(() => {
     try {
-      setGranted(BankNotifications.isPermissionGranted());
+      setGranted(BankNotifications?.isPermissionGranted() ?? false);
     } catch {
       setGranted(false);
     }
@@ -72,6 +74,7 @@ export default function NotificationsScreen() {
   }, [checkPermission]);
 
   useEffect(() => {
+    if (!BankNotifications) return;
     const sub = BankNotifications.addListener(
       "onNotification",
       (event: BankNotificationEvent) => {
@@ -129,7 +132,7 @@ export default function NotificationsScreen() {
 
   const openSettings = () => {
     try {
-      BankNotifications.openPermissionSettings();
+      BankNotifications?.openPermissionSettings();
     } catch (err) {
       Alert.alert(
         "Erro",
@@ -146,6 +149,18 @@ export default function NotificationsScreen() {
           Capture notificações de bancos automaticamente
         </Text>
       </View>
+
+      {!moduleAvailable && (
+        <View style={[styles.permissionCard, { borderColor: colors.danger, backgroundColor: "#fee2e2" }]}>
+          <Ionicons name="warning" size={24} color={colors.danger} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.permissionTitle}>Módulo nativo indisponível</Text>
+            <Text style={styles.permissionText}>
+              Esta funcionalidade requer o APK nativo. No Expo Go apenas as outras abas funcionam.
+            </Text>
+          </View>
+        </View>
+      )}
 
       <ScrollView
         style={{ flex: 1 }}
