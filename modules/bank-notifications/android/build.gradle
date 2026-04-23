@@ -7,4 +7,9 @@ version = '0.1.0'
 
 android {
   namespace "expo.modules.banknotifications"
+
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
 }
