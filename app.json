@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "finance-mobile",
-    "slug": "finance-mobile",
+    "name": "Finance App",
+    "slug": "finance-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.thejhou.financeapp"
     },
     "web": {
       "output": "static",
@@ -45,6 +46,13 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "818949ee-cfa1-4f4d-95d1-13de0a26d225"
+      }
+    },
+    "owner": "thejhou"
   }
 }
