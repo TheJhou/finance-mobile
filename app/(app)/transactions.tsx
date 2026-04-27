@@ -259,7 +259,8 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setDate(toDateInputValue(new Date()));
       setCategoryId(null);
     }
-  }, [editingItem, visible, categories]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingItem, visible]);
 
   const handlePhotoScan = async () => {
     try {

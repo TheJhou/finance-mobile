@@ -299,7 +299,8 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: RecurringForm
       setNextDueDate(toDateInputValue(new Date()));
       setCategoryId(null);
     }
-  }, [editingItem, visible, categories]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingItem, visible]);
 
   const handleSave = async () => {
     const parsedAmount = parseCurrencyInput(amount);

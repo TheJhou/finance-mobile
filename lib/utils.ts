@@ -8,7 +8,7 @@ export function formatCurrency(value: number | string): string {
 }
 
 export function formatDate(value: string | Date): string {
-  const date = typeof value === "string" ? new Date(value) : value;
+  const date = typeof value === "string" ? new Date(value.includes("T") ? value : value + "T00:00:00") : value;
   if (Number.isNaN(date.getTime())) return "";
   return date.toLocaleDateString("pt-BR");
 }

@@ -1,42 +1,48 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  Alert,
-  AppState,
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import * as DocumentPicker from "expo-document-picker";
-import { Audio } from "expo-av";
-import BankNotifications, {
-  type BankNotificationEvent,
-} from "@/modules/bank-notifications";
-import {
-  parseNotification,
-  type ParsedTransaction,
-} from "@/lib/notifications/parsers";
 import { Button } from "@/components/ui/button";
+import { extractTransactionFromText } from "@/lib/ai";
+import { isAuthenticated, login, logout } from "@/lib/auth";
+import { analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
+import { isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
+import {
+    parseNotification,
+    type ParsedTransaction,
+} from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
-import { getStoredApiKey, setApiKey, extractTransactionFromText } from "@/lib/ai";
-import { transcribeAudio, ocrDocument, analyzeText } from "@/lib/backend";
-import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category } from "@/lib/types";
-import { isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
+import { formatCurrency, toDateInputValue } from "@/lib/utils";
+import BankNotifications, {
+    type BankNotificationEvent,
+} from "@/modules/bank-notifications";
+import { Ionicons } from "@expo/vector-icons";
+import { Audio } from "expo-av";
+import * as DocumentPicker from "expo-document-picker";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import {
+    Alert,
+    AppState,
+    FlatList,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface PendingItem extends ParsedTransaction {
   key: string;
   raw: string;
   postTime: number;
+}
+
+function normalizeType(type: unknown): "INCOME" | "EXPENSE" {
+  if (typeof type === "string" && type.toUpperCase() === "INCOME") return "INCOME";
+  return "EXPENSE";
 }
 
 export default function NotificationsScreen() {
@@ -46,9 +52,11 @@ export default function NotificationsScreen() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null
   );
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [apiKey, setApiKeyInput] = useState("");
-  const [savingApiKey, setSavingApiKey] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loggingIn, setLoggingIn] = useState(false);
   const [freeText, setFreeText] = useState("");
   const [processingText, setProcessingText] = useState(false);
   const [processingDocument, setProcessingDocument] = useState(false);
@@ -73,17 +81,17 @@ export default function NotificationsScreen() {
     }
   }, []);
 
-  const loadApiKey = useCallback(async () => {
-    const key = await getStoredApiKey();
-    if (key) setApiKeyInput(key);
+  const checkAuth = useCallback(async () => {
+    const authed = await isAuthenticated();
+    setLoggedIn(authed);
   }, []);
 
   useFocusEffect(
     useCallback(() => {
       checkPermission();
       loadCategories();
-      loadApiKey();
-    }, [checkPermission, loadCategories, loadApiKey])
+      checkAuth();
+    }, [checkPermission, loadCategories, checkAuth])
   );
 
   useEffect(() => {
@@ -134,7 +142,7 @@ export default function NotificationsScreen() {
             date: toDateInputValue(new Date(event.postTime)),
             categoryId: selectedCategoryId,
             notes: `Importado de ${parsed.bank}`,
-            status: parsed.amount >= 500 ? "PENDING" : "PAID",
+            status: "PAID",
           });
 
           // Marcar como processado no banco
@@ -180,21 +188,29 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleSaveApiKey = async () => {
-    if (!apiKey.trim()) {
-      Alert.alert("Erro", "Informe a API Key");
+  const handleLogin = async () => {
+    if (!loginEmail.trim() || !loginPassword.trim()) {
+      Alert.alert("Erro", "Preencha e-mail e senha");
       return;
     }
-    setSavingApiKey(true);
+    setLoggingIn(true);
     try {
-      await setApiKey(apiKey.trim());
-      setShowApiKeyModal(false);
-      Alert.alert("Sucesso", "API Key configurada!");
+      await login(loginEmail.trim(), loginPassword.trim());
+      setLoggedIn(true);
+      setShowLoginModal(false);
+      setLoginEmail("");
+      setLoginPassword("");
+      Alert.alert("Sucesso", "Login realizado!");
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao salvar");
+      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao fazer login");
     } finally {
-      setSavingApiKey(false);
+      setLoggingIn(false);
     }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    setLoggedIn(false);
   };
 
   const handleProcessText = async () => {
@@ -217,7 +233,7 @@ export default function NotificationsScreen() {
         date: extracted.date,
         categoryId,
         notes: "Importado via texto livre",
-        status: extracted.amount >= 500 ? "PENDING" : "PAID",
+        status: "PAID",
       });
 
       setFreeText("");
@@ -251,11 +267,11 @@ export default function NotificationsScreen() {
       await createTransaction({
         description: analysis.draft.description,
         amount: analysis.draft.amount,
-        type: analysis.draft.type,
+        type: normalizeType(analysis.draft.type),
         date: analysis.draft.date,
         categoryId,
         notes: `Importado via documento: ${asset.name}`,
-        status: analysis.draft.amount >= 500 ? "PENDING" : "PAID",
+        status: "PENDING",
       });
 
       Alert.alert("Sucesso", "Transação criada automaticamente!");
@@ -278,9 +294,13 @@ export default function NotificationsScreen() {
         return;
       }
 
-      const recording = new Audio.Recording();
-      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
-      await recording.startAsync();
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
       setRecording(recording);
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao gravar");
@@ -289,10 +309,12 @@ export default function NotificationsScreen() {
 
   const handleStopRecording = async () => {
     if (!recording) return;
+    const currentRecording = recording;
+    setRecording(null);
     try {
       setProcessingAudio(true);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
+      await currentRecording.stopAndUnloadAsync();
+      const uri = currentRecording.getURI();
       if (!uri) throw new Error("Falha ao obter URI do áudio");
 
       const transcribedText = await transcribeAudio(uri, "audio/webm");
@@ -302,14 +324,13 @@ export default function NotificationsScreen() {
       await createTransaction({
         description: analysis.draft.description,
         amount: analysis.draft.amount,
-        type: analysis.draft.type,
+        type: normalizeType(analysis.draft.type),
         date: analysis.draft.date,
         categoryId,
         notes: "Importado via áudio",
-        status: analysis.draft.amount >= 500 ? "PENDING" : "PAID",
+        status: "PAID",
       });
 
-      setRecording(null);
       Alert.alert("Sucesso", "Transação criada automaticamente!");
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar áudio");
@@ -372,36 +393,27 @@ export default function NotificationsScreen() {
           )}
         </View>
 
-        <View
-          style={[
-            styles.permissionCard,
-            {
-              borderColor: apiKey ? colors.incomeFg : colors.border,
-              backgroundColor: apiKey ? colors.incomeBg : colors.surface,
-            },
-          ]}
-        >
-          <Ionicons
-            name="key-outline"
-            size={24}
-            color={apiKey ? colors.incomeFg : colors.textSecondary}
-          />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.permissionTitle}>
-              {apiKey ? "API Key configurada" : "API Key da OpenAI"}
-            </Text>
-            <Text style={styles.permissionText}>
-              {apiKey
-                ? "A IA está pronta para escanear recibos."
-                : "Configure sua API Key da OpenAI para usar o escaneamento de recibos por foto."}
-            </Text>
+        {!loggedIn && (
+          <View
+            style={[
+              styles.permissionCard,
+              { borderColor: colors.border, backgroundColor: colors.surface },
+            ]}
+          >
+            <Ionicons name="log-in-outline" size={24} color={colors.textSecondary} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.permissionTitle}>Login necessário</Text>
+              <Text style={styles.permissionText}>
+                Faça login uma vez para usar IA, áudio, documentos e importações.
+              </Text>
+            </View>
+            <Button
+              title="Entrar"
+              onPress={() => setShowLoginModal(true)}
+              variant="secondary"
+            />
           </View>
-          <Button
-            title={apiKey ? "Alterar" : "Configurar"}
-            onPress={() => setShowApiKeyModal(true)}
-            variant="secondary"
-          />
-        </View>
+        )}
 
         {categories.length > 0 && (
           <View style={{ gap: spacing.sm }}>
@@ -557,30 +569,40 @@ export default function NotificationsScreen() {
         </View>
       </ScrollView>
 
-      <Modal visible={showApiKeyModal} animationType="slide" onRequestClose={() => setShowApiKeyModal(false)}>
+      <Modal visible={showLoginModal} animationType="slide" onRequestClose={() => setShowLoginModal(false)}>
         <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
           <View style={styles.modalHeader}>
-            <Pressable onPress={() => setShowApiKeyModal(false)} hitSlop={10}>
+            <Pressable onPress={() => setShowLoginModal(false)} hitSlop={10}>
               <Ionicons name="close" size={26} color={colors.textPrimary} />
             </Pressable>
-            <Text style={styles.modalTitle}>Configurar API Key</Text>
+            <Text style={styles.modalTitle}>Login</Text>
             <View style={{ width: 26 }} />
           </View>
           <ScrollView contentContainerStyle={styles.modalContent}>
-            <Text style={styles.modalLabel}>OpenAI API Key</Text>
+            <Text style={styles.modalLabel}>E-mail</Text>
             <TextInput
               style={styles.modalInput}
-              value={apiKey}
-              onChangeText={setApiKeyInput}
-              placeholder="sk-..."
+              value={loginEmail}
+              onChangeText={setLoginEmail}
+              placeholder="seu@email.com"
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+            />
+            <Text style={styles.modalLabel}>Senha</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={loginPassword}
+              onChangeText={setLoginPassword}
+              placeholder="Sua senha"
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
             />
             <Text style={styles.modalHint}>
-              Sua API Key é usada para processar fotos de recibos. Ela é armazenada localmente no seu dispositivo.
+              Suas credenciais são usadas para autenticar com o servidor. A chave da IA fica protegida no backend.
             </Text>
-            <Button title="Salvar" onPress={handleSaveApiKey} loading={savingApiKey} />
+            <Button title="Entrar" onPress={handleLogin} loading={loggingIn} />
           </ScrollView>
         </SafeAreaView>
       </Modal>
