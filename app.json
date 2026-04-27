@@ -22,7 +22,10 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.financeapp"
     },
-    "platforms": ["android", "ios"],
+    "platforms": [
+      "android",
+      "ios"
+    ],
     "plugins": [
       "expo-router",
       [
@@ -38,7 +41,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
