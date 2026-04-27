@@ -1,20 +1,20 @@
-import { useCallback, useState } from "react";
-import {
-  ActivityIndicator,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import { PieChart, BarChart } from "react-native-gifted-charts";
 import { getDashboard } from "@/lib/repositories/dashboard";
-import { formatCurrency } from "@/lib/utils";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { DashboardData } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useState } from "react";
+import {
+    ActivityIndicator,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { BarChart, PieChart } from "react-native-gifted-charts";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 function greeting() {
   const h = new Date().getHours();
@@ -229,8 +229,6 @@ export default function DashboardScreen() {
                   xAxisLabelTextStyle={{ fontSize: 10, color: colors.textSecondary }}
                   noOfSections={4}
                   height={180}
-                  yAxisLabel=""
-                  yAxisSuffix=""
                 />
               </View>
             )}

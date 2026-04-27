@@ -1,34 +1,34 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import {
-  createRecurring,
-  deleteRecurring,
-  listRecurring,
-  toggleRecurringActive,
-  updateRecurring,
-} from "@/lib/repositories/recurring";
+import { Input } from "@/components/ui/input";
 import { listCategories } from "@/lib/repositories/categories";
-import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
+import {
+    createRecurring,
+    deleteRecurring,
+    listRecurring,
+    toggleRecurringActive,
+    updateRecurring,
+} from "@/lib/repositories/recurring";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, Frequency, RecurringTransaction, TransactionType } from "@/lib/types";
+import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const frequencyLabel: Record<Frequency, string> = {
   WEEKLY: "Semanal",
@@ -272,7 +272,10 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: RecurringForm
 
   useEffect(() => {
     if (!visible) return;
-    listCategories().then((cats) => setCategories(cats));
+    listCategories().then((cats) => {
+      setCategories(cats);
+      if (!editingItem && cats.length > 0) setCategoryId(cats[0].id);
+    });
     setErr(null);
   }, [visible]);
 
@@ -294,7 +297,7 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: RecurringForm
       setStartDate(toDateInputValue(new Date()));
       setEndDate("");
       setNextDueDate(toDateInputValue(new Date()));
-      setCategoryId(categories.length > 0 ? categories[0].id : null);
+      setCategoryId(null);
     }
   }, [editingItem, visible, categories]);
 

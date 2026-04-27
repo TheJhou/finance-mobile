@@ -1,35 +1,35 @@
-import { useCallback, useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { extractTransactionFromPhoto } from "@/lib/ai";
+import { listCategories } from "@/lib/repositories/categories";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+    createTransaction,
+    deleteTransaction,
+    listTransactions,
+    updateTransaction,
+} from "@/lib/repositories/transactions";
+import { colors, radius, spacing } from "@/lib/theme";
+import type { Category, Transaction, TransactionType } from "@/lib/types";
+import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { useCallback, useEffect, useState } from "react";
 import {
-  createTransaction,
-  deleteTransaction,
-  listTransactions,
-  updateTransaction,
-} from "@/lib/repositories/transactions";
-import { listCategories } from "@/lib/repositories/categories";
-import { extractTransactionFromPhoto } from "@/lib/ai";
-import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
-import { colors, radius, spacing } from "@/lib/theme";
-import type { Category, Transaction, TransactionType } from "@/lib/types";
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function TransactionsScreen() {
   const [items, setItems] = useState<Transaction[]>([]);
@@ -239,6 +239,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
     if (!visible) return;
     listCategories().then((cats) => {
       setCategories(cats);
+      if (!editingItem && cats.length > 0) setCategoryId(cats[0].id);
     });
     setErr(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -256,7 +257,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setAmount("");
       setType("EXPENSE");
       setDate(toDateInputValue(new Date()));
-      setCategoryId(categories.length > 0 ? categories[0].id : null);
+      setCategoryId(null);
     }
   }, [editingItem, visible, categories]);
 
