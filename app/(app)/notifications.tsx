@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
 import * as DocumentPicker from "expo-document-picker";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     Alert,
     AppState,
@@ -62,6 +62,7 @@ export default function NotificationsScreen() {
   const [processingDocument, setProcessingDocument] = useState(false);
   const [processingAudio, setProcessingAudio] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
 
   const moduleAvailable = BankNotifications != null;
 
@@ -100,6 +101,16 @@ export default function NotificationsScreen() {
     });
     return () => sub.remove();
   }, [checkPermission]);
+
+  useEffect(() => {
+    recordingRef.current = recording;
+  }, [recording]);
+
+  useEffect(() => {
+    return () => {
+      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+    };
+  }, []);
 
   useEffect(() => {
     if (!BankNotifications) return;
@@ -215,6 +226,10 @@ export default function NotificationsScreen() {
 
   const handleProcessText = async () => {
     if (!freeText.trim()) return;
+    if (!loggedIn) {
+      Alert.alert("Login necessário", "Faça login para usar a IA.");
+      return;
+    }
     if (!selectedCategoryId) {
       Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
       return;
@@ -225,6 +240,11 @@ export default function NotificationsScreen() {
       const categoryId = extracted.categoryName
         ? categories.find((c) => c.name.toLowerCase() === extracted.categoryName!.toLowerCase())?.id ?? selectedCategoryId
         : selectedCategoryId;
+
+      if (extracted.amount <= 0) {
+        Alert.alert("Aviso", "Não foi possível identificar o valor. Revise a transação manualmente.");
+        return;
+      }
 
       await createTransaction({
         description: extracted.description,
@@ -246,6 +266,10 @@ export default function NotificationsScreen() {
   };
 
   const handlePickDocument = async () => {
+    if (!loggedIn) {
+      Alert.alert("Login necessário", "Faça login para usar OCR.");
+      return;
+    }
     if (!selectedCategoryId) {
       Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
       return;
@@ -283,6 +307,10 @@ export default function NotificationsScreen() {
   };
 
   const handleStartRecording = async () => {
+    if (!loggedIn) {
+      Alert.alert("Login necessário", "Faça login para usar transcrição de áudio.");
+      return;
+    }
     if (!selectedCategoryId) {
       Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
       return;
@@ -302,6 +330,7 @@ export default function NotificationsScreen() {
         Audio.RecordingOptionsPresets.HIGH_QUALITY
       );
       setRecording(recording);
+      recordingRef.current = recording;
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao gravar");
     }

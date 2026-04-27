@@ -264,6 +264,11 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
 
   const handlePhotoScan = async () => {
     try {
+      const authed = await isAuthenticated();
+      if (!authed) {
+        Alert.alert("Login necessário", "Faça login na aba Importar para usar o escaneamento por IA.");
+        return;
+      }
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
         Alert.alert("Permissão", "Precisamos de acesso à câmera para escanear recibos.");

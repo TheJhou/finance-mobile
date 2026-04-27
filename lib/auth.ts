@@ -108,34 +108,46 @@ export async function logout(): Promise<void> {
   await removeStoredValue("jwt_refresh_token");
 }
 
+let pendingRefresh: Promise<string | null> | null = null;
+
 async function refreshAccessToken(): Promise<string | null> {
-  const refreshToken = await getStoredValue("jwt_refresh_token");
-  if (!refreshToken || isTokenExpired(refreshToken, 0)) {
-    await logout();
-    return null;
-  }
+  if (pendingRefresh) return pendingRefresh;
 
-  try {
-    const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-    });
-
-    if (!response.ok) {
+  pendingRefresh = (async () => {
+    const refreshToken = await getStoredValue("jwt_refresh_token");
+    if (!refreshToken || isTokenExpired(refreshToken, 0)) {
       await logout();
       return null;
     }
 
-    const data = await response.json();
-    await setStoredValue("jwt_access_token", data.accessToken);
-    if (data.refreshToken) {
-      await setStoredValue("jwt_refresh_token", data.refreshToken);
+    try {
+      const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!response.ok) {
+        await logout();
+        return null;
+      }
+
+      const data = await response.json();
+      await setStoredValue("jwt_access_token", data.accessToken);
+      if (data.refreshToken) {
+        await setStoredValue("jwt_refresh_token", data.refreshToken);
+      }
+      return data.accessToken;
+    } catch {
+      await logout();
+      return null;
     }
-    return data.accessToken;
-  } catch {
-    await logout();
-    return null;
+  })();
+
+  try {
+    return await pendingRefresh;
+  } finally {
+    pendingRefresh = null;
   }
 }
 
