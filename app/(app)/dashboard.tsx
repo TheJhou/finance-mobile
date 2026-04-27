@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
+import { PieChart, BarChart } from "react-native-gifted-charts";
 import { getDashboard } from "@/lib/repositories/dashboard";
 import { formatCurrency } from "@/lib/utils";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -167,6 +168,29 @@ export default function DashboardScreen() {
             {data.expensesByCategory.length > 0 && (
               <View style={styles.sectionCard}>
                 <Text style={styles.sectionTitle}>Gastos por categoria</Text>
+                <PieChart
+                  data={data.expensesByCategory.map((cat) => ({
+                    value: cat.value,
+                    color: cat.color,
+                    label: cat.name,
+                  }))}
+                  donut
+                  showText
+                  textColor={colors.textPrimary}
+                  textSize={11}
+                  innerCircleColor={colors.surface}
+                  innerCircleBorderWidth={0}
+                  radius={90}
+                  innerRadius={55}
+                  centerLabelComponent={() => (
+                    <View style={{ alignItems: "center" }}>
+                      <Text style={{ fontSize: 11, color: colors.textSecondary }}>Total</Text>
+                      <Text style={{ fontSize: 15, fontWeight: "700", color: colors.textPrimary }}>
+                        {formatCurrency(data.monthlyExpense)}
+                      </Text>
+                    </View>
+                  )}
+                />
                 <View style={styles.categoryList}>
                   {data.expensesByCategory.map((cat) => (
                     <View key={cat.name} style={styles.categoryRow}>
@@ -185,6 +209,27 @@ export default function DashboardScreen() {
                     </View>
                   ))}
                 </View>
+              </View>
+            )}
+
+            {data.monthlyTrend.length > 0 && (
+              <View style={styles.sectionCard}>
+                <Text style={styles.sectionTitle}>Tendência mensal</Text>
+                <BarChart
+                  data={data.monthlyTrend.map((m) => ({
+                    label: m.month.slice(5),
+                    value: m.expense,
+                    frontColor: colors.expenseFg,
+                  }))}
+                  barWidth={22}
+                  spacing={20}
+                  roundedTop
+                  hideYAxisText={false}
+                  yAxisTextStyle={{ fontSize: 10, color: colors.textSecondary }}
+                  xAxisLabelTextStyle={{ fontSize: 10, color: colors.textSecondary }}
+                  noOfSections={4}
+                  height={180}
+                />
               </View>
             )}
           </>

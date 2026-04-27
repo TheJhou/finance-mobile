@@ -70,6 +70,21 @@ export async function getDashboard(): Promise<DashboardData> {
     [first, last]
   );
 
+  // Monthly trend: last 6 months
+  const trendRows = await db.getAllAsync<{
+    month: string;
+    income: number;
+    expense: number;
+  }>(
+    `SELECT strftime('%Y-%m', date) as month,
+       SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+       SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+     FROM transactions
+     WHERE status = 'PAID' AND date >= date('now', '-6 months', 'start of month')
+     GROUP BY strftime('%Y-%m', date)
+     ORDER BY month ASC`
+  );
+
   return {
     balance: balanceRow?.balance ?? 0,
     monthlyIncome: incomeRow?.total ?? 0,
@@ -83,7 +98,11 @@ export async function getDashboard(): Promise<DashboardData> {
       color: r.color,
       value: r.total,
     })),
-    monthlyTrend: [],
+    monthlyTrend: trendRows.map((r) => ({
+      month: r.month,
+      income: r.income,
+      expense: r.expense,
+    })),
     evolution: [],
   };
 }

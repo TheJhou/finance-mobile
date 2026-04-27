@@ -123,6 +123,56 @@ export async function createRecurring(data: {
   return created;
 }
 
+export async function updateRecurring(
+  id: string,
+  data: Partial<{
+    description: string;
+    amount: number;
+    type: TransactionType;
+    frequency: Frequency;
+    paymentMethod: PaymentMethod;
+    isActive: boolean;
+    startDate: string;
+    endDate: string | null;
+    nextDueDate: string;
+    categoryId: string;
+  }>
+): Promise<void> {
+  const db = await getDb();
+  const map: Record<string, string> = {
+    description: "description",
+    amount: "amount",
+    type: "type",
+    frequency: "frequency",
+    paymentMethod: "payment_method",
+    isActive: "is_active",
+    startDate: "start_date",
+    endDate: "end_date",
+    nextDueDate: "next_due_date",
+    categoryId: "category_id",
+  };
+  const sets: string[] = [];
+  const params: unknown[] = [];
+  for (const [key, col] of Object.entries(map)) {
+    const value = (data as Record<string, unknown>)[key];
+    if (value !== undefined) {
+      sets.push(`${col} = ?`);
+      if (key === "isActive") {
+        params.push(value ? 1 : 0);
+      } else {
+        params.push(value as string | number | null);
+      }
+    }
+  }
+  if (sets.length === 0) return;
+  sets.push("updated_at = datetime('now')");
+  params.push(id);
+  await db.runAsync(
+    `UPDATE recurring_transactions SET ${sets.join(", ")} WHERE id = ?`,
+    params as (string | number | null)[]
+  );
+}
+
 export async function deleteRecurring(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync("DELETE FROM recurring_transactions WHERE id = ?", [id]);

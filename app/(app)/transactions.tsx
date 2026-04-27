@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,10 @@ import {
   createTransaction,
   deleteTransaction,
   listTransactions,
+  updateTransaction,
 } from "@/lib/repositories/transactions";
 import { listCategories } from "@/lib/repositories/categories";
+import { extractTransactionFromPhoto } from "@/lib/ai";
 import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, Transaction, TransactionType } from "@/lib/types";
@@ -34,6 +37,7 @@ export default function TransactionsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<Transaction | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -80,6 +84,11 @@ export default function TransactionsScreen() {
     ]);
   };
 
+  const handleEdit = (item: Transaction) => {
+    setEditingItem(item);
+    setShowForm(true);
+  };
+
   if (loading) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -123,33 +132,33 @@ export default function TransactionsScreen() {
         renderItem={({ item }) => {
           const isIncome = item.type === "INCOME";
           return (
-            <Pressable onLongPress={() => handleDelete(item)}>
-              <View style={styles.card}>
-                <View
-                  style={[
-                    styles.icon,
-                    {
-                      backgroundColor: isIncome
-                        ? colors.incomeBg
-                        : colors.expenseBg,
-                    },
-                  ]}
-                >
-                  <Ionicons
-                    name={isIncome ? "arrow-up" : "arrow-down"}
-                    size={18}
-                    color={isIncome ? colors.incomeFg : colors.expenseFg}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.desc} numberOfLines={1}>
-                    {item.description}
-                  </Text>
-                  <Text style={styles.meta}>
-                    {item.category?.name ?? "Sem categoria"} ·{" "}
-                    {formatDate(item.date)}
-                  </Text>
-                </View>
+            <View style={styles.card}>
+              <View
+                style={[
+                  styles.icon,
+                  {
+                    backgroundColor: isIncome
+                      ? colors.incomeBg
+                      : colors.expenseBg,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={isIncome ? "arrow-up" : "arrow-down"}
+                  size={18}
+                  color={isIncome ? colors.incomeFg : colors.expenseFg}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.desc} numberOfLines={1}>
+                  {item.description}
+                </Text>
+                <Text style={styles.meta}>
+                  {item.category?.name ?? "Sem categoria"} ·{" "}
+                  {formatDate(item.date)}
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
                 <Text
                   style={[
                     styles.amount,
@@ -159,8 +168,24 @@ export default function TransactionsScreen() {
                   {isIncome ? "+" : "-"}
                   {formatCurrency(item.amount)}
                 </Text>
+                <View style={styles.actionButtons}>
+                  <Pressable
+                    style={styles.actionButton}
+                    onPress={() => handleEdit(item)}
+                    hitSlop={10}
+                  >
+                    <Ionicons name="create-outline" size={18} color={colors.textSecondary} />
+                  </Pressable>
+                  <Pressable
+                    style={styles.actionButton}
+                    onPress={() => handleDelete(item)}
+                    hitSlop={10}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                  </Pressable>
+                </View>
               </View>
-            </Pressable>
+            </View>
           );
         }}
       />
@@ -177,9 +202,14 @@ export default function TransactionsScreen() {
 
       <TransactionForm
         visible={showForm}
-        onClose={() => setShowForm(false)}
+        editingItem={editingItem}
+        onClose={() => {
+          setShowForm(false);
+          setEditingItem(null);
+        }}
         onSaved={() => {
           setShowForm(false);
+          setEditingItem(null);
           fetchItems();
         }}
       />
@@ -191,9 +221,10 @@ interface FormProps {
   visible: boolean;
   onClose: () => void;
   onSaved: () => void;
+  editingItem?: Transaction | null;
 }
 
-function TransactionForm({ visible, onClose, onSaved }: FormProps) {
+function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -201,21 +232,75 @@ function TransactionForm({ visible, onClose, onSaved }: FormProps) {
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) return;
     listCategories().then((cats) => {
       setCategories(cats);
-      if (cats.length > 0 && !categoryId) setCategoryId(cats[0].id);
     });
-    setDescription("");
-    setAmount("");
-    setType("EXPENSE");
-    setDate(toDateInputValue(new Date()));
     setErr(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
+
+  useEffect(() => {
+    if (editingItem) {
+      setDescription(editingItem.description);
+      setAmount(editingItem.amount.toString());
+      setType(editingItem.type);
+      setDate(editingItem.date);
+      setCategoryId(editingItem.categoryId);
+    } else {
+      setDescription("");
+      setAmount("");
+      setType("EXPENSE");
+      setDate(toDateInputValue(new Date()));
+      setCategoryId(categories.length > 0 ? categories[0].id : null);
+    }
+  }, [editingItem, visible, categories]);
+
+  const handlePhotoScan = async () => {
+    try {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert("Permissão", "Precisamos de acesso à câmera para escanear recibos.");
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        base64: true,
+        quality: 0.7,
+        mediaTypes: ["images"],
+      });
+      if (result.canceled || !result.assets?.[0]?.base64) return;
+
+      setScanning(true);
+      setErr(null);
+      const asset = result.assets[0];
+      const base64 = asset.base64 as string;
+      const extracted = await extractTransactionFromPhoto(
+        base64,
+        (asset.mimeType ?? "image/jpeg") as string
+      );
+      setDescription(extracted.description);
+      setAmount(extracted.amount.toString());
+      setType(extracted.type);
+      setDate(extracted.date);
+      if (extracted.categoryName) {
+        const match = categories.find(
+          (c) => c.name.toLowerCase() === extracted.categoryName!.toLowerCase()
+        );
+        if (match) setCategoryId(match.id);
+      }
+    } catch (error) {
+      Alert.alert(
+        "Erro ao escanear",
+        error instanceof Error ? error.message : "Falha ao processar imagem"
+      );
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleSave = async () => {
     const parsedAmount = parseCurrencyInput(amount);
@@ -238,13 +323,23 @@ function TransactionForm({ visible, onClose, onSaved }: FormProps) {
     setErr(null);
     setSaving(true);
     try {
-      await createTransaction({
-        description: description.trim(),
-        amount: parsedAmount,
-        type,
-        date,
-        categoryId,
-      });
+      if (editingItem) {
+        await updateTransaction(editingItem.id, {
+          description: description.trim(),
+          amount: parsedAmount,
+          type,
+          date,
+          categoryId,
+        });
+      } else {
+        await createTransaction({
+          description: description.trim(),
+          amount: parsedAmount,
+          type,
+          date,
+          categoryId,
+        });
+      }
       onSaved();
     } catch (error) {
       setErr(error instanceof Error ? error.message : "Falha ao salvar");
@@ -269,8 +364,17 @@ function TransactionForm({ visible, onClose, onSaved }: FormProps) {
             <Pressable onPress={onClose} hitSlop={10}>
               <Ionicons name="close" size={26} color={colors.textPrimary} />
             </Pressable>
-            <Text style={styles.formTitle}>Nova transação</Text>
-            <View style={{ width: 26 }} />
+            <Text style={styles.formTitle}>{editingItem ? "Editar transação" : "Nova transação"}</Text>
+            {!editingItem && (
+              <Pressable onPress={handlePhotoScan} disabled={scanning} hitSlop={10}>
+                {scanning ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Ionicons name="camera-outline" size={24} color={colors.primary} />
+                )}
+              </Pressable>
+            )}
+            {editingItem && <View style={{ width: 26 }} />}
           </View>
 
           <ScrollView
@@ -504,4 +608,9 @@ const styles = StyleSheet.create({
   },
   pillDot: { width: 10, height: 10, borderRadius: 5 },
   pillText: { fontSize: 13, color: colors.textPrimary, fontWeight: "500" },
+  actionButtons: { flexDirection: "row", gap: 4 },
+  actionButton: {
+    padding: 6,
+    borderRadius: 4,
+  },
 });

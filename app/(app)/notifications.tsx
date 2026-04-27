@@ -3,10 +3,12 @@ import {
   Alert,
   AppState,
   FlatList,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -22,6 +24,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
+import { getStoredApiKey, setApiKey, extractTransactionFromText } from "@/lib/ai";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category } from "@/lib/types";
@@ -34,11 +37,16 @@ interface PendingItem extends ParsedTransaction {
 
 export default function NotificationsScreen() {
   const [granted, setGranted] = useState(false);
-  const [pending, setPending] = useState<PendingItem[]>([]);
+  const [recentImports, setRecentImports] = useState<PendingItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null
   );
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [apiKey, setApiKeyInput] = useState("");
+  const [savingApiKey, setSavingApiKey] = useState(false);
+  const [freeText, setFreeText] = useState("");
+  const [processingText, setProcessingText] = useState(false);
   const seenRef = useRef<Set<string>>(new Set());
 
   const moduleAvailable = BankNotifications != null;
@@ -59,11 +67,17 @@ export default function NotificationsScreen() {
     }
   }, []);
 
+  const loadApiKey = useCallback(async () => {
+    const key = await getStoredApiKey();
+    if (key) setApiKeyInput(key);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       checkPermission();
       loadCategories();
-    }, [checkPermission, loadCategories])
+      loadApiKey();
+    }, [checkPermission, loadCategories, loadApiKey])
   );
 
   useEffect(() => {
@@ -77,58 +91,49 @@ export default function NotificationsScreen() {
     if (!BankNotifications) return;
     const sub = BankNotifications.addListener(
       "onNotification",
-      (event: BankNotificationEvent) => {
+      async (event: BankNotificationEvent) => {
         const parsed = parseNotification(event);
         if (!parsed) return;
         const key = `${event.packageName}|${event.postTime}|${parsed.amount}|${parsed.description}`;
         if (seenRef.current.has(key)) return;
         seenRef.current.add(key);
 
-        setPending((prev) => [
-          {
-            ...parsed,
-            key,
-            raw: [event.title, event.bigText ?? event.text]
-              .filter(Boolean)
-              .join(" — "),
-            postTime: event.postTime,
-          },
-          ...prev,
-        ]);
+        // Auto-import directly
+        if (!selectedCategoryId) {
+          Alert.alert("Erro", "Configure uma categoria padrão para importar automaticamente.");
+          return;
+        }
+        try {
+          await createTransaction({
+            description: parsed.description,
+            amount: parsed.amount,
+            type: parsed.type,
+            paymentMethod: parsed.paymentMethod,
+            date: toDateInputValue(new Date(event.postTime)),
+            categoryId: selectedCategoryId,
+            notes: `Importado de ${parsed.bank}`,
+          });
+          // Add to recent imports log
+          setRecentImports((prev) => [
+            {
+              ...parsed,
+              key,
+              raw: [event.title, event.bigText ?? event.text]
+                .filter(Boolean)
+                .join(" — "),
+              postTime: event.postTime,
+            },
+            ...prev,
+          ].slice(0, 10)); // Keep only last 10
+        } catch (err) {
+          Alert.alert("Erro ao importar", err instanceof Error ? err.message : "Falha");
+        }
       }
     );
     return () => {
       sub.remove();
     };
-  }, []);
-
-  const handleImport = async (item: PendingItem) => {
-    if (!selectedCategoryId) {
-      Alert.alert("Categoria", "Selecione uma categoria padrão antes de importar.");
-      return;
-    }
-    try {
-      await createTransaction({
-        description: item.description,
-        amount: item.amount,
-        type: item.type,
-        paymentMethod: item.paymentMethod,
-        date: toDateInputValue(new Date(item.postTime)),
-        categoryId: selectedCategoryId,
-        notes: `Importado de ${item.bank}`,
-      });
-      setPending((prev) => prev.filter((p) => p.key !== item.key));
-    } catch (err) {
-      Alert.alert(
-        "Erro",
-        err instanceof Error ? err.message : "Falha ao salvar"
-      );
-    }
-  };
-
-  const handleDiscard = (item: PendingItem) => {
-    setPending((prev) => prev.filter((p) => p.key !== item.key));
-  };
+  }, [selectedCategoryId]);
 
   const openSettings = () => {
     try {
@@ -138,6 +143,54 @@ export default function NotificationsScreen() {
         "Erro",
         err instanceof Error ? err.message : "Falha ao abrir"
       );
+    }
+  };
+
+  const handleSaveApiKey = async () => {
+    if (!apiKey.trim()) {
+      Alert.alert("Erro", "Informe a API Key");
+      return;
+    }
+    setSavingApiKey(true);
+    try {
+      await setApiKey(apiKey.trim());
+      setShowApiKeyModal(false);
+      Alert.alert("Sucesso", "API Key configurada!");
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao salvar");
+    } finally {
+      setSavingApiKey(false);
+    }
+  };
+
+  const handleProcessText = async () => {
+    if (!freeText.trim()) return;
+    if (!selectedCategoryId) {
+      Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
+      return;
+    }
+    setProcessingText(true);
+    try {
+      const extracted = await extractTransactionFromText(freeText);
+      const categoryId = extracted.categoryName
+        ? categories.find((c) => c.name.toLowerCase() === extracted.categoryName!.toLowerCase())?.id ?? selectedCategoryId
+        : selectedCategoryId;
+
+      await createTransaction({
+        description: extracted.description,
+        amount: extracted.amount,
+        type: extracted.type,
+        date: extracted.date,
+        categoryId,
+        notes: "Importado via texto livre",
+      });
+
+      setFreeText("");
+      Alert.alert("Sucesso", "Transação criada automaticamente!");
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar");
+    } finally {
+      setProcessingText(false);
     }
   };
 
@@ -195,6 +248,37 @@ export default function NotificationsScreen() {
           )}
         </View>
 
+        <View
+          style={[
+            styles.permissionCard,
+            {
+              borderColor: apiKey ? colors.incomeFg : colors.border,
+              backgroundColor: apiKey ? colors.incomeBg : colors.surface,
+            },
+          ]}
+        >
+          <Ionicons
+            name="key-outline"
+            size={24}
+            color={apiKey ? colors.incomeFg : colors.textSecondary}
+          />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.permissionTitle}>
+              {apiKey ? "API Key configurada" : "API Key da OpenAI"}
+            </Text>
+            <Text style={styles.permissionText}>
+              {apiKey
+                ? "A IA está pronta para escanear recibos."
+                : "Configure sua API Key da OpenAI para usar o escaneamento de recibos por foto."}
+            </Text>
+          </View>
+          <Button
+            title={apiKey ? "Alterar" : "Configurar"}
+            onPress={() => setShowApiKeyModal(true)}
+            variant="secondary"
+          />
+        </View>
+
         {categories.length > 0 && (
           <View style={{ gap: spacing.sm }}>
             <Text style={styles.sectionLabel}>Categoria padrão ao importar</Text>
@@ -233,25 +317,43 @@ export default function NotificationsScreen() {
         )}
 
         <View style={{ gap: spacing.sm }}>
+          <Text style={styles.sectionLabel}>Texto livre</Text>
+          <TextInput
+            style={styles.freeTextInput}
+            value={freeText}
+            onChangeText={setFreeText}
+            placeholder="Ex: Gastei R$ 50 no McDonalds hoje com cartão de crédito"
+            placeholderTextColor={colors.textMuted}
+            multiline
+            numberOfLines={3}
+          />
+          <Button
+            title={processingText ? "Processando..." : "Processar com IA"}
+            onPress={handleProcessText}
+            loading={processingText}
+            disabled={!freeText.trim() || processingText}
+          />
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
           <Text style={styles.sectionLabel}>
-            Pendentes ({pending.length})
+            Importações recentes ({recentImports.length})
           </Text>
-          {pending.length === 0 ? (
+          {recentImports.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons
                 name="notifications-off-outline"
                 size={40}
                 color={colors.textMuted}
               />
-              <Text style={styles.emptyText}>Nada por aqui ainda</Text>
+              <Text style={styles.emptyText}>Nenhuma importação recente</Text>
               <Text style={styles.emptyHint}>
-                Quando chegar uma notificação de banco (Nubank, Inter, C6,
-                PicPay...), ela aparece aqui pra você confirmar a importação.
+                As notificações bancárias serão importadas automaticamente.
               </Text>
             </View>
           ) : (
             <FlatList
-              data={pending}
+              data={recentImports}
               keyExtractor={(item) => item.key}
               scrollEnabled={false}
               ItemSeparatorComponent={() => (
@@ -260,7 +362,7 @@ export default function NotificationsScreen() {
               renderItem={({ item }) => {
                 const isIncome = item.type === "INCOME";
                 return (
-                  <View style={styles.card}>
+                  <View style={[styles.card, { opacity: 0.7 }]}>
                     <View style={styles.cardHeader}>
                       <View
                         style={[
@@ -297,32 +399,9 @@ export default function NotificationsScreen() {
                       </Text>
                     </View>
                     <Text style={styles.cardDesc}>{item.description}</Text>
-                    <Text style={styles.cardRaw} numberOfLines={2}>
-                      {item.raw}
-                    </Text>
-                    <View style={styles.actionRow}>
-                      <Pressable
-                        style={styles.discardButton}
-                        onPress={() => handleDiscard(item)}
-                      >
-                        <Ionicons
-                          name="close"
-                          size={18}
-                          color={colors.textSecondary}
-                        />
-                        <Text style={styles.discardText}>Descartar</Text>
-                      </Pressable>
-                      <Pressable
-                        style={styles.importButton}
-                        onPress={() => handleImport(item)}
-                      >
-                        <Ionicons
-                          name="checkmark"
-                          size={18}
-                          color={colors.textInverse}
-                        />
-                        <Text style={styles.importText}>Importar</Text>
-                      </Pressable>
+                    <View style={styles.importedBadge}>
+                      <Ionicons name="checkmark-circle" size={14} color={colors.incomeFg} />
+                      <Text style={styles.importedText}>Importado automaticamente</Text>
                     </View>
                   </View>
                 );
@@ -331,6 +410,34 @@ export default function NotificationsScreen() {
           )}
         </View>
       </ScrollView>
+
+      <Modal visible={showApiKeyModal} animationType="slide" onRequestClose={() => setShowApiKeyModal(false)}>
+        <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setShowApiKeyModal(false)} hitSlop={10}>
+              <Ionicons name="close" size={26} color={colors.textPrimary} />
+            </Pressable>
+            <Text style={styles.modalTitle}>Configurar API Key</Text>
+            <View style={{ width: 26 }} />
+          </View>
+          <ScrollView contentContainerStyle={styles.modalContent}>
+            <Text style={styles.modalLabel}>OpenAI API Key</Text>
+            <TextInput
+              style={styles.modalInput}
+              value={apiKey}
+              onChangeText={setApiKeyInput}
+              placeholder="sk-..."
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <Text style={styles.modalHint}>
+              Sua API Key é usada para processar fotos de recibos. Ela é armazenada localmente no seu dispositivo.
+            </Text>
+            <Button title="Salvar" onPress={handleSaveApiKey} loading={savingApiKey} />
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -410,34 +517,50 @@ const styles = StyleSheet.create({
   badgeText: { fontSize: 11, fontWeight: "600" },
   cardAmount: { fontSize: 18, fontWeight: "700" },
   cardDesc: { fontSize: 14, fontWeight: "600", color: colors.textPrimary },
-  cardRaw: { fontSize: 12, color: colors.textMuted },
-  actionRow: {
+  importedBadge: {
     flexDirection: "row",
-    gap: spacing.sm,
+    alignItems: "center",
+    gap: 4,
     marginTop: spacing.sm,
   },
-  discardButton: {
-    flex: 1,
+  importedText: { fontSize: 11, color: colors.incomeFg, fontWeight: "500" },
+
+  modalHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: radius.md,
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  modalTitle: { fontSize: 16, fontWeight: "600", color: colors.textPrimary },
+  modalContent: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing["3xl"] },
+  modalLabel: { fontSize: 13, fontWeight: "500", color: colors.textSecondary },
+  modalInput: {
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 15,
+    color: colors.textPrimary,
     backgroundColor: colors.surface,
   },
-  discardText: { fontSize: 13, color: colors.textSecondary, fontWeight: "600" },
-  importButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
+  modalHint: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
   },
-  importText: { fontSize: 13, color: colors.textInverse, fontWeight: "600" },
+
+  freeTextInput: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    fontSize: 15,
+    color: colors.textPrimary,
+    backgroundColor: colors.surface,
+    minHeight: 80,
+    textAlignVertical: "top",
+  },
 });
