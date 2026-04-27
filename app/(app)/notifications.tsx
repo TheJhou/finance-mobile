@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   Alert,
   AppState,
@@ -31,6 +31,7 @@ import { transcribeAudio, ocrDocument, analyzeText } from "@/lib/backend";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category } from "@/lib/types";
+import { isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
 
 interface PendingItem extends ParsedTransaction {
   key: string;
@@ -53,8 +54,6 @@ export default function NotificationsScreen() {
   const [processingDocument, setProcessingDocument] = useState(false);
   const [processingAudio, setProcessingAudio] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
-  const seenRef = useRef<Set<string>>(new Set());
 
   const moduleAvailable = BankNotifications != null;
 
@@ -101,9 +100,25 @@ export default function NotificationsScreen() {
       async (event: BankNotificationEvent) => {
         const parsed = parseNotification(event);
         if (!parsed) return;
-        const key = `${event.packageName}|${event.postTime}|${parsed.amount}|${parsed.description}`;
-        if (seenRef.current.has(key)) return;
-        seenRef.current.add(key);
+
+        // Verificar deduplicação persistente no banco
+        const text = [event.title, event.text, event.bigText].filter(Boolean).join(" ");
+        const alreadyProcessed = await isNotificationProcessed(
+          event.packageName,
+          event.title,
+          text,
+          parsed.amount,
+          event.postTime
+        );
+        
+        if (alreadyProcessed) {
+          console.log("[Notifications] Notificação duplicada ignorada:", {
+            packageName: event.packageName,
+            title: event.title,
+            amount: parsed.amount,
+          });
+          return;
+        }
 
         // Auto-import directly
         if (!selectedCategoryId) {
@@ -119,9 +134,21 @@ export default function NotificationsScreen() {
             date: toDateInputValue(new Date(event.postTime)),
             categoryId: selectedCategoryId,
             notes: `Importado de ${parsed.bank}`,
+            status: parsed.amount >= 500 ? "PENDING" : "PAID",
           });
+
+          // Marcar como processado no banco
+          await markNotificationAsProcessed(
+            event.packageName,
+            event.title,
+            text,
+            parsed.amount,
+            event.postTime
+          );
+
           // Add to recent imports log
-          setRecentImports((prev) => [
+          const key = `${event.packageName}|${event.postTime}|${parsed.amount}|${parsed.description}`;
+          setRecentImports((prev: PendingItem[]) => [
             {
               ...parsed,
               key,
@@ -190,6 +217,7 @@ export default function NotificationsScreen() {
         date: extracted.date,
         categoryId,
         notes: "Importado via texto livre",
+        status: extracted.amount >= 500 ? "PENDING" : "PAID",
       });
 
       setFreeText("");
@@ -227,6 +255,7 @@ export default function NotificationsScreen() {
         date: analysis.draft.date,
         categoryId,
         notes: `Importado via documento: ${asset.name}`,
+        status: analysis.draft.amount >= 500 ? "PENDING" : "PAID",
       });
 
       Alert.alert("Sucesso", "Transação criada automaticamente!");
@@ -253,18 +282,17 @@ export default function NotificationsScreen() {
       await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
       await recording.startAsync();
       setRecording(recording);
-      recordingRef.current = recording;
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao gravar");
     }
   };
 
   const handleStopRecording = async () => {
-    if (!recordingRef.current) return;
+    if (!recording) return;
     try {
       setProcessingAudio(true);
-      await recordingRef.current.stopAndUnloadAsync();
-      const uri = recordingRef.current.getURI();
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
       if (!uri) throw new Error("Falha ao obter URI do áudio");
 
       const transcribedText = await transcribeAudio(uri, "audio/webm");
@@ -278,10 +306,10 @@ export default function NotificationsScreen() {
         date: analysis.draft.date,
         categoryId,
         notes: "Importado via áudio",
+        status: analysis.draft.amount >= 500 ? "PENDING" : "PAID",
       });
 
       setRecording(null);
-      recordingRef.current = null;
       Alert.alert("Sucesso", "Transação criada automaticamente!");
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar áudio");

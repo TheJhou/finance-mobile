@@ -68,9 +68,30 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS processed_notifications (
+      id TEXT PRIMARY KEY,
+      package_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      text TEXT NOT NULL,
+      amount REAL NOT NULL,
+      post_time INTEGER NOT NULL,
+      processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_processed_notifications_hash ON processed_notifications(package_name, title, text, amount, post_time);
   `);
 
   await seedDefaultCategories(db);
+  await cleanupOldProcessedNotifications(db);
+}
+
+async function cleanupOldProcessedNotifications(db: SQLite.SQLiteDatabase): Promise<void> {
+  // Remove notificações processadas há mais de 30 dias
+  await db.execAsync(`
+    DELETE FROM processed_notifications 
+    WHERE processed_at < datetime('now', '-30 days')
+  `);
 }
 
 async function seedDefaultCategories(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -104,4 +125,35 @@ export function generateId(): string {
   const ts = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 10);
   return `${ts}-${rand}`;
+}
+
+export async function isNotificationProcessed(
+  packageName: string,
+  title: string,
+  text: string,
+  amount: number,
+  postTime: number
+): Promise<boolean> {
+  const db = await getDb();
+  const result = await db.getFirstAsync<{ count: number }>(
+    `SELECT COUNT(*) as count FROM processed_notifications 
+     WHERE package_name = ? AND title = ? AND text = ? AND amount = ? AND post_time = ?`,
+    [packageName, title, text, amount, postTime]
+  );
+  return (result?.count ?? 0) > 0;
+}
+
+export async function markNotificationAsProcessed(
+  packageName: string,
+  title: string,
+  text: string,
+  amount: number,
+  postTime: number
+): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `INSERT INTO processed_notifications (id, package_name, title, text, amount, post_time) 
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [generateId(), packageName, title, text, amount, postTime]
+  );
 }

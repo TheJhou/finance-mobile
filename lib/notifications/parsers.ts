@@ -31,8 +31,15 @@ export const BANK_APPS: Record<string, string> = {
   "br.com.gabba.Caixa": "Caixa",
 };
 
+// Package name do próprio app para ignorar notificações internas
+export const OWN_APP_PACKAGE = "com.thejhou.financeapp";
+
 export function isKnownBank(packageName: string): boolean {
   return packageName in BANK_APPS;
+}
+
+export function isOwnApp(packageName: string): boolean {
+  return packageName === OWN_APP_PACKAGE;
 }
 
 function parseAmount(source: string): number | null {
@@ -43,13 +50,13 @@ function parseAmount(source: string): number | null {
   if (match) {
     const normalized = match[1].replace(/\./g, "").replace(",", ".");
     const num = parseFloat(normalized);
-    if (Number.isFinite(num) && num > 0) return num;
+    if (!isNaN(num) && isFinite(num) && num > 0) return num;
   }
   // Fallback: integer values (rare but possible, e.g., "R$ 100")
   match = source.match(/R\$\s*(\d+)(?!\d*[.,])/);
   if (match) {
     const num = parseInt(match[1], 10);
-    if (Number.isFinite(num) && num > 0) return num;
+    if (!isNaN(num) && isFinite(num) && num > 0) return num;
   }
   return null;
 }
@@ -238,11 +245,39 @@ function parseGeneric(input: NotificationInput): PartialParsed | null {
   const amount = parseAmount(text);
   if (!amount) return null;
 
-  const isIncome = /recebeu|recebido|cr[ée]dito|entrada/i.test(text);
-  const isExpense = /compra|pagou|pagamento|enviou|d[ée]bito|sa[íi]da|paga/i.test(text);
+  // Termos específicos para despesa/saída
+  const expensePatterns = [
+    /pix\s+enviado/i,
+    /pagamento\s+realizado/i,
+    /compra\s+aprovada/i,
+    /compra\s+no\s+d[ée]bito/i,
+    /compra\s+no\s+cr[ée]dito/i,
+    /transfer[êe]ncia\s+enviada/i,
+    /d[ée]bito\s+realizado/i,
+    /boleto\s+pago/i,
+    /saque\s+realizado/i,
+  ];
 
-  const type: TransactionType =
-    isIncome && !isExpense ? "INCOME" : "EXPENSE";
+  // Termos específicos para receita/entrada
+  const incomePatterns = [
+    /pix\s+recebido/i,
+    /transfer[êe]ncia\s+recebida/i,
+    /dep[óo]sito\s+recebido/i,
+    /cr[ée]dito\s+recebido/i,
+    /pagamento\s+recebido/i,
+    /valor\s+recebido/i,
+    /dinheiro\s+recebido/i,
+  ];
+
+  const isExpense = expensePatterns.some(pattern => pattern.test(text));
+  const isIncome = incomePatterns.some(pattern => pattern.test(text));
+
+  // Ignorar casos ambíguos - se não identificar claramente como entrada ou saída
+  if (!isExpense && !isIncome) {
+    return null;
+  }
+
+  const type: TransactionType = isIncome ? "INCOME" : "EXPENSE";
 
   const isPix = /pix/i.test(text);
   const isCard = /cart[ãa]o|compra/i.test(text);
@@ -271,12 +306,36 @@ const PARSERS: Array<(input: NotificationInput) => PartialParsed | null> = [
 export function parseNotification(
   input: NotificationInput
 ): ParsedTransaction | null {
+  // Ignorar notificações do próprio app
+  if (isOwnApp(input.packageName)) {
+    console.log("[NotificationParser] Ignorando notificação do próprio app:", input.packageName);
+    return null;
+  }
+
+  // Filtrar apenas apps permitidos
   const bank = BANK_APPS[input.packageName];
-  if (!bank) return null;
+  if (!bank) {
+    console.log("[NotificationParser] Ignorando packageName não permitido:", input.packageName);
+    return null;
+  }
 
   for (const parser of PARSERS) {
     const result = parser(input);
-    if (result) return { ...result, bank };
+    if (result) {
+      console.log("[NotificationParser] Notificação classificada:", {
+        bank,
+        type: result.type,
+        amount: result.amount,
+        description: result.description,
+      });
+      return { ...result, bank };
+    }
   }
+  
+  console.log("[NotificationParser] Notificação ignorada - não foi possível classificar:", {
+    packageName: input.packageName,
+    title: input.title,
+    text: input.text,
+  });
   return null;
 }
