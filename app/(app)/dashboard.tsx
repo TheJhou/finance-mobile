@@ -229,6 +229,8 @@ export default function DashboardScreen() {
                   xAxisLabelTextStyle={{ fontSize: 10, color: colors.textSecondary }}
                   noOfSections={4}
                   height={180}
+                  yAxisLabel=""
+                  yAxisSuffix=""
                 />
               </View>
             )}
