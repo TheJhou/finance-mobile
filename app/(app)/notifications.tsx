@@ -14,6 +14,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
+import * as DocumentPicker from "expo-document-picker";
+import { Audio } from "expo-av";
 import BankNotifications, {
   type BankNotificationEvent,
 } from "@/modules/bank-notifications";
@@ -25,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { getStoredApiKey, setApiKey, extractTransactionFromText } from "@/lib/ai";
+import { transcribeAudio, ocrDocument, analyzeText } from "@/lib/backend";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category } from "@/lib/types";
@@ -47,6 +50,10 @@ export default function NotificationsScreen() {
   const [savingApiKey, setSavingApiKey] = useState(false);
   const [freeText, setFreeText] = useState("");
   const [processingText, setProcessingText] = useState(false);
+  const [processingDocument, setProcessingDocument] = useState(false);
+  const [processingAudio, setProcessingAudio] = useState(false);
+  const [recording, setRecording] = useState<Audio.Recording | null>(null);
+  const recordingRef = useRef<Audio.Recording | null>(null);
   const seenRef = useRef<Set<string>>(new Set());
 
   const moduleAvailable = BankNotifications != null;
@@ -194,6 +201,95 @@ export default function NotificationsScreen() {
     }
   };
 
+  const handlePickDocument = async () => {
+    if (!selectedCategoryId) {
+      Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
+      return;
+    }
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["application/pdf", "image/png", "image/jpeg", "image/jpg"],
+      });
+
+      if (result.canceled || !result.assets[0]) return;
+
+      setProcessingDocument(true);
+      const asset = result.assets[0];
+      const extractedText = await ocrDocument(asset.uri, asset.mimeType || "application/pdf");
+
+      const analysis = await analyzeText(extractedText, "DOCUMENT", categories);
+      const categoryId = analysis.draft.categoryId || selectedCategoryId;
+
+      await createTransaction({
+        description: analysis.draft.description,
+        amount: analysis.draft.amount,
+        type: analysis.draft.type,
+        date: analysis.draft.date,
+        categoryId,
+        notes: `Importado via documento: ${asset.name}`,
+      });
+
+      Alert.alert("Sucesso", "Transação criada automaticamente!");
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar documento");
+    } finally {
+      setProcessingDocument(false);
+    }
+  };
+
+  const handleStartRecording = async () => {
+    if (!selectedCategoryId) {
+      Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
+      return;
+    }
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== "granted") {
+        Alert.alert("Erro", "Permissão de microfone negada");
+        return;
+      }
+
+      const recording = new Audio.Recording();
+      await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+      await recording.startAsync();
+      setRecording(recording);
+      recordingRef.current = recording;
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao gravar");
+    }
+  };
+
+  const handleStopRecording = async () => {
+    if (!recordingRef.current) return;
+    try {
+      setProcessingAudio(true);
+      await recordingRef.current.stopAndUnloadAsync();
+      const uri = recordingRef.current.getURI();
+      if (!uri) throw new Error("Falha ao obter URI do áudio");
+
+      const transcribedText = await transcribeAudio(uri, "audio/webm");
+      const analysis = await analyzeText(transcribedText, "AUDIO", categories);
+      const categoryId = analysis.draft.categoryId || selectedCategoryId;
+
+      await createTransaction({
+        description: analysis.draft.description,
+        amount: analysis.draft.amount,
+        type: analysis.draft.type,
+        date: analysis.draft.date,
+        categoryId,
+        notes: "Importado via áudio",
+      });
+
+      setRecording(null);
+      recordingRef.current = null;
+      Alert.alert("Sucesso", "Transação criada automaticamente!");
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar áudio");
+    } finally {
+      setProcessingAudio(false);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <View style={styles.header}>
@@ -332,6 +428,28 @@ export default function NotificationsScreen() {
             onPress={handleProcessText}
             loading={processingText}
             disabled={!freeText.trim() || processingText}
+          />
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <Text style={styles.sectionLabel}>Documento (PDF, Imagem)</Text>
+          <Button
+            title={processingDocument ? "Processando..." : "Selecionar documento"}
+            onPress={handlePickDocument}
+            loading={processingDocument}
+            disabled={processingDocument}
+            variant="secondary"
+          />
+        </View>
+
+        <View style={{ gap: spacing.sm }}>
+          <Text style={styles.sectionLabel}>Gravar áudio</Text>
+          <Button
+            title={recording ? "Parar gravação" : "Gravar"}
+            onPress={recording ? handleStopRecording : handleStartRecording}
+            loading={processingAudio}
+            disabled={processingAudio}
+            variant={recording ? "secondary" : undefined}
           />
         </View>
 
