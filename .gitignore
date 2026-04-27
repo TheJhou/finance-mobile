@@ -44,4 +44,5 @@ app-example
 
 # backend repository (separate repo)
 backend-repo/
+backend-final/
 .env
