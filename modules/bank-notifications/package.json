@@ -1,0 +1,7 @@
+{
+  "name": "bank-notifications",
+  "version": "1.0.0",
+  "description": "Android NotificationListenerService bridge for reading bank notifications",
+  "main": "index.ts",
+  "private": true
+}
