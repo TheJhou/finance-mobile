@@ -2,6 +2,14 @@ import { getDb } from "@/lib/db";
 import { processRecurringDue } from "@/lib/repositories/recurring";
 import type { DashboardData } from "@/lib/types";
 
+export interface UpcomingBill {
+  id: string;
+  name: string;
+  date: string;
+  amount: number;
+  color: string;
+}
+
 function monthRange(): { first: string; last: string } {
   const now = new Date();
   const first = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -107,4 +115,48 @@ export async function getDashboard(): Promise<DashboardData> {
     })),
     evolution: [],
   };
+}
+
+export async function getUpcomingBills(): Promise<UpcomingBill[]> {
+  const db = await getDb();
+  const today = new Date().toISOString().slice(0, 10);
+  const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const rows = await db.getAllAsync<{
+    id: string;
+    description: string;
+    next_due_date: string;
+    amount: number;
+    color: string;
+  }>(
+    `SELECT r.id, r.description, r.next_due_date, r.amount, c.color
+     FROM recurring_transactions r
+     LEFT JOIN categories c ON c.id = r.category_id
+     WHERE r.is_active = 1 AND r.next_due_date >= ? AND r.next_due_date <= ?
+     ORDER BY r.next_due_date ASC
+     LIMIT 6`,
+    [today, in30Days]
+  );
+
+  return rows.map((r) => {
+    const d = new Date(r.next_due_date + "T00:00:00");
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return {
+      id: r.id,
+      name: r.description,
+      date: `${d.getDate()} ${months[d.getMonth()]}`,
+      amount: r.amount,
+      color: r.color || "#6366f1",
+    };
+  });
+}
+
+export async function getOverdueTransactions(): Promise<{ id: string; description: string; amount: number; date: string }[]> {
+  const db = await getDb();
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await db.getAllAsync<{ id: string; description: string; amount: number; date: string }>(
+    `SELECT id, description, amount, date FROM transactions WHERE status = 'PENDING' AND date < ? ORDER BY date ASC LIMIT 10`,
+    [today]
+  );
+  return rows;
 }

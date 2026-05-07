@@ -101,6 +101,8 @@ export async function register(name: string, email: string, password: string): P
   const data = await response.json();
   await setStoredValue("jwt_access_token", data.accessToken);
   await setStoredValue("jwt_refresh_token", data.refreshToken);
+  if (data.user?.name) await setStoredValue("user_name", data.user.name);
+  if (data.user?.email) await setStoredValue("user_email", data.user.email);
 }
 
 export async function login(email: string, password: string): Promise<void> {
@@ -122,11 +124,19 @@ export async function login(email: string, password: string): Promise<void> {
   const data = await response.json();
   await setStoredValue("jwt_access_token", data.accessToken);
   await setStoredValue("jwt_refresh_token", data.refreshToken);
+  if (data.user?.name) await setStoredValue("user_name", data.user.name);
+  if (data.user?.email) await setStoredValue("user_email", data.user.email);
 }
 
 export async function logout(): Promise<void> {
   await removeStoredValue("jwt_access_token");
   await removeStoredValue("jwt_refresh_token");
+  await removeStoredValue("user_name");
+  await removeStoredValue("user_email");
+}
+
+export async function getStoredUserName(): Promise<string | null> {
+  return getStoredValue("user_name");
 }
 
 let pendingRefresh: Promise<string | null> | null = null;

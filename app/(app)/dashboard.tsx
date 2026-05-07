@@ -1,19 +1,24 @@
-import { getDashboard } from "@/lib/repositories/dashboard";
+import { getStoredUserName } from "@/lib/auth";
+import type { GoalData, ScoreData, StreakData } from "@/lib/backend";
+import { checkinStreak, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
+import type { UpcomingBill } from "@/lib/repositories/dashboard";
+import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { DashboardData } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -53,15 +58,40 @@ function CircularProgress({
 }
 
 export default function DashboardScreen() {
+  const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [userName, setUserName] = useState<string | null>(null);
+  const [goals, setGoals] = useState<GoalData[]>([]);
+  const [streak, setStreak] = useState<StreakData | null>(null);
+  const [score, setScore] = useState<ScoreData | null>(null);
+  const [bills, setBills] = useState<UpcomingBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chartModal, setChartModal] = useState<"category" | "bar" | "line" | "commitment" | null>(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await getDashboard();
-      setData(res);
+      // Load cached name immediately
+      const cachedName = await getStoredUserName();
+      if (cachedName) setUserName(cachedName);
+
+      const [dashRes, billsRes] = await Promise.all([
+        getDashboard(),
+        getUpcomingBills(),
+      ]);
+      setData(dashRes);
+      setBills(billsRes);
+
+      // Backend calls (non-blocking — fail silently if offline)
+      Promise.all([
+        getMe().then((u) => { if (u.name) setUserName(u.name); }).catch(() => {}),
+        getGoals().then(setGoals).catch(() => {}),
+        getStreak().then(setStreak).catch(() => {}),
+        getDashboardScore().then(setScore).catch(() => {}),
+        checkinStreak().catch(() => {}),
+      ]);
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar");
@@ -101,11 +131,15 @@ export default function DashboardScreen() {
   const healthScore = data
     ? Math.min(100, Math.max(0, Math.round(savingsRate * 200 + 50 - (data.overdueAmount > 0 ? 20 : 0) - data.pendingCount * 2)))
     : 0;
-  const prevMonth = data && data.monthlyTrend.length >= 2 ? data.monthlyTrend[data.monthlyTrend.length - 2] : null;
+  // Encontrar o mês imediatamente anterior (não qualquer mês anterior no trend)
+  const currentMonth = data ? new Date().toISOString().slice(0, 7) : null;
+  const prevMonthStr = data ? (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); })() : null;
+  const prevMonth = data ? data.monthlyTrend.find((m) => m.month === prevMonthStr) ?? null : null;
   const incomeChange = prevMonth && prevMonth.income > 0 ? Math.round(((data!.monthlyIncome - prevMonth.income) / prevMonth.income) * 100) : null;
   const expenseChange = prevMonth && prevMonth.expense > 0 ? Math.round(((data!.monthlyExpense - prevMonth.expense) / prevMonth.expense) * 100) : null;
-  const balanceChange = data && data.monthlyTrend.length >= 2
-    ? (() => { const trends = data.monthlyTrend; const recent = trends[trends.length - 1]; const prev = trends[trends.length - 2]; const recentNet = recent.income - recent.expense; const prevNet = prev.income - prev.expense; return prevNet !== 0 ? Math.round(((recentNet - prevNet) / Math.abs(prevNet)) * 100) : null; })()
+  const currentMonthTrend = data ? data.monthlyTrend.find((m) => m.month === currentMonth) : null;
+  const balanceChange = currentMonthTrend && prevMonth
+    ? (() => { const recentNet = currentMonthTrend.income - currentMonthTrend.expense; const prevNet = prevMonth.income - prevMonth.expense; return prevNet !== 0 ? Math.round(((recentNet - prevNet) / Math.abs(prevNet)) * 100) : null; })()
     : null;
   const totalExpense = data ? data.monthlyExpense || 1 : 1;
 
@@ -120,7 +154,7 @@ export default function DashboardScreen() {
         <View style={styles.header}>
           <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ionicons name="menu" size={24} color={colors.textPrimary} /></TouchableOpacity>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
-            <Text style={styles.greeting}>Olá, Lucas 👋</Text>
+            <Text style={styles.greeting}>Olá, {userName || "Usuário"} 👋</Text>
             <Text style={styles.subtitle}>Aqui está o resumo da sua vida financeira.</Text>
           </View>
           <View style={styles.headerRight}>
@@ -197,7 +231,7 @@ export default function DashboardScreen() {
                 <Text style={styles.miniCardLabel}>Economia</Text>
                 <Text style={styles.miniCardValue}>{formatCurrency(Math.max(0, economia))}</Text>
                 <Text style={styles.miniCardSub}>Este mês</Text>
-                <Text style={[styles.miniCardChange, { color: economia >= 0 ? colors.success : colors.danger }]}>↑ {economiaPercent}%</Text>
+                <Text style={[styles.miniCardChange, { color: economia >= 0 ? colors.success : colors.danger }]}>{economia >= 0 ? "↑" : "↓"} {Math.abs(economiaPercent)}%</Text>
                 <Text style={styles.miniCardNote}>da renda</Text>
               </View>
               {/* Saldo acumulado */}
@@ -240,19 +274,19 @@ export default function DashboardScreen() {
               <View style={styles.healthScoresRow}>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Organização</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.info }]}>{Math.min(100, healthScore + 5)}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.info }]}>{Math.min(100, Math.round((streak?.streak ?? 0) * 3.3 + (streak?.todayRegistered ? 20 : 0)))}</Text>
                 </View>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Estabilidade</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.primary }]}>{Math.max(0, healthScore - 2)}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.primary }]}>{Math.min(100, Math.max(0, 100 - comprometimento))}</Text>
                 </View>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Controle</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.success }]}>{Math.min(100, healthScore + 2)}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.success }]}>{Math.min(100, Math.max(0, data.overdueAmount > 0 ? 40 : data.pendingCount > 3 ? 60 : 90))}</Text>
                 </View>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Planejamento</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.warning }]}>{Math.max(0, healthScore - 5)}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.warning }]}>{Math.min(100, goals.length * 25 + bills.length * 10)}</Text>
                 </View>
               </View>
             </View>
@@ -264,34 +298,43 @@ export default function DashboardScreen() {
                 <Text style={styles.linkText}>Ver tudo {">"}</Text>
               </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.lg }}>
-                <View style={styles.radarItem}>
+                <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
                     <Ionicons name="alert-circle" size={24} color="#f87171" />
                     {data.overdueAmount > 0 && <View style={[styles.radarBadge, { backgroundColor: "#f87171" }]}><Text style={styles.radarBadgeText}>!</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Contas{"\n"}vencidas</Text>
-                </View>
-                <View style={styles.radarItem}>
+                  {data.overdueAmount > 0 && <Text style={{ fontSize: 9, color: "#f87171", fontWeight: "700" }}>{formatCurrency(data.overdueAmount)}</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="card" size={24} color="#f87171" />
-                    {data.activeRecurring > 0 && <View style={[styles.radarBadge, { backgroundColor: "#f87171" }]}><Text style={styles.radarBadgeText}>{data.activeRecurring}</Text></View>}
+                    <Ionicons name="card" size={24} color="#a78bfa" />
+                    {data.activeRecurring > 0 && <View style={[styles.radarBadge, { backgroundColor: "#a78bfa" }]}><Text style={styles.radarBadgeText}>{data.activeRecurring}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Assinaturas{"\n"}ativas</Text>
-                </View>
-                <View style={styles.radarItem}>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
                     <Ionicons name="calendar" size={24} color="#fbbf24" />
-                    {data.upcomingAmount > 0 && <View style={[styles.radarBadge, { backgroundColor: "#fbbf24" }]}><Text style={styles.radarBadgeText}>{data.pendingCount}</Text></View>}
+                    {bills.length > 0 && <View style={[styles.radarBadge, { backgroundColor: "#fbbf24" }]}><Text style={styles.radarBadgeText}>{bills.length}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Contas próximas{"\n"}do vencimento</Text>
-                </View>
-                <View style={styles.radarItem}>
+                  {bills.length > 0 && <Text style={{ fontSize: 9, color: "#fbbf24", fontWeight: "700" }}>{formatCurrency(bills.reduce((s, b) => s + b.amount, 0))}</Text>}
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
                     <Ionicons name="time" size={24} color="#34d399" />
                     {data.pendingCount > 0 && <View style={[styles.radarBadge, { backgroundColor: "#34d399" }]}><Text style={styles.radarBadgeText}>{data.pendingCount}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Transações{"\n"}pendentes</Text>
-                </View>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.radarItem} onPress={() => setChartModal("commitment")}>
+                  <View style={styles.radarCircle}>
+                    <Ionicons name="pie-chart" size={24} color="#60a5fa" />
+                    <View style={[styles.radarBadge, { backgroundColor: comprometimento > 60 ? "#fb923c" : colors.success }]}><Text style={styles.radarBadgeText}>{comprometimento}%</Text></View>
+                  </View>
+                  <Text style={styles.radarLabel}>Comprometimento{"\n"}da renda</Text>
+                </TouchableOpacity>
               </ScrollView>
             </View>
 
@@ -301,7 +344,7 @@ export default function DashboardScreen() {
                 <View style={[styles.sectionCard, { flex: 1 }]}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitleSm}>Gastos por categoria</Text>
-                    <Text style={styles.linkTextSm}>Ver todas {">"}</Text>
+                    <TouchableOpacity onPress={() => setChartModal("category")}><Text style={styles.linkTextSm}>Ver todas {">"}</Text></TouchableOpacity>
                   </View>
                   <View style={{ alignItems: "center" }}>
                     <PieChart
@@ -338,7 +381,7 @@ export default function DashboardScreen() {
               <View style={[styles.sectionCard, { flex: 1 }]}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitleSm}>Gastos ao longo do mês</Text>
-                  <Text style={styles.linkTextSm}>Ver mais {">"}</Text>
+                  <TouchableOpacity onPress={() => setChartModal("bar")}><Text style={styles.linkTextSm}>Ver mais {">"}</Text></TouchableOpacity>
                 </View>
                 <BarChart
                   data={data.monthlyTrend.length > 0
@@ -358,7 +401,7 @@ export default function DashboardScreen() {
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
                     <Text style={{ fontSize: 9, color: colors.textMuted }}>vs mês anterior</Text>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.success }}>↑ {Math.abs(expenseChange)}%</Text>
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: expenseChange !== null && expenseChange > 0 ? colors.danger : colors.success }}>{expenseChange !== null ? `${expenseChange > 0 ? "↑" : "↓"} ${Math.abs(expenseChange)}%` : "—"}</Text>
                   </View>
                 </View>
               </View>
@@ -368,7 +411,7 @@ export default function DashboardScreen() {
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Previsão de saldo</Text>
-                <Text style={styles.linkText}>Ver detalhes {">"}</Text>
+                <TouchableOpacity onPress={() => setChartModal("line")}><Text style={styles.linkText}>Ver detalhes {">"}</Text></TouchableOpacity>
               </View>
               <Text style={{ fontSize: 12, color: colors.textSecondary }}>Se continuar assim, você termina o mês com</Text>
               <Text style={{ fontSize: 18, fontWeight: "700", color: colors.success }}>{formatCurrency(Math.max(0, data.balance - data.upcomingAmount))}</Text>
@@ -389,7 +432,7 @@ export default function DashboardScreen() {
               {data.balance < data.upcomingAmount && (
                 <View style={styles.warningBanner}>
                   <Text style={styles.warningBannerTitle}>⚠️ Tendência de queda</Text>
-                  <Text style={styles.warningBannerText}>Seu saldo pode ficar negativo em 10 dias</Text>
+                  <Text style={styles.warningBannerText}>Seu saldo pode ficar negativo. Contas pendentes: {formatCurrency(data.upcomingAmount)}</Text>
                 </View>
               )}
             </View>
@@ -430,22 +473,19 @@ export default function DashboardScreen() {
               <View style={[styles.sectionCard, { width: HALF_WIDTH }]}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.sectionTitleSm}>Contas futuras{"\n"}previstas</Text>
-                  <Text style={styles.linkTextSm}>Ver todos {">"}</Text>
+                  <TouchableOpacity onPress={() => router.push("/recurring")}><Text style={styles.linkTextSm}>Ver todos {">"}</Text></TouchableOpacity>
                 </View>
                 <View style={{ gap: 8 }}>
-                  {[
-                    { name: "Netflix", date: "12 Mai", value: 39.9, color: "#e50914" },
-                    { name: "Academia", date: "15 Mai", value: 99.9, color: "#60a5fa" },
-                    { name: "Spotify", date: "18 Mai", value: 21.9, color: "#1db954" },
-                    { name: "Amazon Prime", date: "20 Mai", value: 19.9, color: "#ff9900" },
-                  ].map((bill) => (
-                    <View key={bill.name} style={styles.billItem}>
+                  {bills.length > 0 ? bills.map((bill) => (
+                    <View key={bill.id} style={styles.billItem}>
                       <View style={[styles.billDot, { backgroundColor: bill.color }]} />
                       <Text style={styles.billName} numberOfLines={1}>{bill.name}</Text>
                       <Text style={styles.billDate}>{bill.date}</Text>
-                      <Text style={styles.billValue}>{formatCurrency(bill.value)}</Text>
+                      <Text style={styles.billValue}>{formatCurrency(bill.amount)}</Text>
                     </View>
-                  ))}
+                  )) : (
+                    <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: "center" }}>Nenhuma conta futura</Text>
+                  )}
                 </View>
               </View>
 
@@ -453,22 +493,28 @@ export default function DashboardScreen() {
               <View style={[styles.sectionCard, { width: HALF_WIDTH }]}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.sectionTitleSm}>Metas</Text>
-                  <Text style={styles.linkTextSm}>Ver todas {">"}</Text>
                 </View>
-                <View style={{ gap: 6 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Ionicons name="trending-up" size={16} color={colors.primary} />
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textPrimary }}>Viagem para o Japão</Text>
+                {goals.length > 0 ? (
+                  <View style={{ gap: 6 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Ionicons name={(goals[0].icon as keyof typeof Ionicons.glyphMap) || "trending-up"} size={16} color={goals[0].color || colors.primary} />
+                      <Text style={{ fontSize: 12, fontWeight: "600", color: colors.textPrimary }} numberOfLines={1}>{goals[0].name}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11, color: colors.textSecondary }}>{formatCurrency(goals[0].savedValue)} de {formatCurrency(goals[0].targetValue)}</Text>
+                    <View style={styles.progressBarBg}>
+                      <View style={[styles.progressBarFill, { width: `${goals[0].progress}%`, backgroundColor: goals[0].color || colors.primary }]} />
+                    </View>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <View><Text style={{ fontSize: 9, color: colors.textMuted }}>Falta</Text><Text style={{ fontSize: 12, fontWeight: "700", color: colors.textPrimary }}>{formatCurrency(goals[0].remaining)}</Text></View>
+                      {goals[0].estimatedMonths !== null && (
+                        <View style={{ alignItems: "flex-end" }}><Text style={{ fontSize: 9, color: colors.textMuted }}>Tempo estimado</Text><Text style={{ fontSize: 12, fontWeight: "700", color: colors.textPrimary }}>{goals[0].estimatedMonths} {goals[0].estimatedMonths === 1 ? "mês" : "meses"}</Text></View>
+                      )}
+                    </View>
+                    {goals.length > 1 && <Text style={{ fontSize: 9, color: colors.textMuted }}>+{goals.length - 1} {goals.length - 1 === 1 ? "meta" : "metas"}</Text>}
                   </View>
-                  <Text style={{ fontSize: 11, color: colors.textSecondary }}>R$ 2.450,00 de R$ 6.000,00</Text>
-                  <View style={styles.progressBarBg}>
-                    <View style={[styles.progressBarFill, { width: "41%", backgroundColor: colors.primary }]} />
-                  </View>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                    <View><Text style={{ fontSize: 9, color: colors.textMuted }}>Falta</Text><Text style={{ fontSize: 12, fontWeight: "700", color: colors.textPrimary }}>R$ 3.550,00</Text></View>
-                    <View style={{ alignItems: "flex-end" }}><Text style={{ fontSize: 9, color: colors.textMuted }}>Tempo estimado</Text><Text style={{ fontSize: 12, fontWeight: "700", color: colors.textPrimary }}>4 meses</Text></View>
-                  </View>
-                </View>
+                ) : (
+                  <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: "center" }}>Nenhuma meta cadastrada</Text>
+                )}
               </View>
 
               {/* Streak financeiro */}
@@ -477,12 +523,12 @@ export default function DashboardScreen() {
                   <Text style={{ fontSize: 16 }}>🔥</Text>
                   <Text style={styles.sectionTitleSm}>Streak financeiro</Text>
                 </View>
-                <Text style={{ fontSize: 28, fontWeight: "800", color: colors.textPrimary }}>12 <Text style={{ fontSize: 14, fontWeight: "600" }}>dias</Text></Text>
+                <Text style={{ fontSize: 28, fontWeight: "800", color: colors.textPrimary }}>{streak?.streak ?? 0} <Text style={{ fontSize: 14, fontWeight: "600" }}>dias</Text></Text>
                 <Text style={{ fontSize: 11, color: colors.textSecondary }}>Registrando suas finanças</Text>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-                  {["S", "T", "Q", "Q", "S", "S", "D"].map((d, i) => (
-                    <View key={`${d}-${i}`} style={[styles.streakDay, i < 5 && styles.streakDayActive]}>
-                      <Text style={[styles.streakDayText, i < 5 && styles.streakDayTextActive]}>{d}</Text>
+                  {(streak?.weekDays ?? [{ label: "S", active: false }, { label: "T", active: false }, { label: "Q", active: false }, { label: "Q", active: false }, { label: "S", active: false }, { label: "S", active: false }, { label: "D", active: false }]).map((d, i) => (
+                    <View key={`${d.label}-${i}`} style={[styles.streakDay, d.active && styles.streakDayActive]}>
+                      <Text style={[styles.streakDayText, d.active && styles.streakDayTextActive]}>{d.label}</Text>
                     </View>
                   ))}
                 </View>
@@ -494,15 +540,113 @@ export default function DashboardScreen() {
                   <Text style={styles.sectionTitleSm}>Score financeiro</Text>
                   <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
                 </View>
-                <CircularProgress size={80} strokeWidth={8} progress={0.78} progressColor={colors.success}>
-                  <Text style={{ fontSize: 20, fontWeight: "800", color: colors.textPrimary }}>780</Text>
-                  <Text style={{ fontSize: 8, color: colors.textMuted }}>de 1000</Text>
+                <CircularProgress size={80} strokeWidth={8} progress={(score?.score ?? 0) / (score?.maxScore ?? 1000)} progressColor={score && score.score >= 600 ? colors.success : score && score.score >= 300 ? colors.warning : colors.danger}>
+                  <Text style={{ fontSize: 20, fontWeight: "800", color: colors.textPrimary }}>{score?.score ?? 0}</Text>
+                  <Text style={{ fontSize: 8, color: colors.textMuted }}>de {score?.maxScore ?? 1000}</Text>
                 </CircularProgress>
-                <Text style={{ fontSize: 12, color: colors.warning }}>★ Muito bom</Text>
+                <Text style={{ fontSize: 12, color: score && score.score >= 600 ? colors.success : colors.warning }}>★ {score?.label ?? "Calculando..."}</Text>
               </View>
             </View>
           </>
         )}
+
+        {/* ── Chart Modal ── */}
+        <Modal visible={chartModal !== null} transparent animationType="slide" onRequestClose={() => setChartModal(null)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
+                <Text style={styles.sectionTitle}>
+                  {chartModal === "category" ? "Gastos por categoria" : chartModal === "bar" ? "Gastos mensais" : chartModal === "line" ? "Previsão de saldo" : "Comprometimento"}
+                </Text>
+                <TouchableOpacity onPress={() => setChartModal(null)}><Ionicons name="close" size={24} color={colors.textPrimary} /></TouchableOpacity>
+              </View>
+
+              {chartModal === "category" && data && data.expensesByCategory.length > 0 && (
+                <View style={{ alignItems: "center", gap: spacing.md }}>
+                  <PieChart
+                    data={data.expensesByCategory.map((cat, i) => ({ value: cat.value, color: cat.color || pieColors[i % pieColors.length] }))}
+                    donut innerCircleColor={colors.surface} radius={100} innerRadius={65}
+                    centerLabelComponent={() => (
+                      <View style={{ alignItems: "center" }}>
+                        <Text style={{ fontSize: 16, fontWeight: "700", color: colors.textPrimary }}>{formatCurrency(data.monthlyExpense)}</Text>
+                        <Text style={{ fontSize: 10, color: colors.textMuted }}>Total</Text>
+                      </View>
+                    )}
+                  />
+                  <View style={{ gap: 8, width: "100%" }}>
+                    {data.expensesByCategory.map((cat, i) => (
+                      <View key={cat.name} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                        <View style={[styles.catDot, { backgroundColor: cat.color || pieColors[i % pieColors.length] }]} />
+                        <Text style={{ flex: 1, fontSize: 13, color: colors.textSecondary }}>{cat.name}</Text>
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.textPrimary }}>{formatCurrency(cat.value)}</Text>
+                        <Text style={{ fontSize: 12, color: colors.textMuted }}>{Math.round((cat.value / totalExpense) * 100)}%</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
+              {chartModal === "bar" && data && (
+                <BarChart
+                  data={data.monthlyTrend.length > 0
+                    ? data.monthlyTrend.map((m) => ({ label: m.month.slice(5), value: m.expense, frontColor: colors.chartBar1 }))
+                    : [{ label: "-", value: 0, frontColor: colors.chartBar1 }]}
+                  width={SCREEN_WIDTH - spacing.lg * 4 - 40} height={250}
+                  barWidth={20} spacing={14} roundedTop roundedBottom
+                  yAxisThickness={0} xAxisThickness={0} hideYAxisText
+                  xAxisLabelTextStyle={{ fontSize: 10, color: colors.textMuted }}
+                  noOfSections={5} rulesColor={colors.border} rulesType="dashed" backgroundColor="transparent"
+                />
+              )}
+
+              {chartModal === "line" && data && (
+                <LineChart
+                  data={data.monthlyTrend.length > 0
+                    ? data.monthlyTrend.map((m) => ({ label: m.month.slice(5), value: m.income - m.expense }))
+                    : [{ value: 0, label: "-" }]}
+                  width={SCREEN_WIDTH - spacing.lg * 4 - 40} height={250}
+                  color={colors.success} thickness={2}
+                  hideDataPoints={false} dataPointsColor={colors.success} dataPointsRadius={4}
+                  curved areaChart
+                  startFillColor={colors.success} endFillColor="transparent" startOpacity={0.3} endOpacity={0}
+                  yAxisTextStyle={{ fontSize: 10, color: colors.textMuted }}
+                  xAxisLabelTextStyle={{ fontSize: 10, color: colors.textMuted }}
+                  yAxisColor="transparent" xAxisColor={colors.border}
+                  noOfSections={5} rulesColor={colors.border} rulesType="dashed"
+                />
+              )}
+
+              {chartModal === "commitment" && data && (
+                <View style={{ alignItems: "center", gap: spacing.lg }}>
+                  <CircularProgress size={150} strokeWidth={14} progress={comprometimento / 100} progressColor={comprometimento > 60 ? "#fb923c" : comprometimento > 40 ? colors.warning : colors.success}>
+                    <Text style={{ fontSize: 36, fontWeight: "800", color: colors.textPrimary }}>{comprometimento}%</Text>
+                    <Text style={{ fontSize: 12, color: colors.textMuted }}>comprometido</Text>
+                  </CircularProgress>
+                  <View style={{ gap: 8, width: "100%" }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={{ fontSize: 14, color: colors.textSecondary }}>Gastos do mês</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.danger }}>{formatCurrency(data.monthlyExpense)}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={{ fontSize: 14, color: colors.textSecondary }}>Renda do mês</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.success }}>{formatCurrency(data.monthlyIncome)}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                      <Text style={{ fontSize: 14, color: colors.textSecondary }}>Economia</Text>
+                      <Text style={{ fontSize: 14, fontWeight: "700", color: economia >= 0 ? colors.success : colors.danger }}>{formatCurrency(economia)}</Text>
+                    </View>
+                    <View style={[styles.progressBarBg, { height: 10, marginTop: 4 }]}>
+                      <View style={[styles.progressBarFill, { height: 10, width: `${Math.min(comprometimento, 100)}%`, backgroundColor: comprometimento > 60 ? "#fb923c" : colors.success }]} />
+                    </View>
+                    <Text style={{ fontSize: 12, color: colors.textMuted, textAlign: "center" }}>
+                      {comprometimento > 80 ? "Atenção! Você está comprometendo mais de 80% da renda." : comprometimento > 60 ? "Alto comprometimento. Ideal abaixo de 60%." : "Bom controle financeiro!"}
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -594,4 +738,8 @@ const styles = StyleSheet.create({
   streakDayActive: { backgroundColor: colors.success },
   streakDayText: { fontSize: 8, fontWeight: "600", color: colors.textMuted },
   streakDayTextActive: { color: "#fff" },
+
+  /* Modal */
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.7)", justifyContent: "flex-end" },
+  modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, padding: spacing.lg, paddingBottom: 40, maxHeight: "85%" },
 });

@@ -117,6 +117,96 @@ export async function extractFromText(text: string) {
   return response.json();
 }
 
+// ── User Profile ────────────────────────────────────────────────────
+
+export async function getMe(): Promise<{ id: string; name: string | null; email: string }> {
+  const response = await authFetch(`${BACKEND_URL}/auth/me`);
+  if (!response.ok) await handleError(response, "Erro ao buscar perfil");
+  return response.json();
+}
+
+// ── Goals ───────────────────────────────────────────────────────────
+
+export interface GoalData {
+  id: string;
+  name: string;
+  targetValue: number;
+  savedValue: number;
+  progress: number;
+  remaining: number;
+  estimatedMonths: number | null;
+  deadline: string | null;
+  icon: string;
+  color: string;
+}
+
+export async function getGoals(): Promise<GoalData[]> {
+  const response = await authFetch(`${BACKEND_URL}/goals`);
+  if (!response.ok) await handleError(response, "Erro ao buscar metas");
+  return response.json();
+}
+
+export async function createGoal(data: { name: string; targetValue: number; savedValue?: number; deadline?: string; icon?: string; color?: string }) {
+  const response = await authFetch(`${BACKEND_URL}/goals`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) await handleError(response, "Erro ao criar meta");
+  return response.json();
+}
+
+export async function depositGoal(id: string, amount: number) {
+  const response = await authFetch(`${BACKEND_URL}/goals/${id}/deposit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ amount }),
+  });
+  if (!response.ok) await handleError(response, "Erro ao depositar na meta");
+  return response.json();
+}
+
+// ── Streak ──────────────────────────────────────────────────────────
+
+export interface StreakData {
+  streak: number;
+  todayRegistered: boolean;
+  weekDays: { label: string; date: string; active: boolean }[];
+  totalDays: number;
+}
+
+export async function getStreak(): Promise<StreakData> {
+  const response = await authFetch(`${BACKEND_URL}/streak`);
+  if (!response.ok) await handleError(response, "Erro ao buscar streak");
+  return response.json();
+}
+
+export async function checkinStreak(): Promise<{ date: string; actions: number; isNew: boolean }> {
+  const response = await authFetch(`${BACKEND_URL}/streak/checkin`, { method: "POST" });
+  if (!response.ok) await handleError(response, "Erro ao registrar streak");
+  return response.json();
+}
+
+// ── Dashboard Score ─────────────────────────────────────────────────
+
+export interface ScoreData {
+  score: number;
+  maxScore: number;
+  label: string;
+  breakdown: {
+    streak: { value: number; max: number; description: string };
+    frequency: { value: number; max: number; description: string };
+    goals: { value: number; max: number; description: string };
+    tenure: { value: number; max: number; description: string };
+  };
+}
+
+export async function getDashboardScore(): Promise<ScoreData> {
+  const response = await authFetch(`${BACKEND_URL}/dashboard/score`);
+  if (!response.ok) await handleError(response, "Erro ao buscar score");
+  return response.json();
+}
+
 // ── Auto-save ──────────────────────────────────────────────────────────
 
 export async function autoSaveTransaction(transaction: {
