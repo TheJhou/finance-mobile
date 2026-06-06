@@ -629,6 +629,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<TransactionType>("EXPENSE");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
+  const [documentType, setDocumentType] = useState<DocumentType>("NORMAL");
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [boletoNumber, setBoletoNumber] = useState("");
@@ -637,6 +638,15 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const documentTypeOptions: { label: string; value: DocumentType }[] = [
+    { label: "Gasto Normal", value: "NORMAL" },
+    { label: "Boleto", value: "BOLETO" },
+    { label: "Nota Fiscal", value: "NOTA_FISCAL" },
+    { label: "Comprovante PIX", value: "COMPROVANTE_PIX" },
+    { label: "Comprovante Bancário", value: "COMPROVANTE_BANCARIO" },
+    { label: "Outro", value: "OUTRO" },
+  ];
 
   useEffect(() => {
     if (!visible) return;
@@ -654,6 +664,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setAmount(editingItem.amount.toString());
       setType(editingItem.type);
       setPaymentMethod(editingItem.paymentMethod);
+      setDocumentType(editingItem.documentType);
       setDate(editingItem.date);
       setCategoryId(editingItem.categoryId);
       setBoletoNumber(editingItem.boletoNumber ?? "");
@@ -664,6 +675,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setAmount("");
       setType("EXPENSE");
       setPaymentMethod("CASH");
+      setDocumentType("NORMAL");
       setDate(toDateInputValue(new Date()));
       setCategoryId(null);
       setBoletoNumber("");
@@ -704,6 +716,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setAmount(extracted.amount.toString());
       setType(extracted.type);
       setPaymentMethod((extracted.paymentMethod as PaymentMethod) ?? "CASH");
+      setDocumentType((extracted.documentType as DocumentType) ?? "NORMAL");
       setDate(extracted.date);
       setBoletoNumber(extracted.boletoNumber ?? "");
       setCnpj(extracted.cnpj ?? "");
@@ -751,6 +764,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
           amount: parsedAmount,
           type,
           paymentMethod,
+          documentType,
           date,
           categoryId,
           boletoNumber: boletoNumber.trim() || null,
@@ -763,6 +777,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
           amount: parsedAmount,
           type,
           paymentMethod,
+          documentType,
           date,
           categoryId,
           boletoNumber: boletoNumber.trim() || null,
@@ -864,6 +879,38 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
                   Receita
                 </Text>
               </Pressable>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={styles.label}>Tipo de Documento</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.pillRow}
+              >
+                {documentTypeOptions.map((option) => (
+                  <Pressable
+                    key={option.value}
+                    style={[
+                      styles.pill,
+                      documentType === option.value && {
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary,
+                      },
+                    ]}
+                    onPress={() => setDocumentType(option.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.pillText,
+                        documentType === option.value && { color: colors.textInverse },
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             </View>
 
             <Input

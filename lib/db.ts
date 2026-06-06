@@ -99,7 +99,7 @@ async function cleanupOldProcessedNotifications(db: SQLite.SQLiteDatabase): Prom
 }
 
 async function addNewTransactionFields(db: SQLite.SQLiteDatabase): Promise<void> {
-  // Adiciona novos campos para boleto, CNPJ e nome do destinatário
+  // Adiciona novos campos para boleto, CNPJ, nome do destinatário e tipo de documento
   // Usa ALTER TABLE IF NOT EXISTS pattern para evitar erros em migrações futuras
   const columns = await db.getAllAsync<{ name: string }>(
     "PRAGMA table_info(transactions)"
@@ -114,6 +114,9 @@ async function addNewTransactionFields(db: SQLite.SQLiteDatabase): Promise<void>
   }
   if (!columnNames.has("recipient_name")) {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN recipient_name TEXT");
+  }
+  if (!columnNames.has("document_type")) {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'NORMAL'");
   }
 }
 

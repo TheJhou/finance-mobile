@@ -1,6 +1,7 @@
 import { generateId, getDb } from "@/lib/db";
 import type {
     Category,
+    DocumentType,
     PaymentMethod,
     Transaction,
     TransactionStatus,
@@ -20,6 +21,7 @@ interface TransactionRow {
   boleto_number: string | null;
   cnpj: string | null;
   recipient_name: string | null;
+  document_type: DocumentType;
   created_at: string;
   updated_at: string;
   category_name: string | null;
@@ -51,6 +53,7 @@ function mapTransaction(row: TransactionRow): Transaction {
     category,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    documentType: row.document_type,
     boletoNumber: row.boleto_number,
     cnpj: row.cnpj,
     recipientName: row.recipient_name,
@@ -60,7 +63,7 @@ function mapTransaction(row: TransactionRow): Transaction {
 const BASE_SELECT = `
   SELECT
     t.id, t.description, t.amount, t.type, t.status, t.payment_method,
-    t.date, t.notes, t.category_id, t.boleto_number, t.cnpj, t.recipient_name,
+    t.date, t.notes, t.category_id, t.boleto_number, t.cnpj, t.recipient_name, t.document_type,
     t.created_at, t.updated_at,
     c.name as category_name, c.color as category_color,
     c.icon as category_icon, c.is_default as category_is_default
@@ -96,6 +99,7 @@ export async function createTransaction(data: {
   date: string;
   notes?: string | null;
   categoryId: string;
+  documentType?: DocumentType;
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
@@ -104,8 +108,8 @@ export async function createTransaction(data: {
   const id = generateId();
   await db.runAsync(
     `INSERT INTO transactions
-      (id, description, amount, type, status, payment_method, date, notes, category_id, boleto_number, cnpj, recipient_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, description, amount, type, status, payment_method, date, notes, category_id, document_type, boleto_number, cnpj, recipient_name)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.description,
@@ -116,6 +120,7 @@ export async function createTransaction(data: {
       data.date,
       data.notes ?? null,
       data.categoryId,
+      data.documentType ?? "NORMAL",
       data.boletoNumber ?? null,
       data.cnpj ?? null,
       data.recipientName ?? null,
@@ -137,6 +142,7 @@ export async function updateTransaction(
     date: string;
     notes: string | null;
     categoryId: string;
+    documentType: DocumentType;
     boletoNumber: string | null;
     cnpj: string | null;
     recipientName: string | null;
@@ -152,6 +158,7 @@ export async function updateTransaction(
     date: "date",
     notes: "notes",
     categoryId: "category_id",
+    documentType: "document_type",
     boletoNumber: "boleto_number",
     cnpj: "cnpj",
     recipientName: "recipient_name",

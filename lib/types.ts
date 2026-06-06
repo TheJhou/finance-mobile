@@ -45,6 +45,7 @@ export type PaymentMethod =
   | "BOLETO"
   | "MERCADO_PAGO"
   | "OTHER";
+export type DocumentType = "NORMAL" | "BOLETO" | "NOTA_FISCAL" | "COMPROVANTE_PIX" | "COMPROVANTE_BANCARIO" | "OUTRO";
 export type Frequency = "WEEKLY" | "MONTHLY" | "YEARLY";
 
 export interface Transaction {
@@ -60,7 +61,8 @@ export interface Transaction {
   category?: Category;
   createdAt: string;
   updatedAt: string;
-  // Additional fields for bills and invoices
+  // Document type and additional fields
+  documentType: DocumentType;
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
