@@ -42,6 +42,7 @@ export type PaymentMethod =
   | "DEBIT_CARD"
   | "PIX"
   | "BANK_TRANSFER"
+  | "BOLETO"
   | "MERCADO_PAGO"
   | "OTHER";
 export type Frequency = "WEEKLY" | "MONTHLY" | "YEARLY";
@@ -59,6 +60,10 @@ export interface Transaction {
   category?: Category;
   createdAt: string;
   updatedAt: string;
+  // Additional fields for bills and invoices
+  boletoNumber?: string | null;
+  cnpj?: string | null;
+  recipientName?: string | null;
 }
 
 export interface RecurringTransaction {

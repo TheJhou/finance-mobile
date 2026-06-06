@@ -38,6 +38,9 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
       date TEXT NOT NULL,
       notes TEXT,
       category_id TEXT NOT NULL,
+      boleto_number TEXT,
+      cnpj TEXT,
+      recipient_name TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
@@ -84,14 +87,34 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
 
   await seedDefaultCategories(db);
   await cleanupOldProcessedNotifications(db);
+  await addNewTransactionFields(db);
 }
 
 async function cleanupOldProcessedNotifications(db: SQLite.SQLiteDatabase): Promise<void> {
   // Remove notificações processadas há mais de 30 dias
   await db.execAsync(`
-    DELETE FROM processed_notifications 
+    DELETE FROM processed_notifications
     WHERE processed_at < datetime('now', '-30 days')
   `);
+}
+
+async function addNewTransactionFields(db: SQLite.SQLiteDatabase): Promise<void> {
+  // Adiciona novos campos para boleto, CNPJ e nome do destinatário
+  // Usa ALTER TABLE IF NOT EXISTS pattern para evitar erros em migrações futuras
+  const columns = await db.getAllAsync<{ name: string }>(
+    "PRAGMA table_info(transactions)"
+  );
+  const columnNames = new Set(columns.map((c) => c.name));
+
+  if (!columnNames.has("boleto_number")) {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN boleto_number TEXT");
+  }
+  if (!columnNames.has("cnpj")) {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN cnpj TEXT");
+  }
+  if (!columnNames.has("recipient_name")) {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN recipient_name TEXT");
+  }
 }
 
 async function seedDefaultCategories(db: SQLite.SQLiteDatabase): Promise<void> {

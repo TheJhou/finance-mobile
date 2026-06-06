@@ -4,10 +4,10 @@ import { extractTransactionFromPhoto } from "@/lib/ai";
 import { isAuthenticated } from "@/lib/auth";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-  createTransaction,
-  deleteTransaction,
-  listTransactions,
-  updateTransaction,
+    createTransaction,
+    deleteTransaction,
+    listTransactions,
+    updateTransaction,
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, Transaction, TransactionType } from "@/lib/types";
@@ -17,21 +17,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  LayoutAnimation,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  UIManager,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    LayoutAnimation,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    UIManager,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -543,12 +543,18 @@ export default function TransactionsScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.desc} numberOfLines={1}>
-                  {item.description}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={styles.desc} numberOfLines={1}>
+                    {item.description}
+                  </Text>
+                  {item.paymentMethod === "BOLETO" && (
+                    <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+                  )}
+                </View>
                 <Text style={styles.meta}>
                   {item.category?.name ?? "Sem categoria"} ·{" "}
                   {formatDate(item.date)}
+                  {item.paymentMethod === "BOLETO" && " · Boleto"}
                 </Text>
               </View>
               <View style={{ alignItems: "flex-end" }}>
@@ -622,8 +628,12 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<TransactionType>("EXPENSE");
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("CASH");
   const [date, setDate] = useState(toDateInputValue(new Date()));
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [boletoNumber, setBoletoNumber] = useState("");
+  const [cnpj, setCnpj] = useState("");
+  const [recipientName, setRecipientName] = useState("");
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -643,14 +653,22 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setDescription(editingItem.description);
       setAmount(editingItem.amount.toString());
       setType(editingItem.type);
+      setPaymentMethod(editingItem.paymentMethod);
       setDate(editingItem.date);
       setCategoryId(editingItem.categoryId);
+      setBoletoNumber(editingItem.boletoNumber ?? "");
+      setCnpj(editingItem.cnpj ?? "");
+      setRecipientName(editingItem.recipientName ?? "");
     } else {
       setDescription("");
       setAmount("");
       setType("EXPENSE");
+      setPaymentMethod("CASH");
       setDate(toDateInputValue(new Date()));
       setCategoryId(null);
+      setBoletoNumber("");
+      setCnpj("");
+      setRecipientName("");
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingItem, visible]);
@@ -685,7 +703,11 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setDescription(extracted.description);
       setAmount(extracted.amount.toString());
       setType(extracted.type);
+      setPaymentMethod((extracted.paymentMethod as PaymentMethod) ?? "CASH");
       setDate(extracted.date);
+      setBoletoNumber(extracted.boletoNumber ?? "");
+      setCnpj(extracted.cnpj ?? "");
+      setRecipientName(extracted.recipientName ?? "");
       if (extracted.categoryName) {
         const match = categories.find(
           (c) => c.name.toLowerCase() === extracted.categoryName!.toLowerCase()
@@ -728,16 +750,24 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
           description: description.trim(),
           amount: parsedAmount,
           type,
+          paymentMethod,
           date,
           categoryId,
+          boletoNumber: boletoNumber.trim() || null,
+          cnpj: cnpj.trim() || null,
+          recipientName: recipientName.trim() || null,
         });
       } else {
         await createTransaction({
           description: description.trim(),
           amount: parsedAmount,
           type,
+          paymentMethod,
           date,
           categoryId,
+          boletoNumber: boletoNumber.trim() || null,
+          cnpj: cnpj.trim() || null,
+          recipientName: recipientName.trim() || null,
         });
       }
       onSaved();
@@ -856,6 +886,83 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
               placeholder="AAAA-MM-DD"
               autoCapitalize="none"
             />
+
+            <View style={{ gap: 6 }}>
+              <Text style={styles.label}>Método de Pagamento</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.pillRow}
+              >
+                {[
+                  { id: "CASH", label: "Dinheiro", icon: "cash-outline" },
+                  { id: "PIX", label: "PIX", icon: "qr-code" },
+                  { id: "CREDIT_CARD", label: "Crédito", icon: "card" },
+                  { id: "DEBIT_CARD", label: "Débito", icon: "card" },
+                  { id: "BOLETO", label: "Boleto", icon: "document-text" },
+                  { id: "BANK_TRANSFER", label: "Transferência", icon: "swap-horizontal" },
+                  { id: "MERCADO_PAGO", label: "Mercado Pago", icon: "logo-usd" },
+                  { id: "OTHER", label: "Outro", icon: "ellipsis-horizontal" },
+                ].map((method) => (
+                  <Pressable
+                    key={method.id}
+                    style={[
+                      styles.pill,
+                      paymentMethod === method.id && {
+                        backgroundColor: colors.primary,
+                        borderColor: colors.primary,
+                      },
+                    ]}
+                    onPress={() => setPaymentMethod(method.id as PaymentMethod)}
+                  >
+                    <Ionicons
+                      name={method.icon as any}
+                      size={16}
+                      color={paymentMethod === method.id ? colors.textInverse : colors.textMuted}
+                    />
+                    <Text
+                      style={[
+                        styles.pillText,
+                        paymentMethod === method.id && { color: colors.textInverse },
+                      ]}
+                    >
+                      {method.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+
+            {paymentMethod === "BOLETO" && (
+              <>
+                <Input
+                  label="Número do Boleto"
+                  value={boletoNumber}
+                  onChangeText={setBoletoNumber}
+                  placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+
+                <Input
+                  label="CNPJ (opcional)"
+                  value={cnpj}
+                  onChangeText={setCnpj}
+                  placeholder="00.000.000/0000-00"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  keyboardType="numbers-and-punctuation"
+                />
+
+                <Input
+                  label="Nome do Beneficiário"
+                  value={recipientName}
+                  onChangeText={setRecipientName}
+                  placeholder="Nome da empresa ou pessoa"
+                  autoCapitalize="words"
+                />
+              </>
+            )}
 
             <View style={{ gap: 6 }}>
               <Text style={styles.label}>Categoria</Text>

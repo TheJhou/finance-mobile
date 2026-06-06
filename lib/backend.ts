@@ -213,7 +213,7 @@ export async function autoSaveTransaction(transaction: {
   description: string;
   amount: number;
   type: "INCOME" | "EXPENSE";
-  paymentMethod?: "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "BANK_TRANSFER" | "MERCADO_PAGO" | "CASH" | "OTHER";
+  paymentMethod?: "PIX" | "CREDIT_CARD" | "DEBIT_CARD" | "BANK_TRANSFER" | "BOLETO" | "MERCADO_PAGO" | "CASH" | "OTHER";
   date: string;
   categoryId?: string;
   notes?: string;

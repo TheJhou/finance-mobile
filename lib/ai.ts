@@ -6,6 +6,10 @@ export interface ExtractedTransaction {
   type: "INCOME" | "EXPENSE";
   date: string;
   categoryName: string | null;
+  paymentMethod?: string | null;
+  boletoNumber?: string | null;
+  cnpj?: string | null;
+  recipientName?: string | null;
 }
 
 function normalize(data: Record<string, unknown>, fallbackDesc: string): ExtractedTransaction {
@@ -15,6 +19,10 @@ function normalize(data: Record<string, unknown>, fallbackDesc: string): Extract
     type: typeof data.type === "string" && data.type.toUpperCase() === "INCOME" ? "INCOME" : "EXPENSE",
     date: (data.date as string) ?? new Date().toISOString().slice(0, 10),
     categoryName: (data.categoryName as string) ?? null,
+    paymentMethod: (data.paymentMethod as string) ?? null,
+    boletoNumber: (data.boletoNumber as string) ?? null,
+    cnpj: (data.cnpj as string) ?? null,
+    recipientName: (data.recipientName as string) ?? null,
   };
 }
 
