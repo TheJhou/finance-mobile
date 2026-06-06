@@ -92,6 +92,14 @@ export default function DashboardScreen() {
         checkinStreak().catch(() => {}),
       ]);
 
+      // Schedule notifications (non-blocking)
+      const comprometimento = dashRes.monthlyIncome > 0 ? Math.round((dashRes.monthlyExpense / dashRes.monthlyIncome) * 100) : 0;
+      Promise.all([
+        scheduleUpcomingBillsAlerts().catch(() => {}),
+        scheduleGoalAlerts().catch(() => {}),
+        scheduleDailyCommitmentCheck(comprometimento).catch(() => {}),
+      ]);
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar");
