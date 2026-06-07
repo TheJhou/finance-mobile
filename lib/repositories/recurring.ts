@@ -210,7 +210,7 @@ function advanceDate(date: string, frequency: Frequency): string {
 
 export async function processRecurringDue(): Promise<number> {
   const db = await getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatDateLocal(new Date());
 
   const dueRows = await db.getAllAsync<RecurringRow>(
     `${BASE_SELECT} WHERE r.is_active = 1 AND r.next_due_date <= ?`,

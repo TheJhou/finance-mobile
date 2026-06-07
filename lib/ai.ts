@@ -1,12 +1,14 @@
 import { extractFromPhoto, extractFromText } from "@/lib/backend";
 
+import { toDateInputValue } from "@/lib/utils";
+
 export interface ExtractedTransaction {
   description: string;
   amount: number;
   type: "INCOME" | "EXPENSE";
   date: string;
   categoryName: string | null;
-  paymentMethod?: string | null;
+  paymentMethod: string | null;
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
@@ -17,7 +19,7 @@ function normalize(data: Record<string, unknown>, fallbackDesc: string): Extract
     description: (data.description as string) ?? fallbackDesc,
     amount: typeof data.amount === "number" ? Math.abs(data.amount) : 0,
     type: typeof data.type === "string" && data.type.toUpperCase() === "INCOME" ? "INCOME" : "EXPENSE",
-    date: (data.date as string) ?? new Date().toISOString().slice(0, 10),
+    date: (data.date as string) ?? toDateInputValue(new Date()),
     categoryName: (data.categoryName as string) ?? null,
     paymentMethod: (data.paymentMethod as string) ?? null,
     boletoNumber: (data.boletoNumber as string) ?? null,

@@ -86,6 +86,9 @@ export async function getDashboard(): Promise<DashboardData> {
   );
 
   // Monthly trend: last 6 months
+  const sixMonthsAgo = new Date();
+  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
+  sixMonthsAgo.setDate(1);
   const trendRows = await db.getAllAsync<{
     month: string;
     income: number;
@@ -95,9 +98,10 @@ export async function getDashboard(): Promise<DashboardData> {
        SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
        SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
      FROM transactions
-     WHERE status = 'PAID' AND date >= date('now', '-6 months', 'start of month')
+     WHERE status = 'PAID' AND date >= ?
      GROUP BY strftime('%Y-%m', date)
-     ORDER BY month ASC`
+     ORDER BY month ASC`,
+    [formatDateLocal(sixMonthsAgo)]
   );
 
   return {
