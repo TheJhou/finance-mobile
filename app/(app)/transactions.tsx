@@ -55,7 +55,7 @@ interface Filters {
 }
 
 const INITIAL_FILTERS: Filters = {
-  datePreset: "all",
+  datePreset: "month",
   dateFrom: "",
   dateTo: "",
   type: "ALL",
