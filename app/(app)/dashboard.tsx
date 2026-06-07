@@ -70,6 +70,8 @@ export default function DashboardScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [chartModal, setChartModal] = useState<"category" | "bar" | "line" | "commitment" | null>(null);
+  const [notificationModal, setNotificationModal] = useState(false);
+  const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -77,12 +79,14 @@ export default function DashboardScreen() {
       const cachedName = await getStoredUserName();
       if (cachedName) setUserName(cachedName);
 
-      const [dashRes, billsRes] = await Promise.all([
+      const [dashRes, billsRes, overdueRes] = await Promise.all([
         getDashboard(),
         getUpcomingBills(),
+        getOverdueTransactions(),
       ]);
       setData(dashRes);
       setBills(billsRes);
+      setOverdueTransactions(overdueRes);
 
       // Backend calls (non-blocking — fail silently if offline)
       Promise.all([
@@ -173,7 +177,7 @@ export default function DashboardScreen() {
           </View>
           <View style={styles.headerRight}>
             <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ionicons name="search" size={22} color={colors.textPrimary} /></TouchableOpacity>
-            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ overflow: "visible" }}>
+            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ overflow: "visible" }} onPress={() => setNotificationModal(true)}>
               <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {data && data.pendingCount > 0 && (
                 <View style={styles.badge}><Text style={styles.badgeText}>{Math.min(data.pendingCount, 9)}</Text></View>
@@ -658,6 +662,54 @@ export default function DashboardScreen() {
                   </View>
                 </View>
               )}
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── Notification Modal ── */}
+        <Modal visible={notificationModal} transparent animationType="slide" onRequestClose={() => setNotificationModal(false)}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
+                <Text style={styles.sectionTitle}>Notificações</Text>
+                <TouchableOpacity onPress={() => setNotificationModal(false)}><Ionicons name="close" size={24} color={colors.textPrimary} /></TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ maxHeight: 400 }}>
+                {overdueTransactions.length === 0 && data?.pendingCount === 0 ? (
+                  <View style={{ alignItems: "center", paddingVertical: spacing.xl }}>
+                    <Ionicons name="checkmark-circle" size={48} color={colors.success} />
+                    <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: spacing.sm }}>Nenhuma notificação pendente</Text>
+                  </View>
+                ) : (
+                  <>
+                    {overdueTransactions.length > 0 && (
+                      <View style={{ marginBottom: spacing.lg }}>
+                        <Text style={{ fontSize: 12, fontWeight: "600", color: colors.danger, marginBottom: spacing.sm }}>Atrasadas ({overdueTransactions.length})</Text>
+                        {overdueTransactions.map((t) => (
+                          <View key={t.id} style={{ backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderLeftWidth: 3, borderLeftColor: colors.danger }}>
+                            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>{t.description}</Text>
+                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
+                              <Text style={{ fontSize: 12, color: colors.textMuted }}>{t.date}</Text>
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.danger }}>{formatCurrency(t.amount)}</Text>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+
+                    {data?.upcomingAmount > 0 && (
+                      <View>
+                        <Text style={{ fontSize: 12, fontWeight: "600", color: colors.warning, marginBottom: spacing.sm }}>Próximos 7 dias</Text>
+                        <View style={{ backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderLeftWidth: 3, borderLeftColor: colors.warning }}>
+                          <Text style={{ fontSize: 14, color: colors.textPrimary }}>Contas a vencer</Text>
+                          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.warning, marginTop: 4 }}>{formatCurrency(data.upcomingAmount)}</Text>
+                        </View>
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
             </View>
           </View>
         </Modal>
