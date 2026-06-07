@@ -36,7 +36,8 @@ export async function getDashboard(): Promise<DashboardData> {
 
   const balanceRow = await db.getFirstAsync<{ balance: number | null }>(
     `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
-     FROM transactions WHERE status = 'PAID'`
+     FROM transactions WHERE status = 'PAID' AND date BETWEEN ? AND ?`,
+    [first, last]
   );
 
   const incomeRow = await db.getFirstAsync<{ total: number | null }>(
