@@ -57,7 +57,8 @@
           "color": "#6366f1",
           "sounds": []
         }
-      ]
+      ],
+      "./modules/bank-notifications"
     ],
     "experiments": {
       "typedRoutes": true
