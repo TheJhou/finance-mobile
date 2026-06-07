@@ -3,7 +3,7 @@ import type { GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
-import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { getDashboard, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { DashboardData } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
