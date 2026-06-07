@@ -15,19 +15,24 @@ function monthRange(): { first: string; last: string } {
   const first = new Date(now.getFullYear(), now.getMonth(), 1);
   const last = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
   return {
-    first: first.toISOString().slice(0, 10),
-    last: last.toISOString().slice(0, 10),
+    first: formatDateLocal(first),
+    last: formatDateLocal(last),
   };
+}
+
+function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 export async function getDashboard(): Promise<DashboardData> {
   await processRecurringDue();
   const db = await getDb();
   const { first, last } = monthRange();
-  const today = new Date().toISOString().slice(0, 10);
-  const in7Days = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 10);
+  const today = formatDateLocal(new Date());
+  const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
   const balanceRow = await db.getFirstAsync<{ balance: number | null }>(
     `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
@@ -119,8 +124,8 @@ export async function getDashboard(): Promise<DashboardData> {
 
 export async function getUpcomingBills(): Promise<UpcomingBill[]> {
   const db = await getDb();
-  const today = new Date().toISOString().slice(0, 10);
-  const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const today = formatDateLocal(new Date());
+  const in30Days = formatDateLocal(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
   const rows = await db.getAllAsync<{
     id: string;
@@ -153,7 +158,7 @@ export async function getUpcomingBills(): Promise<UpcomingBill[]> {
 
 export async function getOverdueTransactions(): Promise<{ id: string; description: string; amount: number; date: string }[]> {
   const db = await getDb();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = formatDateLocal(new Date());
   const rows = await db.getAllAsync<{ id: string; description: string; amount: number; date: string }>(
     `SELECT id, description, amount, date FROM transactions WHERE status = 'PENDING' AND date < ? ORDER BY date ASC LIMIT 10`,
     [today]
