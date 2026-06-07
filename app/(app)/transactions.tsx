@@ -73,6 +73,60 @@ function normalizePaymentMethod(value: string | null): PaymentMethod {
   return value && allowed.includes(value as PaymentMethod) ? (value as PaymentMethod) : "CASH";
 }
 
+const documentTypeMeta: Record<DocumentType, {
+  label: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  paymentMethod?: PaymentMethod;
+}> = {
+  NORMAL: {
+    label: "Gasto Normal",
+    description: "Descrição, valor, data e categoria.",
+    icon: "receipt-outline",
+    color: colors.textMuted,
+  },
+  BOLETO: {
+    label: "Boleto",
+    description: "Beneficiário, código de barras, vencimento e documento.",
+    icon: "barcode-outline",
+    color: colors.warning,
+    paymentMethod: "BOLETO",
+  },
+  NOTA_FISCAL: {
+    label: "Nota Fiscal",
+    description: "Emitente, CNPJ/CPF e número da nota.",
+    icon: "document-text-outline",
+    color: colors.info,
+  },
+  COMPROVANTE_PIX: {
+    label: "Comprovante PIX",
+    description: "Pagador/recebedor, chave PIX e CPF/CNPJ.",
+    icon: "qr-code-outline",
+    color: colors.success,
+    paymentMethod: "PIX",
+  },
+  COMPROVANTE_BANCARIO: {
+    label: "Comprovante Bancário",
+    description: "Banco, favorecido e CPF/CNPJ.",
+    icon: "business-outline",
+    color: colors.primary,
+    paymentMethod: "BANK_TRANSFER",
+  },
+  OUTRO: {
+    label: "Outro",
+    description: "Campos extras opcionais para identificar o documento.",
+    icon: "folder-outline",
+    color: colors.cardOrange,
+    paymentMethod: "OTHER",
+  },
+};
+
+const documentTypeOptions = Object.entries(documentTypeMeta).map(([value, meta]) => ({
+  value: value as DocumentType,
+  ...meta,
+}));
+
 function getDateRange(preset: DatePreset): { from: string; to: string } | null {
   if (preset === "all") return null;
   const now = new Date();
@@ -648,18 +702,17 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
   const [boletoNumber, setBoletoNumber] = useState("");
   const [cnpj, setCnpj] = useState("");
   const [recipientName, setRecipientName] = useState("");
+  const [documentNumber, setDocumentNumber] = useState("");
+  const [pixKey, setPixKey] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [fineAmount, setFineAmount] = useState("");
+  const [interestAmount, setInterestAmount] = useState("");
+  const [discountAmount, setDiscountAmount] = useState("");
+  const [extraNotes, setExtraNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-
-  const documentTypeOptions: { label: string; value: DocumentType }[] = [
-    { label: "Gasto Normal", value: "NORMAL" },
-    { label: "Boleto", value: "BOLETO" },
-    { label: "Nota Fiscal", value: "NOTA_FISCAL" },
-    { label: "Comprovante PIX", value: "COMPROVANTE_PIX" },
-    { label: "Comprovante Bancário", value: "COMPROVANTE_BANCARIO" },
-    { label: "Outro", value: "OUTRO" },
-  ];
+  const selectedDocumentMeta = documentTypeMeta[documentType];
 
   useEffect(() => {
     if (!visible) return;
@@ -683,6 +736,13 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setBoletoNumber(editingItem.boletoNumber ?? "");
       setCnpj(editingItem.cnpj ?? "");
       setRecipientName(editingItem.recipientName ?? "");
+      setExtraNotes(editingItem.notes ?? "");
+      setDocumentNumber("");
+      setPixKey("");
+      setBankName("");
+      setFineAmount("");
+      setInterestAmount("");
+      setDiscountAmount("");
     } else {
       setDescription("");
       setAmount("");
@@ -694,8 +754,34 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setBoletoNumber("");
       setCnpj("");
       setRecipientName("");
+      setDocumentNumber("");
+      setPixKey("");
+      setBankName("");
+      setFineAmount("");
+      setInterestAmount("");
+      setDiscountAmount("");
+      setExtraNotes("");
     }
   }, [editingItem, visible]);
+
+  const handleDocumentTypeChange = (nextDocumentType: DocumentType) => {
+    setDocumentType(nextDocumentType);
+    const nextPaymentMethod = documentTypeMeta[nextDocumentType].paymentMethod;
+    if (nextPaymentMethod) setPaymentMethod(nextPaymentMethod);
+  };
+
+  const buildNotes = () => {
+    const detailLines = [
+      documentNumber.trim() ? `Número do documento: ${documentNumber.trim()}` : null,
+      pixKey.trim() ? `Chave PIX: ${pixKey.trim()}` : null,
+      bankName.trim() ? `Banco/Instituição: ${bankName.trim()}` : null,
+      fineAmount.trim() ? `Multa: ${fineAmount.trim()}` : null,
+      interestAmount.trim() ? `Juros: ${interestAmount.trim()}` : null,
+      discountAmount.trim() ? `Desconto: ${discountAmount.trim()}` : null,
+      extraNotes.trim() || null,
+    ].filter(Boolean);
+    return detailLines.length > 0 ? detailLines.join("\n") : null;
+  };
 
   const handlePhotoScan = async () => {
     try {
@@ -771,6 +857,23 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setErr("Data inválida (use AAAA-MM-DD)");
       return;
     }
+    if (documentType === "BOLETO" && !boletoNumber.trim()) {
+      setErr("Informe o código de barras ou linha digitável do boleto");
+      return;
+    }
+    if (documentType === "BOLETO" && !recipientName.trim()) {
+      setErr("Informe quem recebeu o boleto");
+      return;
+    }
+    if (documentType === "COMPROVANTE_PIX" && !recipientName.trim()) {
+      setErr("Informe o pagador ou recebedor do PIX");
+      return;
+    }
+    if (documentType === "NOTA_FISCAL" && !cnpj.trim()) {
+      setErr("Informe o CNPJ/CPF da nota fiscal");
+      return;
+    }
+    const notes = buildNotes();
     setErr(null);
     setSaving(true);
     try {
@@ -783,6 +886,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
           documentType,
           date,
           categoryId,
+          notes,
           boletoNumber: boletoNumber.trim() || null,
           cnpj: cnpj.trim() || null,
           recipientName: recipientName.trim() || null,
@@ -796,6 +900,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
           documentType,
           date,
           categoryId,
+          notes,
           boletoNumber: boletoNumber.trim() || null,
           cnpj: cnpj.trim() || null,
           recipientName: recipientName.trim() || null,
@@ -902,31 +1007,39 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.pillRow}
+                contentContainerStyle={styles.documentTypeRow}
               >
                 {documentTypeOptions.map((option) => (
                   <Pressable
                     key={option.value}
                     style={[
-                      styles.pill,
-                      documentType === option.value && {
-                        backgroundColor: colors.primary,
-                        borderColor: colors.primary,
-                      },
+                      styles.documentTypeCard,
+                      documentType === option.value && { borderColor: option.color },
                     ]}
-                    onPress={() => setDocumentType(option.value)}
+                    onPress={() => handleDocumentTypeChange(option.value)}
                   >
+                    <View style={[styles.documentTypeIcon, { backgroundColor: `${option.color}22` }]}>
+                      <Ionicons name={option.icon} size={18} color={option.color} />
+                    </View>
                     <Text
                       style={[
-                        styles.pillText,
-                        documentType === option.value && { color: colors.textInverse },
+                        styles.documentTypeTitle,
+                        documentType === option.value && { color: option.color },
                       ]}
                     >
                       {option.label}
                     </Text>
+                    <Text style={styles.documentTypeDescription}>{option.description}</Text>
                   </Pressable>
                 ))}
               </ScrollView>
+              <View style={[styles.documentHint, { borderLeftColor: selectedDocumentMeta.color }]}>
+                <Ionicons name={selectedDocumentMeta.icon} size={18} color={selectedDocumentMeta.color} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.documentHintTitle}>{selectedDocumentMeta.label}</Text>
+                  <Text style={styles.documentHintText}>{selectedDocumentMeta.description}</Text>
+                </View>
+              </View>
             </View>
 
             <Input
@@ -996,35 +1109,85 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
               </ScrollView>
             </View>
 
-            {paymentMethod === "BOLETO" && (
-              <>
-                <Input
-                  label="Número do Boleto"
-                  value={boletoNumber}
-                  onChangeText={setBoletoNumber}
-                  placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                />
+            {documentType !== "NORMAL" && (
+              <View style={styles.documentFieldsCard}>
+                <Text style={styles.documentFieldsTitle}>Dados do documento</Text>
+
+                {documentType === "BOLETO" && (
+                  <>
+                    <Input
+                      label="Quem recebeu"
+                      value={recipientName}
+                      onChangeText={setRecipientName}
+                      placeholder="Nome da empresa ou pessoa"
+                      autoCapitalize="words"
+                    />
+                    <Input
+                      label="Código de barras / linha digitável"
+                      value={boletoNumber}
+                      onChangeText={setBoletoNumber}
+                      placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                    />
+                    <Input
+                      label="CPF/CNPJ do beneficiário"
+                      value={cnpj}
+                      onChangeText={setCnpj}
+                      placeholder="000.000.000-00 ou 00.000.000/0000-00"
+                      autoCapitalize="characters"
+                      autoCorrect={false}
+                      keyboardType="numbers-and-punctuation"
+                    />
+                    <View style={styles.documentFieldGrid}>
+                      <Input label="Multa" value={fineAmount} onChangeText={setFineAmount} placeholder="0,00" keyboardType="decimal-pad" style={styles.documentGridInput} />
+                      <Input label="Juros" value={interestAmount} onChangeText={setInterestAmount} placeholder="0,00" keyboardType="decimal-pad" style={styles.documentGridInput} />
+                      <Input label="Desconto" value={discountAmount} onChangeText={setDiscountAmount} placeholder="0,00" keyboardType="decimal-pad" style={styles.documentGridInput} />
+                    </View>
+                  </>
+                )}
+
+                {documentType === "NOTA_FISCAL" && (
+                  <>
+                    <Input label="Emitente" value={recipientName} onChangeText={setRecipientName} placeholder="Empresa emissora" autoCapitalize="words" />
+                    <Input label="CPF/CNPJ do emitente" value={cnpj} onChangeText={setCnpj} placeholder="000.000.000-00 ou 00.000.000/0000-00" keyboardType="numbers-and-punctuation" />
+                    <Input label="Número da nota" value={documentNumber} onChangeText={setDocumentNumber} placeholder="NF-e / cupom / série" autoCapitalize="characters" />
+                  </>
+                )}
+
+                {documentType === "COMPROVANTE_PIX" && (
+                  <>
+                    <Input label="Pagador ou recebedor" value={recipientName} onChangeText={setRecipientName} placeholder="Nome da pessoa ou empresa" autoCapitalize="words" />
+                    <Input label="CPF/CNPJ" value={cnpj} onChangeText={setCnpj} placeholder="Documento se disponível" keyboardType="numbers-and-punctuation" />
+                    <Input label="Chave PIX" value={pixKey} onChangeText={setPixKey} placeholder="CPF, e-mail, telefone ou chave aleatória" autoCapitalize="none" />
+                  </>
+                )}
+
+                {documentType === "COMPROVANTE_BANCARIO" && (
+                  <>
+                    <Input label="Favorecido" value={recipientName} onChangeText={setRecipientName} placeholder="Nome do favorecido" autoCapitalize="words" />
+                    <Input label="Banco / instituição" value={bankName} onChangeText={setBankName} placeholder="Ex: Nubank, Itaú, Inter" autoCapitalize="words" />
+                    <Input label="CPF/CNPJ" value={cnpj} onChangeText={setCnpj} placeholder="Documento se disponível" keyboardType="numbers-and-punctuation" />
+                  </>
+                )}
+
+                {documentType === "OUTRO" && (
+                  <>
+                    <Input label="Identificação do documento" value={documentNumber} onChangeText={setDocumentNumber} placeholder="Número, protocolo ou referência" />
+                    <Input label="Responsável" value={recipientName} onChangeText={setRecipientName} placeholder="Pessoa ou empresa relacionada" autoCapitalize="words" />
+                  </>
+                )}
 
                 <Input
-                  label="CNPJ (opcional)"
-                  value={cnpj}
-                  onChangeText={setCnpj}
-                  placeholder="00.000.000/0000-00"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  keyboardType="numbers-and-punctuation"
+                  label="Observações do documento"
+                  value={extraNotes}
+                  onChangeText={setExtraNotes}
+                  placeholder="Detalhes adicionais"
+                  multiline
+                  textAlignVertical="top"
+                  style={styles.notesInput}
                 />
-
-                <Input
-                  label="Nome do Beneficiário"
-                  value={recipientName}
-                  onChangeText={setRecipientName}
-                  placeholder="Nome da empresa ou pessoa"
-                  autoCapitalize="words"
-                />
-              </>
+              </View>
             )}
 
             <View style={{ gap: 6 }}>
@@ -1306,6 +1469,75 @@ const styles = StyleSheet.create({
   },
   typeLabel: { fontSize: 14, fontWeight: "600", color: colors.textSecondary },
   label: { fontSize: 13, fontWeight: "500", color: colors.textSecondary },
+  documentTypeRow: { gap: spacing.sm, paddingVertical: 2 },
+  documentTypeCard: {
+    width: 150,
+    gap: 6,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  documentTypeIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  documentTypeTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  documentTypeDescription: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: colors.textMuted,
+  },
+  documentHint: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderLeftWidth: 3,
+    backgroundColor: colors.surfaceElevated,
+  },
+  documentHintTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  documentHintText: {
+    marginTop: 2,
+    fontSize: 12,
+    color: colors.textSecondary,
+  },
+  documentFieldsCard: {
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
+  documentFieldsTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  documentFieldGrid: {
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  documentGridInput: {
+    minWidth: 92,
+  },
+  notesInput: {
+    minHeight: 86,
+    paddingTop: 12,
+  },
   pillRow: { gap: spacing.sm, paddingVertical: 2 },
   pill: {
     flexDirection: "row",
@@ -1326,3 +1558,4 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
 });
+
