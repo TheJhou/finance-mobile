@@ -698,7 +698,7 @@ export default function DashboardScreen() {
                       </View>
                     )}
 
-                    {data?.upcomingAmount > 0 && (
+                    {data && data.upcomingAmount > 0 && (
                       <View>
                         <Text style={{ fontSize: 12, fontWeight: "600", color: colors.warning, marginBottom: spacing.sm }}>Próximos 7 dias</Text>
                         <View style={{ backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderLeftWidth: 3, borderLeftColor: colors.warning }}>
