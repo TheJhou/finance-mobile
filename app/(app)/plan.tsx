@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, logout, register } from "@/lib/auth";
-// TODO: Reativar IAP quando Google Play Billing estiver configurado
+// Reativar IAP quando Google Play Billing estiver configurado
 // import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -122,6 +122,7 @@ export default function PlanScreen() {
   const resetDate = status?.usage.resetsAt
     ? new Date(status.usage.resetsAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })
     : "";
+  const usageBarColor = getUsageBarColor(usagePercent);
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -136,32 +137,7 @@ export default function PlanScreen() {
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {!loggedIn ? (
-          <View style={styles.card}>
-            <Ionicons name="person-circle-outline" size={48} color={colors.textMuted} />
-            <Text style={styles.cardTitle}>Faça login ou crie sua conta</Text>
-            <Text style={styles.cardText}>
-              Para usar a IA e ver seu plano, entre com sua conta ou crie uma nova.
-            </Text>
-            <View style={{ gap: spacing.sm, width: "100%" }}>
-              <Button
-                title="Entrar"
-                onPress={() => {
-                  setIsRegister(false);
-                  setShowAuthModal(true);
-                }}
-              />
-              <Button
-                title="Criar conta"
-                variant="secondary"
-                onPress={() => {
-                  setIsRegister(true);
-                  setShowAuthModal(true);
-                }}
-              />
-            </View>
-          </View>
-        ) : (
+        {loggedIn ? (
           <>
             {/* Plan card */}
             <View style={[styles.planCard, isPro && styles.planCardPro]}>
@@ -189,7 +165,7 @@ export default function PlanScreen() {
                       styles.barFill,
                       {
                         width: `${usagePercent}%`,
-                        backgroundColor: usagePercent > 90 ? colors.danger : usagePercent > 70 ? colors.warning : colors.primary,
+                        backgroundColor: usageBarColor,
                       },
                     ]}
                   />
@@ -228,6 +204,17 @@ export default function PlanScreen() {
             {/* Logout */}
             <Button title="Sair da conta" variant="ghost" onPress={handleLogout} />
           </>
+        ) : (
+          <AuthPromptCard
+            onLoginPress={() => {
+              setIsRegister(false);
+              setShowAuthModal(true);
+            }}
+            onRegisterPress={() => {
+              setIsRegister(true);
+              setShowAuthModal(true);
+            }}
+          />
         )}
       </ScrollView>
 
@@ -292,6 +279,34 @@ export default function PlanScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+  );
+}
+
+function getUsageBarColor(usagePercent: number) {
+  if (usagePercent > 90) return colors.danger;
+  if (usagePercent > 70) return colors.warning;
+  return colors.primary;
+}
+
+function AuthPromptCard({
+  onLoginPress,
+  onRegisterPress,
+}: Readonly<{
+  onLoginPress: () => void;
+  onRegisterPress: () => void;
+}>) {
+  return (
+    <View style={styles.card}>
+      <Ionicons name="person-circle-outline" size={48} color={colors.textMuted} />
+      <Text style={styles.cardTitle}>Faça login ou crie sua conta</Text>
+      <Text style={styles.cardText}>
+        Para usar a IA e ver seu plano, entre com sua conta ou crie uma nova.
+      </Text>
+      <View style={{ gap: spacing.sm, width: "100%" }}>
+        <Button title="Entrar" onPress={onLoginPress} />
+        <Button title="Criar conta" variant="secondary" onPress={onRegisterPress} />
+      </View>
+    </View>
   );
 }
 

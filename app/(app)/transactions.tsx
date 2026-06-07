@@ -64,6 +64,15 @@ const INITIAL_FILTERS: Filters = {
   amountMax: "",
 };
 
+function ListSeparator() {
+  return <View style={{ height: spacing.sm }} />;
+}
+
+function normalizePaymentMethod(value: string | null): PaymentMethod {
+  const allowed: PaymentMethod[] = ["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER"];
+  return value && allowed.includes(value as PaymentMethod) ? (value as PaymentMethod) : "CASH";
+}
+
 function getDateRange(preset: DatePreset): { from: string; to: string } | null {
   if (preset === "all") return null;
   const now = new Date();
@@ -178,8 +187,8 @@ export default function TransactionsScreen() {
       result = result.filter((t) => filters.categoryIds.includes(t.categoryId));
     }
     // Amount
-    const min = parseFloat(filters.amountMin.replace(",", "."));
-    const max = parseFloat(filters.amountMax.replace(",", "."));
+    const min = Number.parseFloat(filters.amountMin.replace(",", "."));
+    const max = Number.parseFloat(filters.amountMax.replace(",", "."));
     if (Number.isFinite(min) && min > 0) {
       result = result.filter((t) => Number(t.amount) >= min);
     }
@@ -246,6 +255,9 @@ export default function TransactionsScreen() {
   }
 
   const filterCount = activeFilterCount(filters);
+  const totalCountSuffix = filteredItems.length === items.length
+    ? ""
+    : ` de ${items.length}`;
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -255,9 +267,7 @@ export default function TransactionsScreen() {
           <Text style={styles.title}>Transações</Text>
           <Text style={styles.subtitle}>
             {filteredItems.length}
-            {filteredItems.length !== items.length
-              ? ` de ${items.length}`
-              : ""}{" "}
+            {totalCountSuffix}{" "}
             registros
           </Text>
         </View>
@@ -505,7 +515,7 @@ export default function TransactionsScreen() {
             colors={[colors.primary]}
           />
         }
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        ItemSeparatorComponent={ListSeparator}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons
@@ -713,14 +723,14 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       console.log("[Transactions] Iniciando extração de foto");
       const extracted = await extractTransactionFromPhoto(
         base64,
-        (asset.mimeType ?? "image/jpeg") as string
+        asset.mimeType ?? "image/jpeg"
       );
       console.log("[Transactions] Dados extraídos:", JSON.stringify(extracted));
       setDescription(extracted.description);
       setAmount(extracted.amount.toString());
       setType(extracted.type);
-      setPaymentMethod((extracted.paymentMethod as PaymentMethod) ?? "CASH");
-      setDocumentType((extracted.documentType as DocumentType) ?? "NORMAL");
+      setPaymentMethod(normalizePaymentMethod(extracted.paymentMethod));
+      setDocumentType(extracted.documentType ?? "NORMAL");
       setDate(extracted.date);
       setBoletoNumber(extracted.boletoNumber ?? "");
       setCnpj(extracted.cnpj ?? "");

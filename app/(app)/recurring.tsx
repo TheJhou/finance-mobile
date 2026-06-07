@@ -2,11 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-    createRecurring,
-    deleteRecurring,
-    listRecurring,
-    toggleRecurringActive,
-    updateRecurring,
+  createRecurring,
+  deleteRecurring,
+  listRecurring,
+  toggleRecurringActive,
+  updateRecurring,
 } from "@/lib/repositories/recurring";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, Frequency, RecurringTransaction, TransactionType } from "@/lib/types";
@@ -15,18 +15,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -36,6 +36,10 @@ const frequencyLabel: Record<Frequency, string> = {
   YEARLY: "Anual",
 };
 const frequencyOptions: Frequency[] = ["WEEKLY", "MONTHLY", "YEARLY"];
+
+function ListSeparator() {
+  return <View style={{ height: spacing.sm }} />;
+}
 
 export default function RecurringScreen() {
   const [items, setItems] = useState<RecurringTransaction[]>([]);
@@ -130,7 +134,7 @@ export default function RecurringScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
+        ItemSeparatorComponent={ListSeparator}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons
@@ -257,7 +261,7 @@ interface RecurringFormProps {
   onSaved: () => void;
 }
 
-function RecurringForm({ visible, editingItem, onClose, onSaved }: RecurringFormProps) {
+function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<RecurringFormProps>) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
