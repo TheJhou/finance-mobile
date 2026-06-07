@@ -141,7 +141,12 @@ export default function DashboardScreen() {
     : 0;
   // Encontrar o mês imediatamente anterior (não qualquer mês anterior no trend)
   const currentMonth = data ? new Date().toISOString().slice(0, 7) : null;
-  const prevMonthStr = data ? (() => { const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 7); })() : null;
+  const prevMonthStr = data ? (() => { 
+    const d = new Date(); 
+    d.setMonth(d.getMonth() - 1); 
+    // setMonth lida automaticamente com mudança de ano (ex: jan -> dez do ano anterior)
+    return d.toISOString().slice(0, 7); 
+  })() : null;
   const prevMonth = data ? data.monthlyTrend.find((m) => m.month === prevMonthStr) ?? null : null;
   const incomeChange = prevMonth && prevMonth.income > 0 ? Math.round(((data!.monthlyIncome - prevMonth.income) / prevMonth.income) * 100) : null;
   const expenseChange = prevMonth && prevMonth.expense > 0 ? Math.round(((data!.monthlyExpense - prevMonth.expense) / prevMonth.expense) * 100) : null;

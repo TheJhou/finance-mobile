@@ -79,9 +79,12 @@ function getDateRange(preset: DatePreset): { from: string; to: string } | null {
       from = toDateInputValue(d);
       break;
     }
-    case "month":
-      from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+    case "month": {
+      // Correção: usar o primeiro dia do mês atual
+      const d = new Date(now.getFullYear(), now.getMonth(), 1);
+      from = toDateInputValue(d);
       break;
+    }
     case "year":
       from = `${now.getFullYear()}-01-01`;
       break;
