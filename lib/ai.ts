@@ -1,5 +1,6 @@
 import { extractFromPhoto, extractFromText } from "@/lib/backend";
 
+import type { DocumentType } from "@/lib/types";
 import { toDateInputValue } from "@/lib/utils";
 
 export interface ExtractedTransaction {
@@ -9,6 +10,7 @@ export interface ExtractedTransaction {
   date: string;
   categoryName: string | null;
   paymentMethod: string | null;
+  documentType: DocumentType;
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
@@ -22,6 +24,7 @@ function normalize(data: Record<string, unknown>, fallbackDesc: string): Extract
     date: (data.date as string) ?? toDateInputValue(new Date()),
     categoryName: (data.categoryName as string) ?? null,
     paymentMethod: (data.paymentMethod as string) ?? null,
+    documentType: (data.documentType as DocumentType) ?? "NORMAL",
     boletoNumber: (data.boletoNumber as string) ?? null,
     cnpj: (data.cnpj as string) ?? null,
     recipientName: (data.recipientName as string) ?? null,

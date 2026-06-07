@@ -7,7 +7,7 @@ import {
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
-import type { Category } from "@/lib/types";
+import type { Category, DocumentType, PaymentMethod, TransactionStatus } from "@/lib/types";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import BankNotifications from "@/modules/bank-notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -40,6 +40,21 @@ interface PendingItem extends ParsedTransaction {
 function normalizeType(type: unknown): "INCOME" | "EXPENSE" {
   if (typeof type === "string" && type.toUpperCase() === "INCOME") return "INCOME";
   return "EXPENSE";
+}
+
+function normalizePaymentMethod(value: unknown): PaymentMethod {
+  const allowed: PaymentMethod[] = ["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER"];
+  return typeof value === "string" && allowed.includes(value as PaymentMethod) ? (value as PaymentMethod) : "OTHER";
+}
+
+function normalizeDocumentType(value: unknown): DocumentType {
+  const allowed: DocumentType[] = ["NORMAL", "BOLETO", "NOTA_FISCAL", "COMPROVANTE_PIX", "COMPROVANTE_BANCARIO", "OUTRO"];
+  return typeof value === "string" && allowed.includes(value as DocumentType) ? (value as DocumentType) : "NORMAL";
+}
+
+function normalizeStatus(value: unknown, fallback: TransactionStatus): TransactionStatus {
+  const allowed: TransactionStatus[] = ["PAID", "PENDING", "OVERDUE"];
+  return typeof value === "string" && allowed.includes(value as TransactionStatus) ? (value as TransactionStatus) : fallback;
 }
 
 export default function NotificationsScreen() {
@@ -213,10 +228,15 @@ export default function NotificationsScreen() {
         description: draft.description || freeText.substring(0, 50),
         amount: draft.amount,
         type: draft.type || "EXPENSE",
+        paymentMethod: normalizePaymentMethod(draft.paymentMethod),
         date: draft.date || toDateInputValue(new Date()),
         categoryId: draft.categoryId || selectedCategoryId,
+        documentType: normalizeDocumentType(draft.documentType),
+        boletoNumber: draft.boletoNumber || null,
+        cnpj: draft.cnpj || null,
+        recipientName: draft.recipientName || null,
         notes: isPending ? "Importado via texto (pendente de confirmação)" : "Importado via texto livre",
-        status: draft.status || "PAID",
+        status: normalizeStatus(draft.status, "PAID"),
       });
 
       setFreeText("");
@@ -270,10 +290,15 @@ export default function NotificationsScreen() {
         description: (draft.description as string) || `Documento: ${asset.name}`,
         amount: Number(draft.amount),
         type: normalizeType(draft.type),
+        paymentMethod: normalizePaymentMethod(draft.paymentMethod),
         date: (draft.date as string) || toDateInputValue(new Date()),
         categoryId: (draft.categoryId as string) || selectedCategoryId,
+        documentType: normalizeDocumentType(draft.documentType),
+        boletoNumber: (draft.boletoNumber as string) || null,
+        cnpj: (draft.cnpj as string) || null,
+        recipientName: (draft.recipientName as string) || null,
         notes: `Importado via documento: ${asset.name}`,
-        status: "PENDING",
+        status: normalizeStatus(draft.status, "PENDING"),
       });
 
       Alert.alert("Sucesso", "Transação criada automaticamente!");
@@ -330,16 +355,26 @@ export default function NotificationsScreen() {
 
       const transcribedText = await transcribeAudio(uri, "audio/webm");
       const analysis = await analyzeText(transcribedText, "AUDIO", categories);
-      const categoryId = analysis.draft.categoryId || selectedCategoryId;
+      const draft = analysis.draft;
+      if (!draft || !draft.amount || Number(draft.amount) <= 0) {
+        Alert.alert("Aviso", "Não foi possível identificar o valor no áudio. Revise manualmente.");
+        return;
+      }
+      const categoryId = draft.categoryId || selectedCategoryId;
 
       await createTransaction({
-        description: analysis.draft.description,
-        amount: analysis.draft.amount,
-        type: normalizeType(analysis.draft.type),
-        date: analysis.draft.date,
+        description: draft.description || transcribedText.substring(0, 50),
+        amount: Number(draft.amount),
+        type: normalizeType(draft.type),
+        paymentMethod: normalizePaymentMethod(draft.paymentMethod),
+        date: draft.date || toDateInputValue(new Date()),
         categoryId,
+        documentType: normalizeDocumentType(draft.documentType),
+        boletoNumber: draft.boletoNumber || null,
+        cnpj: draft.cnpj || null,
+        recipientName: draft.recipientName || null,
         notes: "Importado via áudio",
-        status: "PAID",
+        status: normalizeStatus(draft.status, "PAID"),
       });
 
       Alert.alert("Sucesso", "Transação criada automaticamente!");

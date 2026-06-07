@@ -4,34 +4,34 @@ import { extractTransactionFromPhoto } from "@/lib/ai";
 import { isAuthenticated } from "@/lib/auth";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-    createTransaction,
-    deleteTransaction,
-    listTransactions,
-    updateTransaction,
+  createTransaction,
+  deleteTransaction,
+  listTransactions,
+  updateTransaction,
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
-import type { Category, Transaction, TransactionType } from "@/lib/types";
+import type { Category, DocumentType, PaymentMethod, Transaction, TransactionType } from "@/lib/types";
 import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    LayoutAnimation,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    UIManager,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  UIManager,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
