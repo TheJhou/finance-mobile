@@ -708,10 +708,12 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setErr(null);
       const asset = result.assets[0];
       const base64 = asset.base64 as string;
+      console.log("[Transactions] Iniciando extração de foto");
       const extracted = await extractTransactionFromPhoto(
         base64,
         (asset.mimeType ?? "image/jpeg") as string
       );
+      console.log("[Transactions] Dados extraídos:", JSON.stringify(extracted));
       setDescription(extracted.description);
       setAmount(extracted.amount.toString());
       setType(extracted.type);
@@ -721,12 +723,14 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setBoletoNumber(extracted.boletoNumber ?? "");
       setCnpj(extracted.cnpj ?? "");
       setRecipientName(extracted.recipientName ?? "");
+      console.log("[Transactions] Campos preenchidos");
       if (extracted.categoryName) {
         const match = categories.find(
           (c) => c.name.toLowerCase() === extracted.categoryName!.toLowerCase()
         );
         if (match) setCategoryId(match.id);
       }
+      console.log("[Transactions] Extração concluída com sucesso");
     } catch (error) {
       Alert.alert(
         "Erro ao escanear",
