@@ -277,7 +277,7 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: RecurringForm
       if (!editingItem && cats.length > 0) setCategoryId(cats[0].id);
     });
     setErr(null);
-  }, [visible]);
+  }, [visible, editingItem]);
 
   useEffect(() => {
     if (editingItem) {
@@ -299,7 +299,6 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: RecurringForm
       setNextDueDate(toDateInputValue(new Date()));
       setCategoryId(null);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingItem, visible]);
 
   const handleSave = async () => {

@@ -685,7 +685,6 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setCnpj("");
       setRecipientName("");
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingItem, visible]);
 
   const handlePhotoScan = async () => {

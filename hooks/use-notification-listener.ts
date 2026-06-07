@@ -89,7 +89,7 @@ export function useNotificationListener() {
           );
 
         } catch (err) {
-          // Erro silencioso em producao
+          console.warn("[AutoImport] Erro ao processar notificação:", err);
         } finally {
           processingRef.current = false;
         }

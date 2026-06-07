@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, logout, register } from "@/lib/auth";
 import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
 import {
-  type ParsedTransaction
+    type ParsedTransaction
 } from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
@@ -17,17 +17,17 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  AppState,
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    AppState,
+    FlatList,
+    Modal,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -44,7 +44,7 @@ function normalizeType(type: unknown): "INCOME" | "EXPENSE" {
 
 export default function NotificationsScreen() {
   const [granted, setGranted] = useState(false);
-  const [recentImports, setRecentImports] = useState<PendingItem[]>([]);
+  const [recentImports] = useState<PendingItem[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null

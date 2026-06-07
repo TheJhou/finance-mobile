@@ -6,7 +6,7 @@ import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { DashboardData } from "@/lib/types";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
@@ -89,20 +89,20 @@ export default function DashboardScreen() {
       setOverdueTransactions(overdueRes);
 
       // Backend calls (non-blocking — fail silently if offline)
-      Promise.all([
-        getMe().then((u) => { if (u.name) setUserName(u.name); }).catch(() => {}),
-        getGoals().then(setGoals).catch(() => {}),
-        getStreak().then(setStreak).catch(() => {}),
-        getDashboardScore().then(setScore).catch(() => {}),
-        checkinStreak().catch(() => {}),
+      void Promise.all([
+        getMe().then((u) => { if (u.name) setUserName(u.name); }).catch((err) => console.warn("[Dashboard] Falha ao buscar perfil:", err)),
+        getGoals().then(setGoals).catch((err) => console.warn("[Dashboard] Falha ao buscar metas:", err)),
+        getStreak().then(setStreak).catch((err) => console.warn("[Dashboard] Falha ao buscar streak:", err)),
+        getDashboardScore().then(setScore).catch((err) => console.warn("[Dashboard] Falha ao buscar score:", err)),
+        checkinStreak().catch((err) => console.warn("[Dashboard] Falha ao registrar streak:", err)),
       ]);
 
       // Schedule notifications (non-blocking)
       const comprometimento = dashRes.monthlyIncome > 0 ? Math.round((dashRes.monthlyExpense / dashRes.monthlyIncome) * 100) : 0;
-      Promise.all([
-        scheduleUpcomingBillsAlerts().catch(() => {}),
-        scheduleGoalAlerts().catch(() => {}),
-        scheduleDailyCommitmentCheck(comprometimento).catch(() => {}),
+      void Promise.all([
+        scheduleUpcomingBillsAlerts().catch((err) => console.warn("[Dashboard] Falha ao agendar contas:", err)),
+        scheduleGoalAlerts().catch((err) => console.warn("[Dashboard] Falha ao agendar metas:", err)),
+        scheduleDailyCommitmentCheck(comprometimento).catch((err) => console.warn("[Dashboard] Falha ao agendar comprometimento:", err)),
       ]);
 
       setError(null);
@@ -145,12 +145,12 @@ export default function DashboardScreen() {
     ? Math.min(100, Math.max(0, Math.round(savingsRate * 200 + 50 - (data.overdueAmount > 0 ? 20 : 0) - data.pendingCount * 2)))
     : 0;
   // Encontrar o mês imediatamente anterior (não qualquer mês anterior no trend)
-  const currentMonth = data ? new Date().toISOString().slice(0, 7) : null;
+  const currentMonth = data ? toDateInputValue(new Date()).slice(0, 7) : null;
   const prevMonthStr = data ? (() => { 
     const d = new Date(); 
     d.setMonth(d.getMonth() - 1); 
     // setMonth lida automaticamente com mudança de ano (ex: jan -> dez do ano anterior)
-    return d.toISOString().slice(0, 7); 
+    return toDateInputValue(d).slice(0, 7); 
   })() : null;
   const prevMonth = data ? data.monthlyTrend.find((m) => m.month === prevMonthStr) ?? null : null;
   const incomeChange = prevMonth && prevMonth.income > 0 ? Math.round(((data!.monthlyIncome - prevMonth.income) / prevMonth.income) * 100) : null;
