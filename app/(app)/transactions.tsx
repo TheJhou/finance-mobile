@@ -821,6 +821,13 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setBoletoNumber(extracted.boletoNumber ?? "");
       setCnpj(extracted.cnpj ?? "");
       setRecipientName(extracted.recipientName ?? "");
+      setDocumentNumber(extracted.documentNumber ?? "");
+      setPixKey(extracted.pixKey ?? "");
+      setBankName(extracted.institution ?? "");
+      setFineAmount(extracted.fineAmount?.toString() ?? "");
+      setInterestAmount(extracted.interestAmount?.toString() ?? "");
+      setDiscountAmount(extracted.discountAmount?.toString() ?? "");
+      setExtraNotes(extracted.notes ?? "");
       console.log("[Transactions] Campos preenchidos");
       if (extracted.categoryName) {
         const match = categories.find(

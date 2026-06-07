@@ -14,6 +14,13 @@ export interface ExtractedTransaction {
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
+  institution?: string | null;
+  documentNumber?: string | null;
+  pixKey?: string | null;
+  fineAmount?: number | null;
+  interestAmount?: number | null;
+  discountAmount?: number | null;
+  notes?: string | null;
 }
 
 function normalize(data: Record<string, unknown>, fallbackDesc: string): ExtractedTransaction {
@@ -28,6 +35,13 @@ function normalize(data: Record<string, unknown>, fallbackDesc: string): Extract
     boletoNumber: (data.boletoNumber as string) ?? null,
     cnpj: (data.cnpj as string) ?? null,
     recipientName: (data.recipientName as string) ?? null,
+    institution: (data.institution as string) ?? null,
+    documentNumber: (data.documentNumber as string) ?? null,
+    pixKey: (data.pixKey as string) ?? null,
+    fineAmount: typeof data.fineAmount === "number" ? data.fineAmount : null,
+    interestAmount: typeof data.interestAmount === "number" ? data.interestAmount : null,
+    discountAmount: typeof data.discountAmount === "number" ? data.discountAmount : null,
+    notes: (data.notes as string) ?? null,
   };
 }
 
