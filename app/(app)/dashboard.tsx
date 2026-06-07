@@ -1,6 +1,7 @@
 import { getStoredUserName } from "@/lib/auth";
 import type { GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
+import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { colors, radius, spacing } from "@/lib/theme";
