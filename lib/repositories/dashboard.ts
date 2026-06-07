@@ -86,6 +86,18 @@ export async function getDashboard(): Promise<DashboardData> {
     [first, last]
   );
 
+  const expenseTrendRows = await db.getAllAsync<{
+    day: string;
+    total: number;
+  }>(
+    `SELECT substr(date, 9, 2) as day, COALESCE(SUM(amount), 0) as total
+     FROM transactions
+     WHERE type = 'EXPENSE' AND status = 'PAID' AND date BETWEEN ? AND ?
+     GROUP BY date
+     ORDER BY date ASC`,
+    [first, last]
+  );
+
   // Monthly trend: last 6 months
   const sixMonthsAgo = new Date();
   sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
@@ -116,6 +128,10 @@ export async function getDashboard(): Promise<DashboardData> {
     expensesByCategory: byCategory.map((r) => ({
       name: r.name,
       color: r.color,
+      value: r.total,
+    })),
+    expenseTrend: expenseTrendRows.map((r) => ({
+      label: r.day,
       value: r.total,
     })),
     monthlyTrend: trendRows.map((r) => ({

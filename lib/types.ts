@@ -94,6 +94,7 @@ export interface DashboardData {
   upcomingAmount: number;
   activeRecurring: number;
   expensesByCategory: { name: string; value: number; color: string }[];
+  expenseTrend: { label: string; value: number }[];
   monthlyTrend: { month: string; income: number; expense: number }[];
   evolution: { month: string; balance: number }[];
 }

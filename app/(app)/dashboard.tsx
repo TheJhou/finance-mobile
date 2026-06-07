@@ -11,15 +11,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Modal,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -160,6 +160,12 @@ export default function DashboardScreen() {
     ? (() => { const recentNet = currentMonthTrend.income - currentMonthTrend.expense; const prevNet = prevMonth.income - prevMonth.expense; return prevNet !== 0 ? Math.round(((recentNet - prevNet) / Math.abs(prevNet)) * 100) : null; })()
     : null;
   const totalExpense = data ? data.monthlyExpense || 1 : 1;
+  const dailyExpenseChartData = data && data.expenseTrend.length > 0
+    ? data.expenseTrend.map((item) => ({ label: item.label, value: item.value, frontColor: colors.chartBar1 }))
+    : [{ label: "-", value: 0, frontColor: colors.chartBar1 }];
+  const netTrendChartData = data && data.monthlyTrend.length > 0
+    ? data.monthlyTrend.map((m) => ({ label: m.month.slice(5), value: m.income - m.expense }))
+    : [{ value: 0, label: "-" }];
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
@@ -402,9 +408,7 @@ export default function DashboardScreen() {
                   <TouchableOpacity onPress={() => setChartModal("bar")}><Text style={styles.linkTextSm}>Ver mais {">"}</Text></TouchableOpacity>
                 </View>
                 <BarChart
-                  data={data.monthlyTrend.length > 0
-                    ? data.monthlyTrend.slice(-5).map((m) => ({ label: m.month.slice(5), value: m.expense, frontColor: colors.chartBar1 }))
-                    : [{ label: "-", value: 0, frontColor: colors.chartBar1 }]}
+                  data={dailyExpenseChartData}
                   width={HALF_WIDTH - spacing.lg * 2 - 20}
                   barWidth={12} spacing={6} roundedTop roundedBottom hideYAxisText
                   yAxisThickness={0} xAxisThickness={0}
@@ -434,9 +438,7 @@ export default function DashboardScreen() {
               <Text style={{ fontSize: 12, color: colors.textSecondary }}>Se continuar assim, você termina o mês com</Text>
               <Text style={{ fontSize: 18, fontWeight: "700", color: colors.success }}>{formatCurrency(Math.max(0, data.balance - data.upcomingAmount))}</Text>
               <LineChart
-                data={data.monthlyTrend.length > 0
-                  ? data.monthlyTrend.map((m) => ({ label: m.month.slice(5), value: m.income - m.expense }))
-                  : [{ value: 0, label: "-" }]}
+                data={netTrendChartData}
                 width={SCREEN_WIDTH - CARD_PADDING * 2 - spacing.lg * 2 - 30} height={140}
                 color={colors.success} thickness={2}
                 hideDataPoints={false} dataPointsColor={colors.success} dataPointsRadius={3}
@@ -606,9 +608,7 @@ export default function DashboardScreen() {
 
               {chartModal === "bar" && data && (
                 <BarChart
-                  data={data.monthlyTrend.length > 0
-                    ? data.monthlyTrend.map((m) => ({ label: m.month.slice(5), value: m.expense, frontColor: colors.chartBar1 }))
-                    : [{ label: "-", value: 0, frontColor: colors.chartBar1 }]}
+                  data={dailyExpenseChartData}
                   width={SCREEN_WIDTH - spacing.lg * 4 - 40} height={250}
                   barWidth={20} spacing={14} roundedTop roundedBottom
                   yAxisThickness={0} xAxisThickness={0} hideYAxisText
@@ -619,9 +619,7 @@ export default function DashboardScreen() {
 
               {chartModal === "line" && data && (
                 <LineChart
-                  data={data.monthlyTrend.length > 0
-                    ? data.monthlyTrend.map((m) => ({ label: m.month.slice(5), value: m.income - m.expense }))
-                    : [{ value: 0, label: "-" }]}
+                  data={netTrendChartData}
                   width={SCREEN_WIDTH - spacing.lg * 4 - 40} height={250}
                   color={colors.success} thickness={2}
                   hideDataPoints={false} dataPointsColor={colors.success} dataPointsRadius={4}
