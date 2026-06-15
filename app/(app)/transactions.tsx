@@ -11,7 +11,7 @@ import {
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, DocumentType, PaymentMethod, Transaction, TransactionType } from "@/lib/types";
-import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
+import { formatCurrency, formatDate, normalizePaymentMethod, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
@@ -66,11 +66,6 @@ const INITIAL_FILTERS: Filters = {
 
 function ListSeparator() {
   return <View style={{ height: spacing.sm }} />;
-}
-
-function normalizePaymentMethod(value: string | null): PaymentMethod {
-  const allowed: PaymentMethod[] = ["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER"];
-  return value && allowed.includes(value as PaymentMethod) ? (value as PaymentMethod) : "CASH";
 }
 
 const documentTypeMeta: Record<DocumentType, {

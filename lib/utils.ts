@@ -1,3 +1,5 @@
+import type { PaymentMethod } from "@/lib/types";
+
 export function formatCurrency(value: number | string): string {
   const num = typeof value === "string" ? parseFloat(value) : value;
   const safe = Number.isFinite(num) ? num : 0;
@@ -20,6 +22,26 @@ export function toDateInputValue(value: string | Date): string {
   const mm = String(date.getMonth() + 1).padStart(2, "0");
   const dd = String(date.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
+}
+
+export function formatDateLocal(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function normalizePaymentMethod(
+  value: unknown,
+  fallback: PaymentMethod = "CASH"
+): PaymentMethod {
+  const allowed: PaymentMethod[] = [
+    "CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX",
+    "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER",
+  ];
+  return typeof value === "string" && allowed.includes(value as PaymentMethod)
+    ? (value as PaymentMethod)
+    : fallback;
 }
 
 export function parseCurrencyInput(input: string): number {

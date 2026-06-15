@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { processRecurringDue } from "@/lib/repositories/recurring";
 import type { DashboardData } from "@/lib/types";
+import { formatDateLocal } from "@/lib/utils";
 
 export interface UpcomingBill {
   id: string;
@@ -18,13 +19,6 @@ function monthRange(): { first: string; last: string } {
     first: formatDateLocal(first),
     last: formatDateLocal(last),
   };
-}
-
-function formatDateLocal(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
 }
 
 export async function getDashboard(): Promise<DashboardData> {

@@ -1,6 +1,5 @@
+import { BACKEND_URL } from "@/lib/config";
 import { getDb } from "@/lib/db";
-
-const BACKEND_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3000";
 
 interface AuthTokens {
   accessToken: string;

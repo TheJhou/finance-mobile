@@ -8,7 +8,7 @@ import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, DocumentType, PaymentMethod, TransactionStatus } from "@/lib/types";
-import { formatCurrency, toDateInputValue } from "@/lib/utils";
+import { formatCurrency, normalizePaymentMethod, toDateInputValue } from "@/lib/utils";
 import BankNotifications from "@/modules/bank-notifications";
 import { Ionicons } from "@expo/vector-icons";
 import { Audio } from "expo-av";
@@ -40,11 +40,6 @@ interface PendingItem extends ParsedTransaction {
 function normalizeType(type: unknown): "INCOME" | "EXPENSE" {
   if (typeof type === "string" && type.toUpperCase() === "INCOME") return "INCOME";
   return "EXPENSE";
-}
-
-function normalizePaymentMethod(value: unknown): PaymentMethod {
-  const allowed: PaymentMethod[] = ["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER"];
-  return typeof value === "string" && allowed.includes(value as PaymentMethod) ? (value as PaymentMethod) : "OTHER";
 }
 
 function normalizeDocumentType(value: unknown): DocumentType {
@@ -228,7 +223,7 @@ export default function NotificationsScreen() {
         description: draft.description || freeText.substring(0, 50),
         amount: draft.amount,
         type: draft.type || "EXPENSE",
-        paymentMethod: normalizePaymentMethod(draft.paymentMethod),
+        paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: draft.date || toDateInputValue(new Date()),
         categoryId: draft.categoryId || selectedCategoryId,
         documentType: normalizeDocumentType(draft.documentType),
@@ -290,7 +285,7 @@ export default function NotificationsScreen() {
         description: (draft.description as string) || `Documento: ${asset.name}`,
         amount: Number(draft.amount),
         type: normalizeType(draft.type),
-        paymentMethod: normalizePaymentMethod(draft.paymentMethod),
+        paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: (draft.date as string) || toDateInputValue(new Date()),
         categoryId: (draft.categoryId as string) || selectedCategoryId,
         documentType: normalizeDocumentType(draft.documentType),
@@ -366,7 +361,7 @@ export default function NotificationsScreen() {
         description: draft.description || transcribedText.substring(0, 50),
         amount: Number(draft.amount),
         type: normalizeType(draft.type),
-        paymentMethod: normalizePaymentMethod(draft.paymentMethod),
+        paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: draft.date || toDateInputValue(new Date()),
         categoryId,
         documentType: normalizeDocumentType(draft.documentType),
