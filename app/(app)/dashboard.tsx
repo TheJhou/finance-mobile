@@ -140,7 +140,6 @@ export default function DashboardScreen() {
   const economia = data ? data.monthlyIncome - data.monthlyExpense : 0;
   const economiaPercent = data && data.monthlyIncome > 0 ? Math.round((economia / data.monthlyIncome) * 100) : 0;
   const comprometimento = data && data.monthlyIncome > 0 ? Math.round((data.monthlyExpense / data.monthlyIncome) * 100) : 0;
-  const savingsRate = data && data.monthlyIncome > 0 ? economia / data.monthlyIncome : 0;
   const subOrganizacao = streak ? Math.min(100, Math.round(streak.streak * 3.3 + (streak.todayRegistered ? 20 : 0))) : 0;
   const subEstabilidade = Math.min(100, Math.max(0, 100 - comprometimento));
   const subControle = data ? Math.min(100, Math.max(0, data.overdueAmount > 0 ? 40 : data.pendingCount > 3 ? 60 : 90)) : 0;

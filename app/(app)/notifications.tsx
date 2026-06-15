@@ -7,7 +7,7 @@ import {
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
-import type { Category, DocumentType, PaymentMethod, TransactionStatus } from "@/lib/types";
+import type { Category, DocumentType, TransactionStatus } from "@/lib/types";
 import { formatCurrency, normalizePaymentMethod, toDateInputValue } from "@/lib/utils";
 import BankNotifications from "@/modules/bank-notifications";
 import { Ionicons } from "@expo/vector-icons";
