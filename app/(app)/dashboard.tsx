@@ -141,8 +141,12 @@ export default function DashboardScreen() {
   const economiaPercent = data && data.monthlyIncome > 0 ? Math.round((economia / data.monthlyIncome) * 100) : 0;
   const comprometimento = data && data.monthlyIncome > 0 ? Math.round((data.monthlyExpense / data.monthlyIncome) * 100) : 0;
   const savingsRate = data && data.monthlyIncome > 0 ? economia / data.monthlyIncome : 0;
+  const subOrganizacao = streak ? Math.min(100, Math.round(streak.streak * 3.3 + (streak.todayRegistered ? 20 : 0))) : 0;
+  const subEstabilidade = Math.min(100, Math.max(0, 100 - comprometimento));
+  const subControle = data ? Math.min(100, Math.max(0, data.overdueAmount > 0 ? 40 : data.pendingCount > 3 ? 60 : 90)) : 0;
+  const subPlanejamento = Math.min(100, goals.length * 20 + (bills.length > 0 ? 20 : 0));
   const healthScore = data
-    ? Math.min(100, Math.max(0, Math.round(savingsRate * 200 + 50 - (data.overdueAmount > 0 ? 20 : 0) - data.pendingCount * 2)))
+    ? Math.min(100, Math.max(0, Math.round((subOrganizacao + subEstabilidade + subControle + subPlanejamento) / 4)))
     : 0;
   // Encontrar o mês imediatamente anterior (não qualquer mês anterior no trend)
   const currentMonth = data ? toDateInputValue(new Date()).slice(0, 7) : null;
@@ -298,19 +302,19 @@ export default function DashboardScreen() {
               <View style={styles.healthScoresRow}>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Organização</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.info }]}>{Math.min(100, Math.round((streak?.streak ?? 0) * 3.3 + (streak?.todayRegistered ? 20 : 0)))}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.info }]}>{subOrganizacao}</Text>
                 </View>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Estabilidade</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.primary }]}>{Math.min(100, Math.max(0, 100 - comprometimento))}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.primary }]}>{subEstabilidade}</Text>
                 </View>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Controle</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.success }]}>{Math.min(100, Math.max(0, data.overdueAmount > 0 ? 40 : data.pendingCount > 3 ? 60 : 90))}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.success }]}>{subControle}</Text>
                 </View>
                 <View style={styles.healthScoreItem}>
                   <Text style={styles.healthScoreLabel}>Planejamento</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.warning }]}>{Math.min(100, goals.length * 25 + bills.length * 10)}</Text>
+                  <Text style={[styles.healthScoreValue, { color: colors.warning }]}>{subPlanejamento}</Text>
                 </View>
               </View>
             </View>
@@ -355,7 +359,7 @@ export default function DashboardScreen() {
                 <TouchableOpacity style={styles.radarItem} onPress={() => setChartModal("commitment")}>
                   <View style={styles.radarCircle}>
                     <Ionicons name="pie-chart" size={24} color="#60a5fa" />
-                    <View style={[styles.radarBadge, { backgroundColor: comprometimento > 60 ? "#fb923c" : colors.success }]}><Text style={styles.radarBadgeText}>{comprometimento}%</Text></View>
+                    <View style={[styles.radarBadge, { backgroundColor: comprometimento > 60 ? "#fb923c" : colors.success, width: "auto", minWidth: 18, paddingHorizontal: 3 }]}><Text style={styles.radarBadgeText}>{comprometimento}%</Text></View>
                   </View>
                   <Text style={styles.radarLabel}>Comprometimento{"\n"}da renda</Text>
                 </TouchableOpacity>
@@ -385,9 +389,10 @@ export default function DashboardScreen() {
                   <View style={{ gap: 4 }}>
                     {data.expensesByCategory.slice(0, 5).map((cat, i) => {
                       const pct = Math.round((cat.value / totalExpense) * 100);
+                      const catColor = cat.color || pieColors[i % pieColors.length];
                       return (
                         <View key={cat.name} style={styles.catLegendItem}>
-                          <View style={[styles.catDot, { backgroundColor: cat.color || pieColors[i % pieColors.length] }]} />
+                          <View style={[styles.catDot, { backgroundColor: catColor }]} />
                           <Text style={styles.catName} numberOfLines={1}>{cat.name}</Text>
                           <Text style={styles.catPct}>{pct}%</Text>
                         </View>
@@ -437,18 +442,20 @@ export default function DashboardScreen() {
               </View>
               <Text style={{ fontSize: 12, color: colors.textSecondary }}>Se continuar assim, você termina o mês com</Text>
               <Text style={{ fontSize: 18, fontWeight: "700", color: colors.success }}>{formatCurrency(Math.max(0, data.balance - data.upcomingAmount))}</Text>
-              <LineChart
-                data={netTrendChartData}
-                width={SCREEN_WIDTH - CARD_PADDING * 2 - spacing.lg * 2 - 30} height={140}
-                color={colors.success} thickness={2}
-                hideDataPoints={false} dataPointsColor={colors.success} dataPointsRadius={3}
-                curved areaChart
-                startFillColor={colors.success} endFillColor="transparent" startOpacity={0.3} endOpacity={0}
-                yAxisTextStyle={{ fontSize: 9, color: colors.textMuted }}
-                xAxisLabelTextStyle={{ fontSize: 9, color: colors.textMuted }}
-                yAxisColor="transparent" xAxisColor={colors.border}
-                noOfSections={3} rulesColor={colors.border} rulesType="dashed"
-              />
+              <View style={{ height: 120, overflow: "hidden" }}>
+                <LineChart
+                  data={netTrendChartData}
+                  width={SCREEN_WIDTH - CARD_PADDING * 2 - spacing.lg * 2 - 30} height={110}
+                  color={colors.success} thickness={2}
+                  hideDataPoints={netTrendChartData.length <= 1} dataPointsColor={colors.success} dataPointsRadius={3}
+                  curved areaChart
+                  startFillColor={colors.success} endFillColor="transparent" startOpacity={0.3} endOpacity={0}
+                  yAxisTextStyle={{ fontSize: 9, color: colors.textMuted }}
+                  xAxisLabelTextStyle={{ fontSize: 9, color: colors.textMuted }}
+                  yAxisColor="transparent" xAxisColor={colors.border}
+                  noOfSections={3} rulesColor={colors.border} rulesType="dashed"
+                />
+              </View>
               {data.balance < data.upcomingAmount && (
                 <View style={styles.warningBanner}>
                   <Text style={styles.warningBannerTitle}>⚠️ Tendência de queda</Text>
@@ -510,9 +517,10 @@ export default function DashboardScreen() {
               </View>
 
               {/* Metas */}
-              <View style={[styles.sectionCard, { width: HALF_WIDTH }]}>
+              <TouchableOpacity style={[styles.sectionCard, { width: HALF_WIDTH }]} onPress={() => router.push("/plan")} activeOpacity={0.8}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.sectionTitleSm}>Metas</Text>
+                  <Text style={styles.linkTextSm}>Ver todas {">"}  </Text>
                 </View>
                 {goals.length > 0 ? (
                   <View style={{ gap: 6 }}>
@@ -535,7 +543,7 @@ export default function DashboardScreen() {
                 ) : (
                   <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: "center" }}>Nenhuma meta cadastrada</Text>
                 )}
-              </View>
+              </TouchableOpacity>
 
               {/* Streak financeiro */}
               <View style={[styles.sectionCard, { width: HALF_WIDTH }]}>
@@ -564,7 +572,7 @@ export default function DashboardScreen() {
                   <Text style={{ fontSize: 20, fontWeight: "800", color: colors.textPrimary }}>{score?.score ?? 0}</Text>
                   <Text style={{ fontSize: 8, color: colors.textMuted }}>de {score?.maxScore ?? 1000}</Text>
                 </CircularProgress>
-                <Text style={{ fontSize: 12, color: score && score.score >= 600 ? colors.success : colors.warning }}>★ {score?.label ?? "Calculando..."}</Text>
+                <Text style={{ fontSize: 12, color: score ? (score.score >= 600 ? colors.success : score.score >= 300 ? colors.warning : colors.danger) : colors.textMuted }}>★ {score?.label ?? (score === null ? "Sem conexão" : "Calculando...")}</Text>
               </View>
             </View>
           </>
