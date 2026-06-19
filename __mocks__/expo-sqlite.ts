@@ -59,7 +59,7 @@ class InMemoryDatabase {
     }
 
     // col <= ?, col < ?, col >= ?, col > ?, col = ?, col != ?
-    const compMatch = part.match(/(\w+(?:\.\w+)?)\s*(<=|>=|<|>|=|!=)\s*(['"][^'"]*['"]|\?)/i);
+    const compMatch = part.match(/(\w+(?:\.\w+)?)\s*(<=|>=|<|>|=|!=)\s*(['"][^'"]*['"]|\?|\d+(?:\.\d+)?)/i);
     if (compMatch) {
       const col = compMatch[1].includes(".") ? compMatch[1].split(".")[1] : compMatch[1];
       const op = compMatch[2];
@@ -126,6 +126,23 @@ class InMemoryDatabase {
     return match[1].split(",").map((c) => c.trim());
   }
 
+  private parseValuePlaceholders(sql: string): (number | string | null)[] {
+    const valuesMatch = sql.match(/VALUES\s*\(([^)]+)\)/i);
+    if (!valuesMatch) return [];
+    return valuesMatch[1].split(",").map((v) => {
+      const trimmed = v.trim();
+      if (trimmed === "?") return null; // placeholder
+      // Try to parse literal string
+      const strMatch = trimmed.match(/^['"]([^'"]*)['"]$/);
+      if (strMatch) return strMatch[1];
+      // Try to parse number
+      if (/^-?\d+(\.\d+)?$/.test(trimmed)) return Number(trimmed);
+      // Try to parse datetime('now')
+      if (/datetime\s*\(\s*['"]now['"]\s*\)/i.test(trimmed)) return new Date().toISOString();
+      return trimmed;
+    });
+  }
+
   private parseJoin(sql: string): { leftTable: string; rightTable: string; rightTableCol: string; leftTableCol: string } | null {
     const joinMatch = sql.match(/LEFT\s+JOIN\s+(\w+)\s+(\w+)\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/i);
     if (!joinMatch) return null;
@@ -161,7 +178,8 @@ class InMemoryDatabase {
   async getAllAsync<T>(sql: string, params?: unknown[]): Promise<T[]> {
     const table = this.parseTable(sql);
     const data = this.getTable(table);
-    const where = params ? this.parseWhere(sql, params) : null;
+    const hasWhere = /WHERE\s+/i.test(sql);
+    const where = hasWhere ? this.parseWhere(sql, params || []) : null;
 
     let results = where ? data.filter(where) : [...data];
 
@@ -174,10 +192,13 @@ class InMemoryDatabase {
         const joined: Row = { ...row };
         const rightRow = rightData.find((r) => r[joinInfo.rightTableCol] === row[joinInfo.leftTableCol]);
         if (rightRow) {
+          // Extract right table alias from SQL (e.g., "categories c" -> "c")
+          const aliasMatch = sql.match(/LEFT\s+JOIN\s+\w+\s+(\w+)\s+ON/i);
+          const rightAlias = aliasMatch ? aliasMatch[1] : joinInfo.rightTable;
           for (const sc of selectCols) {
-            // Match c.name or c.name as category_name
+            // Match alias.col — only map columns from the RIGHT table
             const m = sc.raw.match(/^(\w+)\.(\w+)(?:\s+as\s+(\w+))?$/i);
-            if (m && rightRow[m[2]] !== undefined) {
+            if (m && (m[1] === joinInfo.rightTable || m[1] === rightAlias) && rightRow[m[2]] !== undefined) {
               const alias = sc.alias || m[3] || m[2];
               joined[alias] = rightRow[m[2]];
             }
@@ -308,24 +329,43 @@ class InMemoryDatabase {
 
     if (sql.trim().toUpperCase().startsWith("INSERT")) {
       const columns = this.parseColumns(sql);
+      const values = this.parseValuePlaceholders(sql);
       const row: Row = {};
-      if (params) {
-        columns.forEach((col, i) => { row[col] = params[i]; });
-      }
+      let paramIndex = 0;
+      columns.forEach((col, i) => {
+        const val = values[i];
+        if (val === null) {
+          // placeholder ?
+          row[col] = params ? params[paramIndex++] : undefined;
+        } else {
+          // literal value
+          row[col] = val;
+        }
+      });
       data.push(row);
     } else if (sql.trim().toUpperCase().startsWith("UPDATE")) {
       const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i);
       if (setMatch) {
         const setParts = setMatch[1].split(",").map((p) => p.trim());
         const updates: Record<string, unknown> = {};
-        const setQ = (setMatch[1].match(/\?/g) || []).length;
-        if (params) {
-          for (let i = 0; i < setParts.length; i++) {
-            const colMatch = setParts[i].match(/(\w+)\s*=\s*\?/);
-            if (colMatch) updates[colMatch[1]] = params[i];
+        let paramIndex = 0;
+        for (const part of setParts) {
+          const colMatch = part.match(/(\w+)\s*=\s*(.+)/);
+          if (colMatch) {
+            const col = colMatch[1];
+            const valueExpr = colMatch[2].trim();
+            if (valueExpr === "?") {
+              updates[col] = params ? params[paramIndex++] : undefined;
+            } else if (/^['"]([^'"]*)['"]$/.test(valueExpr)) {
+              updates[col] = valueExpr.replace(/^['"]|['"]$/g, "");
+            } else if (/^-?\d+(\.\d+)?$/.test(valueExpr)) {
+              updates[col] = Number(valueExpr);
+            } else if (/datetime\s*\(\s*['"]now['"]\s*\)/i.test(valueExpr)) {
+              updates[col] = new Date().toISOString();
+            }
           }
         }
-        const whereParam = params ? params[setQ] : undefined;
+        const whereParam = params ? params[paramIndex] : undefined;
         for (const row of data) {
           if (row.id === whereParam) Object.assign(row, updates);
         }
