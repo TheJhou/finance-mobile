@@ -8,20 +8,23 @@ import {
 } from "@/lib/utils";
 
 describe("formatCurrency", () => {
+  // Intl.NumberFormat inserts a non-breaking space (\u00A0) between the currency symbol and the value
+  const nbsp = "\u00A0";
+
   it("formats a number to Brazilian Real", () => {
-    expect(formatCurrency(100)).toBe("R$100,00");
-    expect(formatCurrency(1234.56)).toBe("R$1.234,56");
-    expect(formatCurrency(0)).toBe("R$0,00");
+    expect(formatCurrency(100)).toBe(`R$${nbsp}100,00`);
+    expect(formatCurrency(1234.56)).toBe(`R$${nbsp}1.234,56`);
+    expect(formatCurrency(0)).toBe(`R$${nbsp}0,00`);
   });
 
   it("formats a numeric string", () => {
-    expect(formatCurrency("99.90")).toBe("R$99,90");
+    expect(formatCurrency("99.90")).toBe(`R$${nbsp}99,90`);
   });
 
   it("returns R$0,00 for invalid values", () => {
-    expect(formatCurrency("abc")).toBe("R$0,00");
-    expect(formatCurrency(NaN)).toBe("R$0,00");
-    expect(formatCurrency(Infinity)).toBe("R$0,00");
+    expect(formatCurrency("abc")).toBe(`R$${nbsp}0,00`);
+    expect(formatCurrency(NaN)).toBe(`R$${nbsp}0,00`);
+    expect(formatCurrency(Infinity)).toBe(`R$${nbsp}0,00`);
   });
 });
 

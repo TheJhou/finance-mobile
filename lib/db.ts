@@ -13,6 +13,11 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
   return dbPromise;
 }
 
+/** Reseta o cache do banco. Usado em testes. */
+export function resetDbCache(): void {
+  dbPromise = null;
+}
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
     PRAGMA foreign_keys = ON;

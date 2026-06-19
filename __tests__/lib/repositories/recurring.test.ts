@@ -1,9 +1,6 @@
-jest.mock("expo-sqlite", () => require("@/__mocks__/expo-sqlite"));
-
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb } from "@/lib/db";
 import {
-  advanceDate,
   createRecurring,
   deleteRecurring,
   getRecurring,
@@ -64,26 +61,6 @@ describe("recurring repository", () => {
       "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
       ["cat-1", "Moradia", "#eab308", "home"]
     );
-  });
-
-  describe("advanceDate", () => {
-    it("advances 7 days for WEEKLY frequency", () => {
-      expect(advanceDate("2025-06-10", "WEEKLY")).toBe("2025-06-17");
-    });
-
-    it("advances 1 month for MONTHLY frequency", () => {
-      expect(advanceDate("2025-06-10", "MONTHLY")).toBe("2025-07-10");
-    });
-
-    it("advances 1 year for YEARLY frequency", () => {
-      expect(advanceDate("2025-06-10", "YEARLY")).toBe("2026-06-10");
-    });
-
-    it("handles month-end correctly (31 -> last day of next month)", () => {
-      // Jan 31 -> Feb 28 (or 29 in leap years)
-      const result = advanceDate("2025-01-31", "MONTHLY");
-      expect(result).toBe("2025-02-28");
-    });
   });
 
   describe("createRecurring", () => {

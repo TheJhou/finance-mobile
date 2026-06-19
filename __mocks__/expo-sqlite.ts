@@ -26,16 +26,25 @@ class InMemoryDatabase {
     // Extract table alias (e.g., "t." or "r.")
     const tableAlias = sql.match(/FROM\s+\w+\s+(\w)\./i)?.[1];
 
-    const whereClause = whereMatch[1].trim();
+    let whereClause = whereMatch[1].trim();
+    // Temporarily replace BETWEEN ? AND ? to avoid splitting on AND
+    const betweenPlaceholders: string[] = [];
+    whereClause = whereClause.replace(/(\w+(?:\.\w+)?\s+BETWEEN\s+\?\s+AND\s+\?)/gi, (match) => {
+      betweenPlaceholders.push(match);
+      return `__BETWEEN_${betweenPlaceholders.length - 1}__`;
+    });
     const parts = whereClause.split(/\s+AND\s+/i);
 
     for (const part of parts) {
-      const eqMatch = part.match(/(\w+)(?:\.(\w+))?\s*=\s*\?/);
-      const ltMatch = part.match(/(\w+)(?:\.(\w+))?\s*<\s*\?/);
-      const gtMatch = part.match(/(\w+)(?:\.(\w+))?\s*>\s*\?/);
-      const lteMatch = part.match(/(\w+)(?:\.(\w+))?\s*<=\s*\?/);
-      const gteMatch = part.match(/(\w+)(?:\.(\w+))?\s*>=\s*\?/);
-      const inMatch = part.match(/(\w+)\s+IN\s*\(([^)]+)\)/i);
+      // Restore BETWEEN placeholders
+      const restoredPart = part.replace(/__BETWEEN_(\d+)__/g, (_, i) => betweenPlaceholders[parseInt(i)]);
+      const eqMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*=\s*\?/);
+      const ltMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*<\s*\?/);
+      const gtMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*>\s*\?/);
+      const lteMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*<=\s*\?/);
+      const gteMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*>=\s*\?/);
+      const inMatch = restoredPart.match(/(\w+)\s+IN\s*\(([^)]+)\)/i);
+      const betweenMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s+BETWEEN\s+\?\s+AND\s+\?/i);
 
       if (eqMatch) {
         const col = eqMatch[2] || eqMatch[1];
@@ -68,6 +77,17 @@ class InMemoryDatabase {
         conditions.push((row) => {
           const v = row[col];
           return typeof v === "number" && typeof value === "number" ? v > value : String(v) > String(value);
+        });
+      } else if (betweenMatch) {
+        const col = betweenMatch[2] || betweenMatch[1];
+        const minValue = params[paramIndex++];
+        const maxValue = params[paramIndex++];
+        conditions.push((row) => {
+          const v = row[col];
+          const vStr = String(v);
+          const minStr = String(minValue);
+          const maxStr = String(maxValue);
+          return vStr >= minStr && vStr <= maxStr;
         });
       } else if (inMatch) {
         const col = inMatch[1];
@@ -113,12 +133,46 @@ class InMemoryDatabase {
     });
   }
 
+  private parseJoin(sql: string): { leftTable: string; rightTable: string; leftCol: string; rightCol: string } | null {
+    const joinMatch = sql.match(/LEFT\s+JOIN\s+(\w+)\s+(\w+)\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/i);
+    if (!joinMatch) return null;
+    const [, rightTable, rightAlias, leftAlias, leftCol, , rightCol] = joinMatch;
+    // Determine left table from FROM clause
+    const fromMatch = sql.match(/FROM\s+(\w+)\s+(\w+)/i);
+    if (!fromMatch) return null;
+    return { leftTable: fromMatch[1], rightTable, leftCol, rightCol };
+  }
+
   async getAllAsync<T>(sql: string, params?: unknown[]): Promise<T[]> {
     const table = this.parseTable(sql);
     const data = this.getTable(table);
     const where = params ? this.parseWhere(sql, params) : null;
 
     let results = where ? data.filter(where) : [...data];
+
+    // Handle LEFT JOIN
+    const joinInfo = this.parseJoin(sql);
+    if (joinInfo) {
+      const rightData = this.getTable(joinInfo.rightTable);
+      results = results.map((row) => {
+        const joined = { ...row };
+        const rightRow = rightData.find((r) => r[joinInfo.rightCol] === row[joinInfo.leftCol]);
+        if (rightRow) {
+          // Map joined columns with alias prefix (e.g., c.name -> category_name)
+          const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM/i);
+          if (selectMatch) {
+            const cols = selectMatch[1].split(",").map((c) => c.trim());
+            for (const col of cols) {
+              const aliasMatch = col.match(/(\w+)\.(\w+)\s+as\s+(\w+)/i);
+              if (aliasMatch && rightRow[aliasMatch[2]] !== undefined) {
+                joined[aliasMatch[3]] = rightRow[aliasMatch[2]];
+              }
+            }
+          }
+        }
+        return joined;
+      });
+    }
 
     // Handle ORDER BY
     const orderMatch = sql.match(/ORDER\s+BY\s+(\w+)(?:\.(\w+))?\s*(ASC|DESC)?/i);
@@ -192,22 +246,24 @@ class InMemoryDatabase {
       }
       data.push(row);
     } else if (sql.trim().toUpperCase().startsWith("UPDATE")) {
-      const where = params ? this.parseWhere(sql, params) : null;
       const setMatch = sql.match(/SET\s+(.+?)\s+WHERE/i);
       if (setMatch) {
         const setParts = setMatch[1].split(",").map((p) => p.trim());
-        let paramIdx = 0;
         const updates: Record<string, unknown> = {};
-        for (const part of setParts) {
-          const colMatch = part.match(/(\w+)\s*=\s*\?/);
-          if (colMatch && params) {
-            updates[colMatch[1]] = params[paramIdx++];
+        // Count how many ? are in the SET clause
+        const setQuestionMarks = (setMatch[1].match(/\?/g) || []).length;
+        if (params) {
+          for (let i = 0; i < setParts.length; i++) {
+            const colMatch = setParts[i].match(/(\w+)\s*=\s*\?/);
+            if (colMatch) {
+              updates[colMatch[1]] = params[i];
+            }
           }
         }
-        // The last param after SET columns is the id for WHERE
-        const whereParam = params ? params[params.length - 1] : undefined;
+        // The remaining params after SET columns are for WHERE
+        const whereParam = params ? params[setQuestionMarks] : undefined;
         for (const row of data) {
-          if (where ? where(row) : row.id === whereParam) {
+          if (row.id === whereParam) {
             Object.assign(row, updates);
           }
         }

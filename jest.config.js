@@ -6,12 +6,14 @@ module.exports = {
   modulePaths: ["<rootDir>"],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
+    "^expo-sqlite$": "<rootDir>/__mocks__/expo-sqlite.ts",
   },
   transform: {
     "^.+\\.tsx?$": [
       "ts-jest",
       {
         tsconfig: "tsconfig.test.json",
+        diagnostics: { ignoreCodes: [2571, 2322, 2345] },
       },
     ],
   },

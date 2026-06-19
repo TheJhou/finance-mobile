@@ -1,5 +1,3 @@
-jest.mock("expo-sqlite", () => require("@/__mocks__/expo-sqlite"));
-
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { generateId, isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
 import { getDb } from "@/lib/db";
