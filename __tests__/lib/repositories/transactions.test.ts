@@ -12,34 +12,6 @@ describe("transactions repository", () => {
   beforeEach(async () => {
     resetMockDatabase();
     const db = await getDb();
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS categories (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        color TEXT NOT NULL DEFAULT '#6366f1',
-        icon TEXT NOT NULL DEFAULT 'tag',
-        is_default INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT,
-        updated_at TEXT
-      );
-      CREATE TABLE IF NOT EXISTS transactions (
-        id TEXT PRIMARY KEY,
-        description TEXT NOT NULL,
-        amount REAL NOT NULL,
-        type TEXT NOT NULL CHECK(type IN ('INCOME','EXPENSE')),
-        status TEXT NOT NULL DEFAULT 'PAID',
-        payment_method TEXT NOT NULL DEFAULT 'CASH',
-        date TEXT NOT NULL,
-        notes TEXT,
-        category_id TEXT NOT NULL,
-        boleto_number TEXT,
-        cnpj TEXT,
-        recipient_name TEXT,
-        document_type TEXT DEFAULT 'NORMAL',
-        created_at TEXT,
-        updated_at TEXT
-      );
-    `);
     await db.runAsync(
       "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
       ["cat-1", "Alimentação", "#ef4444", "restaurant"]

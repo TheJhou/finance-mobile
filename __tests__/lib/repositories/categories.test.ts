@@ -71,6 +71,8 @@ describe("categories repository", () => {
     });
 
     it("returns empty array when no categories exist", async () => {
+      const db = await getDb();
+      await db.execAsync("DELETE FROM categories");
       const list = await listCategories();
       expect(list).toEqual([]);
     });

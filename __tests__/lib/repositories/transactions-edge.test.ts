@@ -219,14 +219,28 @@ describe("transactions edge cases", () => {
 
   describe("ordering", () => {
     it("orders by date desc then created_at desc", async () => {
-      await (await getDb()).runAsync(
+      const db = await getDb();
+      await db.runAsync(
         "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
-      await createTransaction({ description: "A", amount: 1, type: "EXPENSE", date: "2025-06-15", categoryId: "cat-1" });
-      await createTransaction({ description: "B", amount: 2, type: "EXPENSE", date: "2025-06-15", categoryId: "cat-1" });
-      await createTransaction({ description: "C", amount: 3, type: "EXPENSE", date: "2025-06-14", categoryId: "cat-1" });
+      // Insert directly with created_at to test ordering
+      await db.runAsync(
+        `INSERT INTO transactions (id, description, amount, type, status, payment_method, date, notes, category_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["id-a", "A", 1, "EXPENSE", "PAID", "CASH", "2025-06-15", null, "cat-1", "2025-06-15T10:00:00Z", "2025-06-15T10:00:00Z"]
+      );
+      await db.runAsync(
+        `INSERT INTO transactions (id, description, amount, type, status, payment_method, date, notes, category_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["id-b", "B", 2, "EXPENSE", "PAID", "CASH", "2025-06-15", null, "cat-1", "2025-06-15T11:00:00Z", "2025-06-15T11:00:00Z"]
+      );
+      await db.runAsync(
+        `INSERT INTO transactions (id, description, amount, type, status, payment_method, date, notes, category_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ["id-c", "C", 3, "EXPENSE", "PAID", "CASH", "2025-06-14", null, "cat-1", "2025-06-14T10:00:00Z", "2025-06-14T10:00:00Z"]
+      );
 
       const list = await listTransactions();
       expect(list[0].description).toBe("B");

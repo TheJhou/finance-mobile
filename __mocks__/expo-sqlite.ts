@@ -1,5 +1,6 @@
 // Mock in-memory SQLite for unit testing
-// Supports basic INSERT, SELECT, UPDATE, DELETE operations
+// Supports: INSERT, SELECT (with JOIN, GROUP BY, ORDER BY, LIMIT, WHERE),
+// UPDATE, DELETE, CREATE TABLE/INDEX, ALTER TABLE, PRAGMA
 
 interface Row {
   [key: string]: unknown;
@@ -16,87 +17,97 @@ class InMemoryDatabase {
     return this.tables.get(name)!;
   }
 
-  private parseWhere(sql: string, params: unknown[]): ((row: Row) => boolean) | null {
-    const whereMatch = sql.match(/WHERE\s+(.+?)(?:ORDER|GROUP|LIMIT|$)/i);
-    if (!whereMatch) return null;
+  /** Evaluate a single condition part against a row, consuming params. */
+  private evalCondition(part: string, row: Row, params: unknown[], paramIndex: { i: number }): boolean {
+    // strftime('%Y-%m', date) = '2025-06' or = ?
+    const strftimeEq = part.match(/strftime\s*\(\s*['"]([^'"]+)['"]\s*,\s*(\w+)\s*\)\s*=\s*(['"][^'"]*['"]|\?)/i);
+    if (strftimeEq) {
+      const fmt = strftimeEq[1];
+      const col = strftimeEq[2];
+      const rawValue = strftimeEq[3];
+      let value: string;
+      if (rawValue === "?") {
+        value = String(params[paramIndex.i++]);
+      } else {
+        value = rawValue.replace(/['"]/g, "");
+      }
+      const v = row[col];
+      if (fmt === "%Y-%m") {
+        return v ? String(v).slice(0, 7) === value : false;
+      }
+      return v ? String(v) === value : false;
+    }
 
-    const conditions: ((row: Row) => boolean)[] = [];
-    let paramIndex = 0;
+    // col BETWEEN ? AND ?
+    const betweenMatch = part.match(/(\w+(?:\.\w+)?)\s+BETWEEN\s+\?\s+AND\s+\?/i);
+    if (betweenMatch) {
+      const col = betweenMatch[1].includes(".") ? betweenMatch[1].split(".")[1] : betweenMatch[1];
+      const minValue = params[paramIndex.i++];
+      const maxValue = params[paramIndex.i++];
+      const v = row[col];
+      const vStr = String(v);
+      return vStr >= String(minValue) && vStr <= String(maxValue);
+    }
 
-    // Extract table alias (e.g., "t." or "r.")
-    const tableAlias = sql.match(/FROM\s+\w+\s+(\w)\./i)?.[1];
+    // col IN ('a','b') or col IN (?,?)
+    const inMatch = part.match(/(\w+(?:\.\w+)?)\s+IN\s*\(([^)]+)\)/i);
+    if (inMatch) {
+      const col = inMatch[1].includes(".") ? inMatch[1].split(".")[1] : inMatch[1];
+      const values = inMatch[2].split(",").map((v) => v.trim().replace(/^['"]|['"]$/g, ""));
+      const v = row[col];
+      return values.includes(String(v));
+    }
 
-    let whereClause = whereMatch[1].trim();
-    // Temporarily replace BETWEEN ? AND ? to avoid splitting on AND
-    const betweenPlaceholders: string[] = [];
-    whereClause = whereClause.replace(/(\w+(?:\.\w+)?\s+BETWEEN\s+\?\s+AND\s+\?)/gi, (match) => {
-      betweenPlaceholders.push(match);
-      return `__BETWEEN_${betweenPlaceholders.length - 1}__`;
-    });
-    const parts = whereClause.split(/\s+AND\s+/i);
-
-    for (const part of parts) {
-      // Restore BETWEEN placeholders
-      const restoredPart = part.replace(/__BETWEEN_(\d+)__/g, (_, i) => betweenPlaceholders[parseInt(i)]);
-      const eqMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*=\s*\?/);
-      const ltMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*<\s*\?/);
-      const gtMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*>\s*\?/);
-      const lteMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*<=\s*\?/);
-      const gteMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s*>=\s*\?/);
-      const inMatch = restoredPart.match(/(\w+)\s+IN\s*\(([^)]+)\)/i);
-      const betweenMatch = restoredPart.match(/(\w+)(?:\.(\w+))?\s+BETWEEN\s+\?\s+AND\s+\?/i);
-
-      if (eqMatch) {
-        const col = eqMatch[2] || eqMatch[1];
-        const value = params[paramIndex++];
-        conditions.push((row) => row[col] === value);
-      } else if (lteMatch) {
-        const col = lteMatch[2] || lteMatch[1];
-        const value = params[paramIndex++];
-        conditions.push((row) => {
-          const v = row[col];
-          return typeof v === "number" && typeof value === "number" ? v <= value : String(v) <= String(value);
-        });
-      } else if (gteMatch) {
-        const col = gteMatch[2] || gteMatch[1];
-        const value = params[paramIndex++];
-        conditions.push((row) => {
-          const v = row[col];
-          return typeof v === "number" && typeof value === "number" ? v >= value : String(v) >= String(value);
-        });
-      } else if (ltMatch) {
-        const col = ltMatch[2] || ltMatch[1];
-        const value = params[paramIndex++];
-        conditions.push((row) => {
-          const v = row[col];
-          return typeof v === "number" && typeof value === "number" ? v < value : String(v) < String(value);
-        });
-      } else if (gtMatch) {
-        const col = gtMatch[2] || gtMatch[1];
-        const value = params[paramIndex++];
-        conditions.push((row) => {
-          const v = row[col];
-          return typeof v === "number" && typeof value === "number" ? v > value : String(v) > String(value);
-        });
-      } else if (betweenMatch) {
-        const col = betweenMatch[2] || betweenMatch[1];
-        const minValue = params[paramIndex++];
-        const maxValue = params[paramIndex++];
-        conditions.push((row) => {
-          const v = row[col];
-          const vStr = String(v);
-          const minStr = String(minValue);
-          const maxStr = String(maxValue);
-          return vStr >= minStr && vStr <= maxStr;
-        });
-      } else if (inMatch) {
-        const col = inMatch[1];
-        const values = inMatch[2].split(",").map((v) => v.trim().replace(/'/g, ""));
-        conditions.push((row) => values.includes(String(row[col])));
+    // col <= ?, col < ?, col >= ?, col > ?, col = ?, col != ?
+    const compMatch = part.match(/(\w+(?:\.\w+)?)\s*(<=|>=|<|>|=|!=)\s*(['"][^'"]*['"]|\?)/i);
+    if (compMatch) {
+      const col = compMatch[1].includes(".") ? compMatch[1].split(".")[1] : compMatch[1];
+      const op = compMatch[2];
+      const rawValue = compMatch[3];
+      let value: unknown;
+      if (rawValue === "?") {
+        value = params[paramIndex.i++];
+      } else {
+        value = rawValue.replace(/^['"]|['"]$/g, "");
+      }
+      const v = row[col];
+      const vs = String(v);
+      const vals = String(value);
+      switch (op) {
+        case "=": return v === value || vs === vals;
+        case "!=": return v !== value && vs !== vals;
+        case "<=": return vs <= vals;
+        case ">=": return vs >= vals;
+        case "<": return vs < vals;
+        case ">": return vs > vals;
       }
     }
 
-    return (row) => conditions.every((fn) => fn(row));
+    return true; // unknown condition, allow
+  }
+
+  private parseWhere(sql: string, params: unknown[]): ((row: Row) => boolean) | null {
+    const whereMatch = sql.match(/WHERE\s+([\s\S]+?)(?:\s+ORDER\s+BY|\s+GROUP\s+BY|\s+LIMIT|$)/i);
+    if (!whereMatch) return null;
+
+    return (row: Row) => {
+      const paramIndex = { i: 0 };
+      // Protect BETWEEN ... AND ... from splitting
+      let clause = whereMatch[1];
+      const betweens: string[] = [];
+      clause = clause.replace(/(\w+(?:\.\w+)?\s+BETWEEN\s+\?\s+AND\s+\?)/gi, (m) => {
+        betweens.push(m);
+        return `__BETWEEN_${betweens.length - 1}__`;
+      });
+      const parts = clause.split(/\s+AND\s+/i);
+      for (const p of parts) {
+        const restored = p.replace(/__BETWEEN_(\d+)__/g, (_, i) => betweens[parseInt(i)]);
+        if (!this.evalCondition(restored.trim(), row, params, paramIndex)) {
+          return false;
+        }
+      }
+      return true;
+    };
   }
 
   private parseTable(sql: string): string {
@@ -106,41 +117,45 @@ class InMemoryDatabase {
     if (intoMatch) return intoMatch[1];
     const updateMatch = sql.match(/UPDATE\s+(\w+)/i);
     if (updateMatch) return updateMatch[1];
-    const deleteMatch = sql.match(/FROM\s+(\w+)/i);
-    if (deleteMatch) return deleteMatch[1];
     return "";
   }
 
   private parseColumns(sql: string): string[] {
-    const match = sql.match(/INSERT\s+INTO\s+\w+\s*\(([^)]+)\)/i);
+    const match = sql.match(/INSERT(?:\s+OR\s+REPLACE)?\s+INTO\s+\w+\s*\(([^)]+)\)/i);
     if (!match) return [];
     return match[1].split(",").map((c) => c.trim());
   }
 
-  private parseValues(sql: string): number {
-    const match = sql.match(/VALUES\s*\(([^)]+)\)/i);
-    if (!match) return 0;
-    return match[1].split(",").filter((v) => v.trim() === "?").length;
+  private parseJoin(sql: string): { leftTable: string; rightTable: string; rightTableCol: string; leftTableCol: string } | null {
+    const joinMatch = sql.match(/LEFT\s+JOIN\s+(\w+)\s+(\w+)\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/i);
+    if (!joinMatch) return null;
+    const [, rightTable, , rightAlias, rightTableCol, leftAlias, leftTableCol] = joinMatch;
+    const fromMatch = sql.match(/FROM\s+(\w+)/i);
+    if (!fromMatch) return null;
+    return { leftTable: fromMatch[1], rightTable, rightTableCol, leftTableCol };
   }
 
-  private parseSet(sql: string): { col: string; paramIndex: number }[] {
-    const match = sql.match(/SET\s+(.+?)\s+WHERE/i);
+  private parseOrderBy(sql: string): { col: string; dir: "ASC" | "DESC" }[] {
+    const match = sql.match(/ORDER\s+BY\s+(.+?)(?:\s+LIMIT|$)/i);
     if (!match) return [];
-    const parts = match[1].split(",").map((p) => p.trim());
-    return parts.map((p) => {
-      const colMatch = p.match(/(\w+)\s*=\s*\?/);
-      return { col: colMatch ? colMatch[1] : "", paramIndex: -1 };
+    return match[1].split(",").map((p) => {
+      const parts = p.trim().split(/\s+/);
+      const colRaw = parts[0];
+      const col = colRaw.includes(".") ? colRaw.split(".")[1] : colRaw;
+      const dir = (parts[1]?.toUpperCase() as "ASC" | "DESC") || "ASC";
+      return { col, dir };
     });
   }
 
-  private parseJoin(sql: string): { leftTable: string; rightTable: string; leftCol: string; rightCol: string } | null {
-    const joinMatch = sql.match(/LEFT\s+JOIN\s+(\w+)\s+(\w+)\s+ON\s+(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)/i);
-    if (!joinMatch) return null;
-    const [, rightTable, rightAlias, leftAlias, leftCol, , rightCol] = joinMatch;
-    // Determine left table from FROM clause
-    const fromMatch = sql.match(/FROM\s+(\w+)\s+(\w+)/i);
-    if (!fromMatch) return null;
-    return { leftTable: fromMatch[1], rightTable, leftCol, rightCol };
+  private parseSelect(sql: string): { raw: string; alias?: string }[] {
+    const match = sql.match(/SELECT\s+([\s\S]+?)\s+FROM/i);
+    if (!match) return [];
+    return match[1].split(",").map((c) => {
+      const trimmed = c.trim();
+      const aliasMatch = trimmed.match(/(.+?)\s+as\s+(\w+)/i);
+      if (aliasMatch) return { raw: trimmed, alias: aliasMatch[2] };
+      return { raw: trimmed };
+    });
   }
 
   async getAllAsync<T>(sql: string, params?: unknown[]): Promise<T[]> {
@@ -150,23 +165,21 @@ class InMemoryDatabase {
 
     let results = where ? data.filter(where) : [...data];
 
-    // Handle LEFT JOIN
+    // LEFT JOIN
     const joinInfo = this.parseJoin(sql);
     if (joinInfo) {
       const rightData = this.getTable(joinInfo.rightTable);
+      const selectCols = this.parseSelect(sql);
       results = results.map((row) => {
-        const joined = { ...row };
-        const rightRow = rightData.find((r) => r[joinInfo.rightCol] === row[joinInfo.leftCol]);
+        const joined: Row = { ...row };
+        const rightRow = rightData.find((r) => r[joinInfo.rightTableCol] === row[joinInfo.leftTableCol]);
         if (rightRow) {
-          // Map joined columns with alias prefix (e.g., c.name -> category_name)
-          const selectMatch = sql.match(/SELECT\s+(.+?)\s+FROM/i);
-          if (selectMatch) {
-            const cols = selectMatch[1].split(",").map((c) => c.trim());
-            for (const col of cols) {
-              const aliasMatch = col.match(/(\w+)\.(\w+)\s+as\s+(\w+)/i);
-              if (aliasMatch && rightRow[aliasMatch[2]] !== undefined) {
-                joined[aliasMatch[3]] = rightRow[aliasMatch[2]];
-              }
+          for (const sc of selectCols) {
+            // Match c.name or c.name as category_name
+            const m = sc.raw.match(/^(\w+)\.(\w+)(?:\s+as\s+(\w+))?$/i);
+            if (m && rightRow[m[2]] !== undefined) {
+              const alias = sc.alias || m[3] || m[2];
+              joined[alias] = rightRow[m[2]];
             }
           }
         }
@@ -174,51 +187,108 @@ class InMemoryDatabase {
       });
     }
 
-    // Handle ORDER BY
-    const orderMatch = sql.match(/ORDER\s+BY\s+(\w+)(?:\.(\w+))?\s*(ASC|DESC)?/i);
-    if (orderMatch) {
-      const col = orderMatch[2] || orderMatch[1];
-      const dir = orderMatch[3]?.toUpperCase() || "ASC";
+    // ORDER BY
+    const orderCols = this.parseOrderBy(sql);
+    if (orderCols.length > 0) {
       results.sort((a, b) => {
-        const av = a[col];
-        const bv = b[col];
-        if (av == null) return dir === "ASC" ? 1 : -1;
-        if (bv == null) return dir === "ASC" ? -1 : 1;
-        if (typeof av === "number" && typeof bv === "number") {
-          return dir === "ASC" ? av - bv : bv - av;
+        for (const o of orderCols) {
+          const av = a[o.col];
+          const bv = b[o.col];
+          if (av == null && bv != null) return o.dir === "ASC" ? 1 : -1;
+          if (av != null && bv == null) return o.dir === "ASC" ? -1 : 1;
+          if (av == null && bv == null) continue;
+          const cmp = typeof av === "number" && typeof bv === "number"
+            ? (av as number) - (bv as number)
+            : String(av).localeCompare(String(bv));
+          if (cmp !== 0) return o.dir === "ASC" ? cmp : -cmp;
         }
-        return dir === "ASC" ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+        return 0;
       });
     }
 
-    // Handle GROUP BY
-    const groupMatch = sql.match(/GROUP\s+BY\s+(.+?)(?:ORDER|LIMIT|$)/i);
+    // GROUP BY
+    const groupMatch = sql.match(/GROUP\s+BY\s+(.+?)(?:\s+ORDER\s+BY|\s+LIMIT|$)/i);
     if (groupMatch) {
-      const groupCol = groupMatch[1].trim();
+      const groupColRaw = groupMatch[1].trim();
+      const groupCol = groupColRaw.includes(".") ? groupColRaw.split(".")[1] : groupColRaw;
       const grouped: Record<string, Row> = {};
+      const selectCols = this.parseSelect(sql);
       for (const row of results) {
         const key = String(row[groupCol]);
         if (!grouped[key]) {
+          // Start with base row, will overwrite aggregated columns
           grouped[key] = { ...row };
-        } else {
-          // SUM aggregation
-          const aggMatch = sql.match(/SUM\(([^)]+)\)/i);
-          if (aggMatch) {
-            const sumCol = aggMatch[1].includes(".") ? aggMatch[1].split(".")[1] : aggMatch[1];
-            const existing = Number(grouped[key][sumCol] || 0);
-            grouped[key][sumCol] = existing + Number(row[sumCol] || 0);
+        }
+        // SUM aggregation
+        for (const sc of selectCols) {
+          const sumMatch = sc.raw.match(/SUM\(([^)]+)\)/i);
+          if (sumMatch) {
+            const sumCol = sumMatch[1].includes(".") ? sumMatch[1].split(".")[1] : sumMatch[1];
+            const existing = Number(grouped[key][sc.alias || sumCol] || 0);
+            grouped[key][sc.alias || sumCol] = existing + Number(row[sumCol] || 0);
           }
-          // COUNT aggregation
-          const countMatch = sql.match(/COUNT\(\*\)/i);
+          const countMatch = sc.raw.match(/COUNT\(\*\)/i);
           if (countMatch) {
-            grouped[key]["count"] = (Number(grouped[key]["count"] || 0)) + 1;
+            const existing = Number(grouped[key][sc.alias || "count"] || 0);
+            grouped[key][sc.alias || "count"] = existing + 1;
           }
         }
       }
       results = Object.values(grouped);
     }
 
-    // Handle LIMIT
+    // Handle SELECT COUNT(*) - return count instead of rows
+    const countSelectMatch = sql.match(/SELECT\s+COUNT\(\*\)\s+as\s+(\w+)/i);
+    if (countSelectMatch) {
+      const alias = countSelectMatch[1];
+      const row: Row = { [alias]: results.length };
+      return [row] as T[];
+    }
+
+    // Handle aggregate selects like COALESCE(SUM(...), 0) as alias
+    // e.g., SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
+    const aggSelectMatch = sql.match(/SELECT\s+COALESCE\s*\(\s*SUM\s*\(([^)]+)\)\s*,\s*0\s*\)\s+as\s+(\w+)/i);
+    if (aggSelectMatch) {
+      const sumExpr = aggSelectMatch[1];
+      const alias = aggSelectMatch[2];
+      let total = 0;
+      for (const row of results) {
+        // CASE WHEN type = 'INCOME' THEN amount ELSE -amount END
+        const caseMatch = sumExpr.match(/CASE\s+WHEN\s+(\w+)\s*=\s*['"]([^'"]+)['"]\s+THEN\s+(\w+)\s+ELSE\s+-?(\w+)\s+END/i);
+        if (caseMatch) {
+          const condCol = caseMatch[1];
+          const condVal = caseMatch[2];
+          const thenCol = caseMatch[3];
+          const elseCol = caseMatch[4];
+          if (row[condCol] === condVal) {
+            total += Number(row[thenCol] || 0);
+          } else {
+            total -= Number(row[elseCol] || 0);
+          }
+        } else {
+          // Simple SUM(col)
+          const simpleCol = sumExpr.trim();
+          total += Number(row[simpleCol] || 0);
+        }
+      }
+      const row: Row = { [alias]: total };
+      return [row] as T[];
+    }
+
+    // Handle SUM(col) as alias
+    const sumSelectMatch = sql.match(/SELECT\s+COALESCE\s*\(\s*SUM\s*\((\w+)\)\s*,\s*0\s*\)\s+as\s+(\w+)/i);
+    if (sumSelectMatch) {
+      const col = sumSelectMatch[1];
+      const alias = sumSelectMatch[2];
+      let total = 0;
+      for (const row of results) {
+        total += Number(row[col] || 0);
+      }
+      const row: Row = { [alias]: total };
+      return [row] as T[];
+    }
+
+    // LIMIT
     const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
     if (limitMatch) {
       results = results.slice(0, parseInt(limitMatch[1]));
@@ -240,9 +310,7 @@ class InMemoryDatabase {
       const columns = this.parseColumns(sql);
       const row: Row = {};
       if (params) {
-        columns.forEach((col, i) => {
-          row[col] = params[i];
-        });
+        columns.forEach((col, i) => { row[col] = params[i]; });
       }
       data.push(row);
     } else if (sql.trim().toUpperCase().startsWith("UPDATE")) {
@@ -250,22 +318,16 @@ class InMemoryDatabase {
       if (setMatch) {
         const setParts = setMatch[1].split(",").map((p) => p.trim());
         const updates: Record<string, unknown> = {};
-        // Count how many ? are in the SET clause
-        const setQuestionMarks = (setMatch[1].match(/\?/g) || []).length;
+        const setQ = (setMatch[1].match(/\?/g) || []).length;
         if (params) {
           for (let i = 0; i < setParts.length; i++) {
             const colMatch = setParts[i].match(/(\w+)\s*=\s*\?/);
-            if (colMatch) {
-              updates[colMatch[1]] = params[i];
-            }
+            if (colMatch) updates[colMatch[1]] = params[i];
           }
         }
-        // The remaining params after SET columns are for WHERE
-        const whereParam = params ? params[setQuestionMarks] : undefined;
+        const whereParam = params ? params[setQ] : undefined;
         for (const row of data) {
-          if (row.id === whereParam) {
-            Object.assign(row, updates);
-          }
+          if (row.id === whereParam) Object.assign(row, updates);
         }
       }
     } else if (sql.trim().toUpperCase().startsWith("DELETE")) {
@@ -276,42 +338,26 @@ class InMemoryDatabase {
   }
 
   async execAsync(sql: string): Promise<void> {
-    // Handle CREATE TABLE
     const createMatch = sql.match(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)/i);
-    if (createMatch) {
-      this.getTable(createMatch[1]);
-    }
-    // Handle CREATE INDEX
+    if (createMatch) this.getTable(createMatch[1]);
     const indexMatch = sql.match(/CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)\s+ON\s+(\w+)/i);
-    if (indexMatch) {
-      this.indexes.set(indexMatch[1], new Set());
-    }
-    // Handle DELETE without WHERE (cleanup)
+    if (indexMatch) this.indexes.set(indexMatch[1], new Set());
     const deleteMatch = sql.match(/DELETE\s+FROM\s+(\w+)/i);
-    if (deleteMatch && !sql.includes("WHERE")) {
-      this.tables.set(deleteMatch[1], []);
-    }
-    // Handle ALTER TABLE
+    if (deleteMatch && !sql.includes("WHERE")) this.tables.set(deleteMatch[1], []);
     const alterMatch = sql.match(/ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)/i);
     if (alterMatch) {
       const [, tname, colName] = alterMatch;
-      const rows = this.getTable(tname);
-      for (const row of rows) {
-        if (!(colName in row)) {
-          row[colName] = null;
-        }
+      for (const row of this.getTable(tname)) {
+        if (!(colName in row)) row[colName] = null;
       }
     }
-    // Handle PRAGMA - ignore
   }
 }
 
 let mockDb: InMemoryDatabase | null = null;
 
 export function openDatabaseAsync(_name: string): Promise<InMemoryDatabase> {
-  if (!mockDb) {
-    mockDb = new InMemoryDatabase();
-  }
+  if (!mockDb) mockDb = new InMemoryDatabase();
   return Promise.resolve(mockDb);
 }
 

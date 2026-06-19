@@ -83,10 +83,11 @@ export async function getTransaction(
   id: string
 ): Promise<Transaction | null> {
   const db = await getDb();
-  const row = await db.getFirstAsync<TransactionRow>(
+  const rows = await db.getAllAsync<TransactionRow>(
     `${BASE_SELECT} WHERE t.id = ?`,
     [id]
   );
+  const row = rows[0] || null;
   return row ? mapTransaction(row) : null;
 }
 
