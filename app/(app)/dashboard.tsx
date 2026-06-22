@@ -1,3 +1,4 @@
+import DrawerMenu from "@/components/drawer-menu";
 import { getStoredUserName } from "@/lib/auth";
 import type { GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
@@ -11,15 +12,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -72,6 +73,7 @@ export default function DashboardScreen() {
   const [chartModal, setChartModal] = useState<"category" | "bar" | "line" | "commitment" | null>(null);
   const [notificationModal, setNotificationModal] = useState(false);
   const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
+  const [drawerVisible, setDrawerVisible] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -172,6 +174,11 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+      <DrawerMenu
+        visible={drawerVisible}
+        onClose={() => setDrawerVisible(false)}
+        userName={userName}
+      />
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
@@ -179,7 +186,7 @@ export default function DashboardScreen() {
       >
         {/* ── Header ── */}
         <View style={styles.header}>
-          <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ionicons name="menu" size={24} color={colors.textPrimary} /></TouchableOpacity>
+          <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} onPress={() => setDrawerVisible(true)}><Ionicons name="menu" size={24} color={colors.textPrimary} /></TouchableOpacity>
           <View style={{ flex: 1, marginLeft: spacing.md }}>
             <Text style={styles.greeting}>Olá, {userName || "Usuário"} 👋</Text>
             <Text style={styles.subtitle}>Aqui está o resumo da sua vida financeira.</Text>

@@ -90,6 +90,9 @@ export default function AppLayout() {
           ),
         }}
       />
+      <Tabs.Screen name="account" options={{ href: null }} />
+      <Tabs.Screen name="export-data" options={{ href: null }} />
+      <Tabs.Screen name="billing" options={{ href: null }} />
     </Tabs>
   );
 }
