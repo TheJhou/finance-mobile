@@ -58,7 +58,7 @@
           "sounds": []
         }
       ],
-      "./modules/bank-notifications"
+      "./modules/bank-notifications/app.plugin.js"
     ],
     "experiments": {
       "typedRoutes": true
