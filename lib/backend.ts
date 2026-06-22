@@ -116,6 +116,38 @@ export async function extractFromText(text: string, categories: Array<{ id: stri
   return response.json();
 }
 
+// ── AI Forecast ─────────────────────────────────────────────────────
+
+export interface AiForecast {
+  forecastBalance: number;
+  trend: "positiva" | "negativa" | "estavel";
+  riskLevel: "baixo" | "medio" | "alto";
+  summary: string;
+  insight: string;
+  savingsPotential: number;
+  generatedAt: string;
+  cached: boolean;
+}
+
+export async function getAiForecast(payload: {
+  balance: number;
+  monthlyIncome: number;
+  monthlyExpense: number;
+  upcomingAmount: number;
+  overdueAmount: number;
+  activeRecurring: number;
+  expensesByCategory: { name: string; value: number }[];
+  monthlyTrend: { month: string; income: number; expense: number }[];
+}): Promise<AiForecast> {
+  const response = await authFetch(`${BACKEND_URL}/dashboard/ai-forecast`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) await handleError(response, "Erro ao buscar previsão IA");
+  return response.json();
+}
+
 // ── User Profile ────────────────────────────────────────────────────
 
 export async function getMe(): Promise<{ id: string; name: string | null; email: string }> {

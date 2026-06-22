@@ -1,7 +1,7 @@
 import DrawerMenu from "@/components/drawer-menu";
 import { getStoredUserName } from "@/lib/auth";
-import type { GoalData, ScoreData, StreakData } from "@/lib/backend";
-import { checkinStreak, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
+import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
+import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
@@ -9,6 +9,7 @@ import { colors, radius, spacing } from "@/lib/theme";
 import type { DashboardData } from "@/lib/types";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
 import {
@@ -74,6 +75,41 @@ export default function DashboardScreen() {
   const [notificationModal, setNotificationModal] = useState(false);
   const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
+  const [forecastLoading, setForecastLoading] = useState(false);
+
+  const AI_FORECAST_KEY = "ai_forecast_cache";
+
+  const loadAiForecast = useCallback(async (dashData: DashboardData) => {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const cached = await AsyncStorage.getItem(AI_FORECAST_KEY);
+      if (cached) {
+        const parsed: AiForecast = JSON.parse(cached);
+        if (parsed.generatedAt === today) {
+          setAiForecast(parsed);
+          return;
+        }
+      }
+      setForecastLoading(true);
+      const forecast = await getAiForecast({
+        balance: dashData.balance,
+        monthlyIncome: dashData.monthlyIncome,
+        monthlyExpense: dashData.monthlyExpense,
+        upcomingAmount: dashData.upcomingAmount,
+        overdueAmount: dashData.overdueAmount,
+        activeRecurring: dashData.activeRecurring,
+        expensesByCategory: dashData.expensesByCategory,
+        monthlyTrend: dashData.monthlyTrend,
+      });
+      setAiForecast(forecast);
+      await AsyncStorage.setItem(AI_FORECAST_KEY, JSON.stringify(forecast));
+    } catch (err) {
+      console.warn("[Dashboard] Falha ao buscar previsão IA:", err);
+    } finally {
+      setForecastLoading(false);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     try {
@@ -89,6 +125,9 @@ export default function DashboardScreen() {
       setData(dashRes);
       setBills(billsRes);
       setOverdueTransactions(overdueRes);
+
+      // AI Forecast (1x por dia, non-blocking)
+      void loadAiForecast(dashRes);
 
       // Backend calls (non-blocking — fail silently if offline)
       void Promise.all([
@@ -440,18 +479,57 @@ export default function DashboardScreen() {
               </View>
             </View>
 
-            {/* ── Previsão de saldo ── */}
+            {/* ── Previsão de saldo (IA) ── */}
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitle}>Previsão de saldo</Text>
-                <TouchableOpacity onPress={() => setChartModal("line")}><Text style={styles.linkText}>Ver detalhes {">"}</Text></TouchableOpacity>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Text style={styles.sectionTitle}>Previsão de saldo</Text>
+                  <View style={{ backgroundColor: colors.primary + "22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                    <Text style={{ fontSize: 9, fontWeight: "700", color: colors.primary }}>IA</Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => setChartModal("line")}><Text style={styles.linkText}>Ver gráfico {">"}  </Text></TouchableOpacity>
               </View>
-              <Text style={{ fontSize: 12, color: colors.textSecondary }}>Se continuar assim, você termina o mês com</Text>
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.success }}>{formatCurrency(Math.max(0, data.balance - data.upcomingAmount))}</Text>
-              <View style={{ height: 120, overflow: "hidden" }}>
+
+              {forecastLoading && !aiForecast ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 8 }}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={{ fontSize: 12, color: colors.textMuted }}>Analisando seus dados...</Text>
+                </View>
+              ) : aiForecast ? (
+                <View style={{ gap: spacing.sm }}>
+                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
+                    <Text style={{ fontSize: 22, fontWeight: "800", color: aiForecast.trend === "negativa" ? colors.danger : colors.success }}>
+                      {formatCurrency(aiForecast.forecastBalance)}
+                    </Text>
+                    <View style={{ backgroundColor: aiForecast.riskLevel === "alto" ? colors.danger + "22" : aiForecast.riskLevel === "medio" ? colors.warning + "22" : colors.success + "22", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 10, fontWeight: "700", color: aiForecast.riskLevel === "alto" ? colors.danger : aiForecast.riskLevel === "medio" ? colors.warning : colors.success }}>
+                        {aiForecast.riskLevel === "alto" ? "Risco alto" : aiForecast.riskLevel === "medio" ? "Risco médio" : "Baixo risco"}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>{aiForecast.summary}</Text>
+                  <View style={{ backgroundColor: colors.primary + "11", borderRadius: radius.md, padding: spacing.sm, borderLeftWidth: 3, borderLeftColor: colors.primary }}>
+                    <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>💡 {aiForecast.insight}</Text>
+                  </View>
+                  {aiForecast.savingsPotential > 0 && (
+                    <Text style={{ fontSize: 11, color: colors.textMuted }}>Potencial de economia: {formatCurrency(aiForecast.savingsPotential)}</Text>
+                  )}
+                  <Text style={{ fontSize: 10, color: colors.textMuted, textAlign: "right" }}>
+                    {aiForecast.cached ? "🔄 Atualizado hoje" : "✨ Gerado agora"}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ gap: spacing.xs }}>
+                  <Text style={{ fontSize: 12, color: colors.textSecondary }}>Estimativa simples</Text>
+                  <Text style={{ fontSize: 18, fontWeight: "700", color: colors.success }}>{formatCurrency(Math.max(0, data.balance - data.upcomingAmount))}</Text>
+                </View>
+              )}
+
+              <View style={{ height: 100, overflow: "hidden", marginTop: spacing.sm }}>
                 <LineChart
                   data={netTrendChartData}
-                  width={SCREEN_WIDTH - CARD_PADDING * 2 - spacing.lg * 2 - 30} height={110}
+                  width={SCREEN_WIDTH - CARD_PADDING * 2 - spacing.lg * 2 - 30} height={90}
                   color={colors.success} thickness={2}
                   hideDataPoints={netTrendChartData.length <= 1} dataPointsColor={colors.success} dataPointsRadius={3}
                   curved areaChart
