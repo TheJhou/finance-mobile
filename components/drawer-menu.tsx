@@ -5,6 +5,7 @@ import React, { useEffect, useRef } from "react";
 import {
     Animated,
     Dimensions,
+    Modal,
     Pressable,
     StyleSheet,
     Text,
@@ -38,10 +39,11 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
   const insets = useSafeAreaInsets();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const [mounted, setMounted] = React.useState(false);
+  const [modalVisible, setModalVisible] = React.useState(false);
 
   useEffect(() => {
     if (visible) {
+      setModalVisible(true);
       Animated.parallel([
         Animated.spring(translateX, {
           toValue: 0,
@@ -67,9 +69,8 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
           duration: 220,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => setModalVisible(false));
     }
-    if (visible) setMounted(true);
   }, [visible, translateX, overlayOpacity]);
 
   const navigate = (route: string) => {
@@ -107,10 +108,14 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
     },
   ];
 
-  if (!mounted) return null;
-
   return (
-    <View style={StyleSheet.absoluteFillObject} pointerEvents={visible ? "auto" : "none"}>
+    <Modal
+      visible={modalVisible}
+      transparent
+      animationType="none"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
       {/* Overlay */}
       <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
@@ -193,7 +198,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
           <Text style={styles.footerVersion}>v1.0.0</Text>
         </View>
       </Animated.View>
-    </View>
+    </Modal>
   );
 }
 
