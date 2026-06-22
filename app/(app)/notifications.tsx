@@ -18,7 +18,6 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     AppState,
     FlatList,
     Modal,
@@ -27,7 +26,7 @@ import {
     StyleSheet,
     Text,
     TextInput,
-    View,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -73,6 +72,14 @@ export default function NotificationsScreen() {
   const [processingAudio, setProcessingAudio] = useState(false);
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const recordingRef = useRef<Audio.Recording | null>(null);
+  const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
+  const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = useCallback((type: "success" | "error" | "warning", message: string) => {
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    setToast({ type, message });
+    toastTimeout.current = setTimeout(() => setToast(null), 3500);
+  }, []);
 
   const moduleAvailable = BankNotifications != null;
 
@@ -128,10 +135,7 @@ export default function NotificationsScreen() {
     try {
       BankNotifications?.openPermissionSettings();
     } catch (err) {
-      Alert.alert(
-        "Erro",
-        err instanceof Error ? err.message : "Falha ao abrir"
-      );
+      showToast("error", err instanceof Error ? err.message : "Falha ao abrir configurações");
     }
   };
 
@@ -144,7 +148,7 @@ export default function NotificationsScreen() {
 
   const handleLogin = async () => {
     if (!loginEmail.trim() || !loginPassword.trim()) {
-      Alert.alert("Erro", "Preencha e-mail e senha");
+      showToast("error", "Preencha e-mail e senha");
       return;
     }
     setLoggingIn(true);
@@ -153,9 +157,9 @@ export default function NotificationsScreen() {
       setLoggedIn(true);
       setShowLoginModal(false);
       resetAuthForm();
-      Alert.alert("Sucesso", "Login realizado!");
+      showToast("success", "Login realizado com sucesso!");
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao fazer login");
+      showToast("error", err instanceof Error ? err.message : "Falha ao fazer login");
     } finally {
       setLoggingIn(false);
     }
@@ -163,15 +167,15 @@ export default function NotificationsScreen() {
 
   const handleRegister = async () => {
     if (!loginEmail.trim() || !loginPassword.trim()) {
-      Alert.alert("Erro", "Preencha e-mail e senha");
+      showToast("error", "Preencha e-mail e senha");
       return;
     }
     if (loginPassword.length < 6) {
-      Alert.alert("Erro", "A senha deve ter no mínimo 6 caracteres");
+      showToast("error", "A senha deve ter no mínimo 6 caracteres");
       return;
     }
     if (loginPassword !== loginPasswordConfirm) {
-      Alert.alert("Erro", "As senhas não coincidem");
+      showToast("error", "As senhas não coincidem");
       return;
     }
     setLoggingIn(true);
@@ -180,9 +184,9 @@ export default function NotificationsScreen() {
       setLoggedIn(true);
       setShowLoginModal(false);
       resetAuthForm();
-      Alert.alert("Sucesso", "Conta criada com sucesso!");
+      showToast("success", "Conta criada com sucesso!");
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao criar conta");
+      showToast("error", err instanceof Error ? err.message : "Falha ao criar conta");
     } finally {
       setLoggingIn(false);
     }
@@ -196,11 +200,11 @@ export default function NotificationsScreen() {
   const handleProcessText = async () => {
     if (!freeText.trim()) return;
     if (!loggedIn) {
-      Alert.alert("Login necessário", "Faça login para usar a IA.");
+      showToast("warning", "Faça login para usar a IA.");
       return;
     }
     if (!selectedCategoryId) {
-      Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
+      showToast("warning", "Configure uma categoria padrão primeiro.");
       return;
     }
     setProcessingText(true);
@@ -213,7 +217,7 @@ export default function NotificationsScreen() {
       const draft = result.draft;
 
       if (!draft || draft.amount <= 0) {
-        Alert.alert("Aviso", "Não foi possível identificar o valor. Revise a transação manualmente.");
+        showToast("warning", "Não foi possível identificar o valor. Revise manualmente.");
         return;
       }
 
@@ -236,15 +240,15 @@ export default function NotificationsScreen() {
 
       setFreeText("");
       if (isPending) {
-        Alert.alert("Pendente", "Transação salva como pendente. Não foi possível determinar se é receita ou despesa — revise na aba Transações.");
+        showToast("warning", "Salvo como pendente. Revise o tipo na aba Transações.");
       } else {
-        Alert.alert("Sucesso", "Transação criada automaticamente!");
+        showToast("success", "Transação criada automaticamente!");
       }
     } catch (err) {
       if (err instanceof ApiError && err.code === "TOKEN_LIMIT_EXCEEDED") {
-        Alert.alert("Limite atingido", "Seus tokens mensais acabaram. Vá em Plano para ver detalhes ou fazer upgrade.");
+        showToast("error", "Limite de tokens atingido. Veja seu Plano.");
       } else {
-        Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar");
+        showToast("error", err instanceof Error ? err.message : "Falha ao processar");
       }
     } finally {
       setProcessingText(false);
@@ -253,11 +257,11 @@ export default function NotificationsScreen() {
 
   const handlePickDocument = async () => {
     if (!loggedIn) {
-      Alert.alert("Login necessário", "Faça login para usar OCR.");
+      showToast("warning", "Faça login para usar OCR.");
       return;
     }
     if (!selectedCategoryId) {
-      Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
+      showToast("warning", "Configure uma categoria padrão primeiro.");
       return;
     }
     try {
@@ -277,7 +281,7 @@ export default function NotificationsScreen() {
 
       const draft = ocrResult.draft;
       if (!draft || !draft.amount || Number(draft.amount) <= 0) {
-        Alert.alert("Aviso", "Não foi possível identificar o valor no documento. Revise manualmente.");
+        showToast("warning", "Não foi possível identificar o valor no documento. Revise manualmente.");
         return;
       }
 
@@ -296,12 +300,12 @@ export default function NotificationsScreen() {
         status: normalizeStatus(draft.status, "PENDING"),
       });
 
-      Alert.alert("Sucesso", "Transação criada automaticamente!");
+      showToast("success", "Transação criada automaticamente!");
     } catch (err) {
       if (err instanceof ApiError && err.code === "TOKEN_LIMIT_EXCEEDED") {
-        Alert.alert("Limite atingido", "Seus tokens mensais acabaram. Vá em Plano para ver detalhes ou fazer upgrade.");
+        showToast("error", "Limite de tokens atingido. Veja seu Plano.");
       } else {
-        Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar documento");
+        showToast("error", err instanceof Error ? err.message : "Falha ao processar documento");
       }
     } finally {
       setProcessingDocument(false);
@@ -310,17 +314,17 @@ export default function NotificationsScreen() {
 
   const handleStartRecording = async () => {
     if (!loggedIn) {
-      Alert.alert("Login necessário", "Faça login para usar transcrição de áudio.");
+      showToast("warning", "Faça login para usar transcrição de áudio.");
       return;
     }
     if (!selectedCategoryId) {
-      Alert.alert("Erro", "Configure uma categoria padrão primeiro.");
+      showToast("warning", "Configure uma categoria padrão primeiro.");
       return;
     }
     try {
       const { status } = await Audio.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Erro", "Permissão de microfone negada");
+        showToast("error", "Permissão de microfone negada");
         return;
       }
 
@@ -334,7 +338,7 @@ export default function NotificationsScreen() {
       setRecording(recording);
       recordingRef.current = recording;
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao gravar");
+      showToast("error", err instanceof Error ? err.message : "Falha ao iniciar gravação");
     }
   };
 
@@ -352,7 +356,7 @@ export default function NotificationsScreen() {
       const analysis = await analyzeText(transcribedText, "AUDIO", categories);
       const draft = analysis.draft;
       if (!draft || !draft.amount || Number(draft.amount) <= 0) {
-        Alert.alert("Aviso", "Não foi possível identificar o valor no áudio. Revise manualmente.");
+        showToast("warning", "Não foi possível identificar o valor no áudio. Revise manualmente.");
         return;
       }
       const categoryId = draft.categoryId || selectedCategoryId;
@@ -372,12 +376,12 @@ export default function NotificationsScreen() {
         status: normalizeStatus(draft.status, "PAID"),
       });
 
-      Alert.alert("Sucesso", "Transação criada automaticamente!");
+      showToast("success", "Transação criada automaticamente!");
     } catch (err) {
       if (err instanceof ApiError && err.code === "TOKEN_LIMIT_EXCEEDED") {
-        Alert.alert("Limite atingido", "Seus tokens mensais acabaram. Vá em Plano para ver detalhes ou fazer upgrade.");
+        showToast("error", "Limite de tokens atingido. Veja seu Plano.");
       } else {
-        Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao processar áudio");
+        showToast("error", err instanceof Error ? err.message : "Falha ao processar áudio");
       }
     } finally {
       setProcessingAudio(false);
@@ -699,13 +703,26 @@ export default function NotificationsScreen() {
         </View>
       </ScrollView>
 
+      {/* Toast feedback */}
+      {toast && (
+        <View style={[styles.toast, toast.type === "success" ? styles.toastSuccess : toast.type === "error" ? styles.toastError : styles.toastWarning]} pointerEvents="none">
+          <Ionicons
+            name={toast.type === "success" ? "checkmark-circle" : toast.type === "error" ? "close-circle" : "warning"}
+            size={20}
+            color="#fff"
+          />
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </View>
+      )}
+
       {/* Auth modal */}
       <Modal
         visible={showLoginModal}
         animationType="slide"
+        presentationStyle="pageSheet"
         onRequestClose={() => setShowLoginModal(false)}
       >
-        <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+        <SafeAreaView style={[styles.safe, { backgroundColor: colors.background }]} edges={["top", "left", "right"]}>
           <View style={styles.modalHeader}>
             <Pressable onPress={() => setShowLoginModal(false)} hitSlop={10}>
               <Ionicons name="close" size={26} color={colors.textPrimary} />
@@ -1116,5 +1133,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.primary,
+  },
+
+  toast: {
+    position: "absolute",
+    bottom: 24,
+    left: spacing.lg,
+    right: spacing.lg,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 14,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    zIndex: 999,
+  },
+  toastSuccess: { backgroundColor: colors.success },
+  toastError: { backgroundColor: colors.danger },
+  toastWarning: { backgroundColor: colors.warning },
+  toastText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#fff",
+    lineHeight: 18,
   },
 });
