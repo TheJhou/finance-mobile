@@ -1,5 +1,5 @@
-import { BACKEND_URL } from "@/lib/config";
 import { authFetch } from "@/lib/auth";
+import { BACKEND_URL } from "@/lib/config";
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -105,11 +105,11 @@ export async function extractFromPhoto(base64Image: string, mimeType: string) {
 
 // ── Extração de texto livre (via backend, sem API key no client) ───────
 
-export async function extractFromText(text: string) {
+export async function extractFromText(text: string, categories: Array<{ id: string; name: string }> = []) {
   const response = await authFetch(`${BACKEND_URL}/imports/extract-text`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify({ text, categories }),
   });
 
   if (!response.ok) await handleError(response, "Erro ao processar texto");
