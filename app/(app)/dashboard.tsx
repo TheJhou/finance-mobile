@@ -155,19 +155,19 @@ export default function DashboardScreen() {
     // setMonth lida automaticamente com mudança de ano (ex: jan -> dez do ano anterior)
     return toDateInputValue(d).slice(0, 7); 
   })() : null;
-  const prevMonth = data ? data.monthlyTrend.find((m) => m.month === prevMonthStr) ?? null : null;
+  const prevMonth = data ? data.monthlyTrend.find((m: { month: string; income: number; expense: number }) => m.month === prevMonthStr) ?? null : null;
   const incomeChange = prevMonth && prevMonth.income > 0 ? Math.round(((data!.monthlyIncome - prevMonth.income) / prevMonth.income) * 100) : null;
   const expenseChange = prevMonth && prevMonth.expense > 0 ? Math.round(((data!.monthlyExpense - prevMonth.expense) / prevMonth.expense) * 100) : null;
-  const currentMonthTrend = data ? data.monthlyTrend.find((m) => m.month === currentMonth) : null;
+  const currentMonthTrend = data ? data.monthlyTrend.find((m: { month: string; income: number; expense: number }) => m.month === currentMonth) : null;
   const balanceChange = currentMonthTrend && prevMonth
     ? (() => { const recentNet = currentMonthTrend.income - currentMonthTrend.expense; const prevNet = prevMonth.income - prevMonth.expense; return prevNet !== 0 ? Math.round(((recentNet - prevNet) / Math.abs(prevNet)) * 100) : null; })()
     : null;
   const totalExpense = data ? data.monthlyExpense || 1 : 1;
   const dailyExpenseChartData = data && data.expenseTrend.length > 0
-    ? data.expenseTrend.map((item) => ({ label: item.label, value: item.value, frontColor: colors.chartBar1 }))
+    ? data.expenseTrend.map((item: { label: string; value: number }) => ({ label: item.label, value: item.value, frontColor: colors.chartBar1 }))
     : [{ label: "-", value: 0, frontColor: colors.chartBar1 }];
   const netTrendChartData = data && data.monthlyTrend.length > 0
-    ? data.monthlyTrend.map((m) => ({ label: m.month.slice(5), value: m.income - m.expense }))
+    ? data.monthlyTrend.map((m: { month: string; income: number; expense: number }) => ({ label: m.month.slice(5), value: m.income - m.expense }))
     : [{ value: 0, label: "-" }];
 
   return (
@@ -346,7 +346,7 @@ export default function DashboardScreen() {
                     {bills.length > 0 && <View style={[styles.radarBadge, { backgroundColor: "#fbbf24" }]}><Text style={styles.radarBadgeText}>{bills.length}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Contas próximas{"\n"}do vencimento</Text>
-                  {bills.length > 0 && <Text style={{ fontSize: 9, color: "#fbbf24", fontWeight: "700" }}>{formatCurrency(bills.reduce((s, b) => s + b.amount, 0))}</Text>}
+                  {bills.length > 0 && <Text style={{ fontSize: 9, color: "#fbbf24", fontWeight: "700" }}>{formatCurrency(bills.reduce((s: number, b: UpcomingBill) => s + b.amount, 0))}</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
@@ -375,7 +375,7 @@ export default function DashboardScreen() {
                   </View>
                   <View style={{ alignItems: "center" }}>
                     <PieChart
-                      data={data.expensesByCategory.map((cat, i) => ({ value: cat.value, color: cat.color || pieColors[i % pieColors.length] }))}
+                      data={data.expensesByCategory.map((cat: { name: string; value: number; color: string }, i: number) => ({ value: cat.value, color: cat.color || pieColors[i % pieColors.length] }))}
                       donut innerCircleColor={colors.surface} radius={50} innerRadius={32}
                       centerLabelComponent={() => (
                         <View style={{ alignItems: "center" }}>
@@ -386,7 +386,7 @@ export default function DashboardScreen() {
                     />
                   </View>
                   <View style={{ gap: 4 }}>
-                    {data.expensesByCategory.slice(0, 5).map((cat, i) => {
+                    {data.expensesByCategory.slice(0, 5).map((cat: { name: string; value: number; color: string }, i: number) => {
                       const pct = Math.round((cat.value / totalExpense) * 100);
                       const catColor = cat.color || pieColors[i % pieColors.length];
                       return (
@@ -502,7 +502,7 @@ export default function DashboardScreen() {
                   <TouchableOpacity onPress={() => router.push("/recurring")}><Text style={styles.linkTextSm}>Ver todos {">"}</Text></TouchableOpacity>
                 </View>
                 <View style={{ gap: 8 }}>
-                  {bills.length > 0 ? bills.map((bill) => (
+                  {bills.length > 0 ? bills.map((bill: UpcomingBill) => (
                     <View key={bill.id} style={styles.billItem}>
                       <View style={[styles.billDot, { backgroundColor: bill.color }]} />
                       <Text style={styles.billName} numberOfLines={1}>{bill.name}</Text>
@@ -553,7 +553,7 @@ export default function DashboardScreen() {
                 <Text style={{ fontSize: 28, fontWeight: "800", color: colors.textPrimary }}>{streak?.streak ?? 0} <Text style={{ fontSize: 14, fontWeight: "600" }}>dias</Text></Text>
                 <Text style={{ fontSize: 11, color: colors.textSecondary }}>Registrando suas finanças</Text>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-                  {(streak?.weekDays ?? [{ label: "S", active: false }, { label: "T", active: false }, { label: "Q", active: false }, { label: "Q", active: false }, { label: "S", active: false }, { label: "S", active: false }, { label: "D", active: false }]).map((d, i) => (
+                  {(streak?.weekDays ?? [{ label: "S", active: false }, { label: "T", active: false }, { label: "Q", active: false }, { label: "Q", active: false }, { label: "S", active: false }, { label: "S", active: false }, { label: "D", active: false }]).map((d: { label: string; active: boolean }, i: number) => (
                     <View key={`${d.label}-${i}`} style={[styles.streakDay, d.active && styles.streakDayActive]}>
                       <Text style={[styles.streakDayText, d.active && styles.streakDayTextActive]}>{d.label}</Text>
                     </View>
@@ -591,7 +591,7 @@ export default function DashboardScreen() {
               {chartModal === "category" && data && data.expensesByCategory.length > 0 && (
                 <View style={{ alignItems: "center", gap: spacing.md }}>
                   <PieChart
-                    data={data.expensesByCategory.map((cat, i) => ({ value: cat.value, color: cat.color || pieColors[i % pieColors.length] }))}
+                    data={data.expensesByCategory.map((cat: { name: string; value: number; color: string }, i: number) => ({ value: cat.value, color: cat.color || pieColors[i % pieColors.length] }))}
                     donut innerCircleColor={colors.surface} radius={100} innerRadius={65}
                     centerLabelComponent={() => (
                       <View style={{ alignItems: "center" }}>
@@ -601,7 +601,7 @@ export default function DashboardScreen() {
                     )}
                   />
                   <View style={{ gap: 8, width: "100%" }}>
-                    {data.expensesByCategory.map((cat, i) => (
+                    {data.expensesByCategory.map((cat: { name: string; value: number; color: string }, i: number) => (
                       <View key={cat.name} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                         <View style={[styles.catDot, { backgroundColor: cat.color || pieColors[i % pieColors.length] }]} />
                         <Text style={{ flex: 1, fontSize: 13, color: colors.textSecondary }}>{cat.name}</Text>
@@ -691,7 +691,7 @@ export default function DashboardScreen() {
                     {overdueTransactions.length > 0 && (
                       <View style={{ marginBottom: spacing.lg }}>
                         <Text style={{ fontSize: 12, fontWeight: "600", color: colors.danger, marginBottom: spacing.sm }}>Atrasadas ({overdueTransactions.length})</Text>
-                        {overdueTransactions.map((t) => (
+                        {overdueTransactions.map((t: { id: string; description: string; amount: number; date: string }) => (
                           <View key={t.id} style={{ backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderLeftWidth: 3, borderLeftColor: colors.danger }}>
                             <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>{t.description}</Text>
                             <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
