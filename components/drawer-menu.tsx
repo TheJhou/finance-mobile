@@ -3,13 +3,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
-  Animated,
-  Dimensions,
-  Pressable,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Animated,
+    Dimensions,
+    Pressable,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -38,6 +38,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
   const insets = useSafeAreaInsets();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
+  const [mounted, setMounted] = React.useState(false);
 
   useEffect(() => {
     if (visible) {
@@ -68,6 +69,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
         }),
       ]).start();
     }
+    if (visible) setMounted(true);
   }, [visible, translateX, overlayOpacity]);
 
   const navigate = (route: string) => {
@@ -105,7 +107,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
     },
   ];
 
-  if (!visible && translateX.__getValue() === -DRAWER_WIDTH) return null;
+  if (!mounted) return null;
 
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents={visible ? "auto" : "none"}>
@@ -148,7 +150,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
         <View style={styles.divider} />
 
         {/* Menu items */}
-        <View style={styles.menuList}>
+        <View style={[styles.menuList, { flex: 1 }]}>
           {menuItems.map((item, idx) => (
             <TouchableOpacity
               key={idx}
@@ -313,7 +315,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   footer: {
-    marginTop: "auto",
     alignItems: "center",
     paddingTop: spacing.lg,
   },

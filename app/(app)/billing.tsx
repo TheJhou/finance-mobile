@@ -2,19 +2,19 @@ import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface PlanFeature {
   label: string;
-  free: boolean;
-  pro: boolean;
+  free: boolean | string;
+  pro: boolean | string;
 }
 
 const FEATURES: PlanFeature[] = [
@@ -24,8 +24,8 @@ const FEATURES: PlanFeature[] = [
   { label: "Exportar CSV", free: true, pro: true },
   { label: "Exportar Excel (XLSX)", free: false, pro: true },
   { label: "Exportar PDF", free: false, pro: true },
-  { label: "IA para importar por foto", free: "5/mês" as any, pro: "Ilimitado" as any },
-  { label: "IA para importar por texto", free: "10/mês" as any, pro: "Ilimitado" as any },
+  { label: "IA para importar por foto", free: "5/mês", pro: "Ilimitado" },
+  { label: "IA para importar por texto", free: "10/mês", pro: "Ilimitado" },
   { label: "OCR de documentos", free: false, pro: true },
   { label: "Suporte prioritário", free: false, pro: true },
 ];
@@ -96,6 +96,15 @@ export default function BillingScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Comparativo de planos</Text>
 
+          {/* Header das colunas */}
+          <View style={styles.featureHeader}>
+            <View style={{ flex: 1 }} />
+            <View style={styles.featureCells}>
+              <Text style={styles.featureColLabel}>Free</Text>
+              <Text style={[styles.featureColLabel, { color: "#f472b6" }]}>Pro</Text>
+            </View>
+          </View>
+
           {FEATURES.map((f, i) => (
             <View key={i}>
               {i > 0 && <View style={styles.featureDivider} />}
@@ -108,7 +117,7 @@ export default function BillingScreen() {
                     ) : f.free === false ? (
                       <Ionicons name="close-circle" size={18} color={colors.border} />
                     ) : (
-                      <Text style={styles.featureLimitText}>{f.free}</Text>
+                      <Text style={styles.featureLimitText}>{f.free as string}</Text>
                     )}
                   </View>
                   <View style={styles.featureCell}>
@@ -117,22 +126,13 @@ export default function BillingScreen() {
                     ) : f.pro === false ? (
                       <Ionicons name="close-circle" size={18} color={colors.border} />
                     ) : (
-                      <Text style={[styles.featureLimitText, { color: "#f472b6" }]}>{f.pro}</Text>
+                      <Text style={[styles.featureLimitText, { color: "#f472b6" }]}>{f.pro as string}</Text>
                     )}
                   </View>
                 </View>
               </View>
             </View>
           ))}
-
-          {/* Header das colunas */}
-          <View style={styles.featureHeader}>
-            <View style={{ flex: 1 }} />
-            <View style={styles.featureCells}>
-              <Text style={styles.featureColLabel}>Free</Text>
-              <Text style={[styles.featureColLabel, { color: "#f472b6" }]}>Pro</Text>
-            </View>
-          </View>
         </View>
 
         {/* CTA */}
@@ -317,10 +317,10 @@ const styles = StyleSheet.create({
   featureHeader: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: spacing.sm,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingBottom: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: spacing.xs,
   },
   featureRow: {
     flexDirection: "row",
