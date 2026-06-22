@@ -2,6 +2,7 @@
   "name": "bank-notifications",
   "version": "1.0.0",
   "description": "Android NotificationListenerService bridge for reading bank notifications",
-  "main": "index.ts",
+  "main": "app.plugin.js",
+  "plugin": "./app.plugin.js",
   "private": true
 }
