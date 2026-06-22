@@ -1,42 +1,56 @@
-import { useCallback, useEffect, useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
-  createCategory,
-  deleteCategory,
-  listCategories,
+    createCategory,
+    deleteCategory,
+    listCategories,
 } from "@/lib/repositories/categories";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category } from "@/lib/types";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import {
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const PALETTE = [
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#06b6d4",
-  "#3b82f6",
-  "#6366f1",
-  "#a855f7",
-  "#ec4899",
-  "#6b7280",
+  // Vermelhos
+  "#ef4444", "#dc2626", "#b91c1c", "#fca5a5",
+  // Laranjas
+  "#f97316", "#ea580c", "#fb923c", "#fed7aa",
+  // Amarelos
+  "#eab308", "#ca8a04", "#facc15", "#fde68a",
+  // Verdes
+  "#22c55e", "#16a34a", "#15803d", "#4ade80",
+  "#84cc16", "#65a30d", "#a3e635",
+  // Azuis / Ciano
+  "#06b6d4", "#0891b2", "#67e8f9",
+  "#3b82f6", "#2563eb", "#1d4ed8", "#93c5fd",
+  "#0ea5e9", "#0284c7",
+  // Roxos / Índigo
+  "#6366f1", "#4f46e5", "#818cf8",
+  "#a855f7", "#9333ea", "#7e22ce", "#d8b4fe",
+  // Rosas
+  "#ec4899", "#db2777", "#f9a8d4",
+  "#f43f5e", "#e11d48",
+  // Neutros
+  "#6b7280", "#374151", "#111827",
+  "#78716c", "#57534e",
+  // Especiais
+  "#14b8a6", "#0d9488", "#f59e0b", "#d97706",
 ];
 
 export default function CategoriesScreen() {
@@ -125,17 +139,28 @@ export default function CategoriesScreen() {
         }
         ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         renderItem={({ item }) => (
-          <Pressable onLongPress={() => handleDelete(item)}>
-            <View style={styles.card}>
-              <View style={[styles.dot, { backgroundColor: item.color }]} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{item.name}</Text>
-                {item.isDefault ? (
-                  <Text style={styles.badge}>Padrão</Text>
-                ) : null}
-              </View>
+          <View style={styles.card}>
+            <View style={[styles.dot, { backgroundColor: item.color }]} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{item.name}</Text>
+              {item.isDefault ? (
+                <Text style={styles.badge}>Padrão</Text>
+              ) : null}
             </View>
-          </Pressable>
+            {!item.isDefault ? (
+              <Pressable
+                onPress={() => handleDelete(item)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={({ pressed }) => [styles.deleteBtn, { opacity: pressed ? 0.6 : 1 }]}
+              >
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              </Pressable>
+            ) : (
+              <View style={styles.lockIcon}>
+                <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+              </View>
+            )}
+          </View>
         )}
       />
 
@@ -317,11 +342,19 @@ const styles = StyleSheet.create({
     paddingBottom: spacing["3xl"],
   },
   label: { fontSize: 13, fontWeight: "500", color: colors.textSecondary },
-  colorGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.md },
+  deleteBtn: {
+    padding: spacing.xs,
+    borderRadius: radius.sm,
+    backgroundColor: colors.danger + "15",
+  },
+  lockIcon: {
+    padding: spacing.xs,
+  },
+  colorGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
   colorSwatch: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },
