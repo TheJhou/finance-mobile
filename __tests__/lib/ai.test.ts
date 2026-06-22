@@ -1,8 +1,9 @@
 import {
-  extractTransactionFromPhoto,
-  extractTransactionFromText,
+    extractTransactionFromPhoto,
+    extractTransactionFromText,
 } from "@/lib/ai";
 import * as backend from "@/lib/backend";
+import { ApiError } from "@/lib/backend";
 
 jest.mock("@/lib/backend");
 
@@ -127,5 +128,77 @@ describe("ai extraction", () => {
       expect(result.amount).toBe(5000);
       expect(result.date).toBe("2025-06-01");
     });
+
+    it("truncates fallback description to 50 chars for short text", async () => {
+      (backend.extractFromText as jest.Mock).mockResolvedValue({});
+      const shortText = "Uber";
+      const result = await extractTransactionFromText(shortText);
+      expect(result.description).toBe("Uber");
+    });
+
+    it("defaults type to EXPENSE for unknown type string", async () => {
+      (backend.extractFromText as jest.Mock).mockResolvedValue({ type: "UNKNOWN" });
+      const result = await extractTransactionFromText("test");
+      expect(result.type).toBe("EXPENSE");
+    });
+
+    it("defaults type to EXPENSE when type is null", async () => {
+      (backend.extractFromText as jest.Mock).mockResolvedValue({ type: null });
+      const result = await extractTransactionFromText("test");
+      expect(result.type).toBe("EXPENSE");
+    });
+
+    it("coerces string amount to 0", async () => {
+      (backend.extractFromText as jest.Mock).mockResolvedValue({ amount: "cento e cinquenta" });
+      const result = await extractTransactionFromText("test");
+      expect(result.amount).toBe(0);
+    });
+
+    it("returns today date when date is missing", async () => {
+      (backend.extractFromText as jest.Mock).mockResolvedValue({});
+      const result = await extractTransactionFromText("test");
+      const today = new Date().toISOString().slice(0, 10);
+      expect(result.date).toBe(today);
+    });
+
+    it("propagates backend rejection as error", async () => {
+      (backend.extractFromText as jest.Mock).mockRejectedValue(
+        new ApiError("Token limit exceeded", 429, "TOKEN_LIMIT_EXCEEDED")
+      );
+      await expect(extractTransactionFromText("test")).rejects.toBeInstanceOf(ApiError);
+    });
+  });
+
+  describe("normalize edge cases", () => {
+    it("accepts INCOME case-insensitively", async () => {
+      (backend.extractFromPhoto as jest.Mock).mockResolvedValue({ type: "income" });
+      const result = await extractTransactionFromPhoto("b64", "image/jpeg");
+      expect(result.type).toBe("INCOME");
+    });
+
+    it("treats type 'expense' as EXPENSE", async () => {
+      (backend.extractFromPhoto as jest.Mock).mockResolvedValue({ type: "expense" });
+      const result = await extractTransactionFromPhoto("b64", "image/jpeg");
+      expect(result.type).toBe("EXPENSE");
+    });
+
+    it("converts negative fineAmount to null (non-number)", async () => {
+      (backend.extractFromPhoto as jest.Mock).mockResolvedValue({ fineAmount: "dez reais" });
+      const result = await extractTransactionFromPhoto("b64", "image/jpeg");
+      expect(result.fineAmount).toBeNull();
+    });
+
+    it("preserves zero amount (does not treat as missing)", async () => {
+      (backend.extractFromPhoto as jest.Mock).mockResolvedValue({ amount: 0 });
+      const result = await extractTransactionFromPhoto("b64", "image/jpeg");
+      expect(result.amount).toBe(0);
+    });
+
+    it("keeps documentType from backend when present", async () => {
+      (backend.extractFromPhoto as jest.Mock).mockResolvedValue({ documentType: "BOLETO" });
+      const result = await extractTransactionFromPhoto("b64", "image/jpeg");
+      expect(result.documentType).toBe("BOLETO");
+    });
   });
 });
+

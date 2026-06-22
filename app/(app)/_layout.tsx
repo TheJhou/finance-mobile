@@ -73,6 +73,15 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen
+        name="dre"
+        options={{
+          title: "Relatório",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="bar-chart-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="plan"
         options={{
           title: "Plano",
