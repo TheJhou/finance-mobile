@@ -85,8 +85,19 @@ export default function NotificationsScreen() {
 
   const checkPermission = useCallback(() => {
     try {
-      setGranted(BankNotifications?.isPermissionGranted() ?? false);
-    } catch {
+      if (!BankNotifications) {
+        setGranted(false);
+        return;
+      }
+      
+      // Add a small delay to ensure the permission system is ready
+      setTimeout(() => {
+        const isGranted = BankNotifications.isPermissionGranted();
+        console.log("[Notifications] Permission status:", isGranted);
+        setGranted(isGranted);
+      }, 100);
+    } catch (error) {
+      console.warn("[Notifications] Error checking permission:", error);
       setGranted(false);
     }
   }, []);
@@ -133,9 +144,21 @@ export default function NotificationsScreen() {
 
   const openSettings = () => {
     try {
-      BankNotifications?.openPermissionSettings();
+      if (!BankNotifications) {
+        showToast("error", "Módulo de notificações não disponível");
+        return;
+      }
+      
+      BankNotifications.openPermissionSettings();
+      showToast("warning", "Abra as configurações e ative 'Finance App'");
+      
+      // Check permission again after a delay to see if user enabled it
+      setTimeout(() => {
+        checkPermission();
+      }, 2000);
     } catch (err) {
-      showToast("error", err instanceof Error ? err.message : "Falha ao abrir configurações");
+      console.error("[Notifications] Error opening settings:", err);
+      showToast("error", "Falha ao abrir configurações. Abra manualmente em Configurações > Aplicativos > Finance App > Notificações");
     }
   };
 
@@ -484,10 +507,17 @@ export default function NotificationsScreen() {
             <Text style={styles.statusText}>
               {granted
                 ? "Capturando notificações bancárias automaticamente."
-                : "Autorize o acesso para importar automaticamente."}
+                : moduleAvailable 
+                  ? "Autorize o acesso nas configurações do Android para importar automaticamente."
+                  : "Módulo não disponível. Requer build nativo."}
             </Text>
+            {!granted && moduleAvailable && (
+              <Text style={styles.statusSubText}>
+                Dica: Após ativar, pode ser necessário reiniciar o app
+              </Text>
+            )}
           </View>
-          {!granted && (
+          {!granted && moduleAvailable && (
             <Pressable style={styles.statusBtn} onPress={openSettings}>
               <Text style={styles.statusBtnText}>Ativar</Text>
             </Pressable>
@@ -952,6 +982,7 @@ const styles = StyleSheet.create({
   },
   statusTitle: { fontSize: 13, fontWeight: "700", color: colors.textPrimary },
   statusText: { fontSize: 11, color: colors.textSecondary, marginTop: 2 },
+  statusSubText: { fontSize: 10, color: colors.textMuted, marginTop: 4, fontStyle: "italic" },
   statusBtn: {
     paddingHorizontal: spacing.md,
     paddingVertical: 6,

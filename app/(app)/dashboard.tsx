@@ -71,6 +71,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [tokenLimitStatus, setTokenLimitStatus] = useState(getTokenLimitStatus());
   const [chartModal, setChartModal] = useState<"category" | "bar" | "line" | "commitment" | null>(null);
   const [notificationModal, setNotificationModal] = useState(false);
   const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
@@ -129,14 +130,36 @@ export default function DashboardScreen() {
       // AI Forecast (1x por dia, non-blocking)
       void loadAiForecast(dashRes);
 
-      // Backend calls (non-blocking — fail silently if offline)
-      void Promise.all([
-        getMe().then((u) => { if (u.name) setUserName(u.name); }).catch((err) => console.warn("[Dashboard] Falha ao buscar perfil:", err)),
-        getGoals().then(setGoals).catch((err) => console.warn("[Dashboard] Falha ao buscar metas:", err)),
-        getStreak().then(setStreak).catch((err) => console.warn("[Dashboard] Falha ao buscar streak:", err)),
-        getDashboardScore().then(setScore).catch((err) => console.warn("[Dashboard] Falha ao buscar score:", err)),
-        checkinStreak().catch((err) => console.warn("[Dashboard] Falha ao registrar streak:", err)),
-      ]);
+      // Backend calls (check token limit first)
+      const currentTokenStatus = getTokenLimitStatus();
+      setTokenLimitStatus(currentTokenStatus);
+      
+      if (!currentTokenStatus.exceeded) {
+        void Promise.all([
+          getMe().then((u) => { if (u.name) setUserName(u.name); }).catch((err) => {
+            console.warn("[Dashboard] Falha ao buscar perfil:", err);
+            setTokenLimitStatus(getTokenLimitStatus());
+          }),
+          getGoals().then(setGoals).catch((err) => {
+            console.warn("[Dashboard] Falha ao buscar metas:", err);
+            setTokenLimitStatus(getTokenLimitStatus());
+          }),
+          getStreak().then(setStreak).catch((err) => {
+            console.warn("[Dashboard] Falha ao buscar streak:", err);
+            setTokenLimitStatus(getTokenLimitStatus());
+          }),
+          getDashboardScore().then(setScore).catch((err) => {
+            console.warn("[Dashboard] Falha ao buscar score:", err);
+            setTokenLimitStatus(getTokenLimitStatus());
+          }),
+          checkinStreak().catch((err) => {
+            console.warn("[Dashboard] Falha ao registrar streak:", err);
+            setTokenLimitStatus(getTokenLimitStatus());
+          }),
+        ]);
+      } else {
+        console.warn("[Dashboard] Pulando chamadas backend: limite de tokens atingido");
+      }
 
       // Schedule notifications (non-blocking)
       const comprometimento = dashRes.monthlyIncome > 0 ? Math.round((dashRes.monthlyExpense / dashRes.monthlyIncome) * 100) : 0;
@@ -163,6 +186,8 @@ export default function DashboardScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    resetTokenLimitStatus();
+    setTokenLimitStatus(getTokenLimitStatus());
     fetchData();
   };
 
@@ -242,6 +267,20 @@ export default function DashboardScreen() {
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {/* Token limit warning banner */}
+        {tokenLimitStatus.exceeded && (
+          <View style={styles.tokenLimitBanner}>
+            <Ionicons name="warning" size={20} color="#f59e0b" />
+            <Text style={styles.tokenLimitText}>{tokenLimitStatus.message}</Text>
+            <TouchableOpacity 
+              style={styles.tokenLimitButton}
+              onPress={() => router.push("/(app)/plan")}
+            >
+              <Text style={styles.tokenLimitButtonText}>Ver Plano</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {data && (
           <>
@@ -823,6 +862,33 @@ const styles = StyleSheet.create({
 
   /* Error */
   error: { fontSize: 13, color: colors.danger, backgroundColor: colors.expenseBg, padding: spacing.md, borderRadius: radius.md },
+
+  /* Token Limit Banner */
+  tokenLimitBanner: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    backgroundColor: "#fef3c7", 
+    padding: spacing.md, 
+    borderRadius: radius.md, 
+    gap: spacing.sm 
+  },
+  tokenLimitText: { 
+    flex: 1, 
+    fontSize: 13, 
+    color: "#92400e", 
+    fontWeight: "500" 
+  },
+  tokenLimitButton: {
+    backgroundColor: "#f59e0b",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.sm,
+  },
+  tokenLimitButtonText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#fff",
+  },
 
   /* Balance Card */
   balanceCard: { backgroundColor: colors.surface, borderRadius: radius.xl, padding: spacing.lg, gap: spacing.sm },

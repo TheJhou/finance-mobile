@@ -88,11 +88,95 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     );
 
     CREATE INDEX IF NOT EXISTS idx_processed_notifications_hash ON processed_notifications(package_name, title, text, amount, post_time);
+
+    -- Backup system tables
+    CREATE TABLE IF NOT EXISTS backup_metadata (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      user_name TEXT,
+      version TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      size INTEGER NOT NULL,
+      checksum TEXT NOT NULL,
+      tables TEXT NOT NULL, -- JSON array
+      encrypted INTEGER NOT NULL DEFAULT 0,
+      device_info TEXT, -- JSON object
+      restored_at TEXT,
+      restore_user_id TEXT,
+      FOREIGN KEY (restore_user_id) REFERENCES users(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS backup_schedule (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      last_backup TEXT NOT NULL,
+      next_backup TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      backup_time TEXT NOT NULL DEFAULT '02:00', -- HH:MM format
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id)
+    );
+
+    -- Multi-user support tables
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      email TEXT UNIQUE NOT NULL,
+      name TEXT,
+      avatar_url TEXT,
+      preferences TEXT, -- JSON object
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      last_login TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      device_id TEXT NOT NULL,
+      device_info TEXT, -- JSON object
+      token_hash TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- OpenFinance preparation tables
+    CREATE TABLE IF NOT EXISTS financial_institutions (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      code TEXT UNIQUE NOT NULL, -- Bank code for OpenFinance
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_accounts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      institution_id TEXT NOT NULL,
+      account_type TEXT NOT NULL CHECK(account_type IN ('CHECKING','SAVINGS','CREDIT','INVESTMENT')),
+      account_number TEXT,
+      branch_number TEXT,
+      nickname TEXT,
+      balance REAL DEFAULT 0,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (institution_id) REFERENCES financial_institutions(id)
+    );
+
+    -- Add user_id to existing tables for multi-user support
+    -- This will be added in a migration function
   `);
 
   await seedDefaultCategories(db);
   await cleanupOldProcessedNotifications(db);
   await addNewTransactionFields(db);
+  await addMultiUserSupport(db);
+  await seedFinancialInstitutions(db);
 }
 
 async function cleanupOldProcessedNotifications(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -123,6 +207,66 @@ async function addNewTransactionFields(db: SQLite.SQLiteDatabase): Promise<void>
   if (!columnNames.has("document_type")) {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'NORMAL'");
   }
+}
+
+async function addMultiUserSupport(db: SQLite.SQLiteDatabase): Promise<void> {
+  // Add user_id columns to existing tables for multi-user support
+  const tables = ['categories', 'transactions', 'recurring_transactions', 'settings'];
+  
+  for (const tableName of tables) {
+    const columns = await db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(${tableName})`
+    );
+    const columnNames = new Set(columns.map((c) => c.name));
+
+    if (!columnNames.has("user_id")) {
+      await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN user_id TEXT`);
+      
+      // For existing data, assign to a default user
+      const defaultUserId = 'user_default_' + Date.now();
+      await db.execAsync(`UPDATE ${tableName} SET user_id = ? WHERE user_id IS NULL`, [defaultUserId]);
+      
+      console.log(`[DB] Added user_id to ${tableName} and migrated existing data`);
+    }
+  }
+
+  // Create indexes for user_id columns
+  await db.execAsync(`
+    CREATE INDEX IF NOT EXISTS idx_categories_user ON categories(user_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_recurring_transactions_user ON recurring_transactions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_settings_user ON settings(user_id);
+  `);
+}
+
+async function seedFinancialInstitutions(db: SQLite.SQLiteDatabase): Promise<void> {
+  // Seed major Brazilian banks for OpenFinance preparation
+  const row = await db.getFirstAsync<{ count: number }>(
+    "SELECT COUNT(*) as count FROM financial_institutions"
+  );
+  if ((row?.count ?? 0) > 0) return;
+
+  const institutions = [
+    { name: "Banco do Brasil", code: "001" },
+    { name: "Caixa Econômica Federal", code: "104" },
+    { name: "Bradesco", code: "237" },
+    { name: "Itaú Unibanco", code: "341" },
+    { name: "Santander", code: "033" },
+    { name: "Banco Inter", code: "077" },
+    { name: "NuBank", code: "260" },
+    { name: "PicPay", code: "336" },
+    { name: "Mercado Pago", code: "413" },
+    { name: "Banco Original", code: "212" },
+  ];
+
+  for (const inst of institutions) {
+    await db.runAsync(
+      "INSERT INTO financial_institutions (id, name, code) VALUES (?, ?, ?)",
+      [generateId(), inst.name, inst.code]
+    );
+  }
+
+  console.log("[DB] Seeded financial institutions for OpenFinance");
 }
 
 async function seedDefaultCategories(db: SQLite.SQLiteDatabase): Promise<void> {

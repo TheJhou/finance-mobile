@@ -4,21 +4,22 @@ import { isAuthenticated, login, logout, register } from "@/lib/auth";
 // import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
+import { resetTokenLimitStatus } from "@/lib/token-limit";
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Alert,
+    Modal,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -44,12 +45,18 @@ export default function PlanScreen() {
       if (authed) {
         const s = await getSubscriptionStatus();
         setStatus(s);
+        setError(null); // Clear any previous errors
       } else {
         setStatus(null);
       }
-      setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao carregar");
+      // Handle token limit errors specifically
+      if (handleTokenLimitError(err)) {
+        setError("Limite de tokens atingido. Veja seu plano atual.");
+      } else {
+        setError(err instanceof Error ? err.message : "Erro ao carregar");
+        console.error("[Plan] Error fetching subscription status:", err);
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -65,6 +72,7 @@ export default function PlanScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
+    resetTokenLimitStatus();
     fetchStatus();
   };
 
@@ -136,6 +144,16 @@ export default function PlanScreen() {
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
+
+        {/* Show fallback indicator when API is unavailable but we have default data */}
+        {status && !error && status.plan.code === "FREE" && status.usage.used === 0 && (
+          <View style={styles.fallbackCard}>
+            <Ionicons name="information-circle" size={16} color={colors.textMuted} />
+            <Text style={styles.fallbackText}>
+              Usando dados offline. Conecte-se à internet para ver seu plano atual.
+            </Text>
+          </View>
+        )}
 
         {loggedIn ? (
           <>
@@ -322,6 +340,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#fee2e2",
     padding: spacing.md,
     borderRadius: radius.md,
+  },
+  fallbackCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#f0f9ff",
+    padding: spacing.md,
+    borderRadius: radius.md,
+    gap: spacing.sm,
+  },
+  fallbackText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.textMuted,
+    fontStyle: "italic",
   },
   card: {
     backgroundColor: colors.surface,

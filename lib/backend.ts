@@ -28,7 +28,12 @@ async function handleError(response: Response, fallback: string): Promise<never>
     msg = "Você atingiu o limite mensal de uso da IA. Atualize para o plano Pro para continuar.";
   }
 
-  throw new ApiError(msg, response.status, code);
+  const error = new ApiError(msg, response.status, code);
+  
+  // Track token limit errors globally
+  handleTokenLimitError(error);
+  
+  throw error;
 }
 
 // ── Audio ──────────────────────────────────────────────────────────────

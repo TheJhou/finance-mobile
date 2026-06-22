@@ -1,10 +1,19 @@
 import { useNotificationListener } from "@/hooks/use-notification-listener";
+import { BackupScheduler } from "@/lib/backup-scheduler";
 import { colors } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
+import { useEffect } from "react";
 
 export default function AppLayout() {
   useNotificationListener();
+
+  // Initialize backup scheduler
+  useEffect(() => {
+    BackupScheduler.initialize().catch(error => {
+      console.error('[AppLayout] Failed to initialize backup scheduler:', error);
+    });
+  }, []);
 
   return (
     <Tabs
@@ -87,6 +96,15 @@ export default function AppLayout() {
           title: "Plano",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="diamond-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="backup"
+        options={{
+          title: "Backup",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="cloud-upload-outline" size={size} color={color} />
           ),
         }}
       />
