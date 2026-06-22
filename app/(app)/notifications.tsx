@@ -223,13 +223,31 @@ export default function NotificationsScreen() {
 
       const isPending = draft.status === "PENDING";
 
+      // Valida data da IA: se ausente ou fora de ±6 meses, usa hoje
+      const today = toDateInputValue(new Date());
+      let resolvedDate = draft.date || today;
+      const parsedDate = new Date(resolvedDate + "T00:00:00");
+      const now = new Date();
+      const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+      const sixMonthsAhead = new Date(now.getFullYear(), now.getMonth() + 6, 1);
+      if (isNaN(parsedDate.getTime()) || parsedDate < sixMonthsAgo || parsedDate > sixMonthsAhead) {
+        resolvedDate = today;
+      }
+
+      // Garante categoryId válido
+      const resolvedCategoryId = draft.categoryId || selectedCategoryId;
+      if (!resolvedCategoryId) {
+        showToast("warning", "Nenhuma categoria disponível. Adicione uma categoria primeiro.");
+        return;
+      }
+
       await createTransaction({
         description: draft.description || freeText.substring(0, 50),
         amount: draft.amount,
         type: draft.type || "EXPENSE",
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
-        date: draft.date || toDateInputValue(new Date()),
-        categoryId: draft.categoryId || selectedCategoryId,
+        date: resolvedDate,
+        categoryId: resolvedCategoryId,
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: draft.boletoNumber || null,
         cnpj: draft.cnpj || null,
@@ -285,13 +303,23 @@ export default function NotificationsScreen() {
         return;
       }
 
+      const ocrToday = toDateInputValue(new Date());
+      let ocrDate = (draft.date as string) || ocrToday;
+      const ocrParsed = new Date(ocrDate + "T00:00:00");
+      const ocrNow = new Date();
+      if (isNaN(ocrParsed.getTime()) || ocrParsed < new Date(ocrNow.getFullYear(), ocrNow.getMonth() - 6, 1) || ocrParsed > new Date(ocrNow.getFullYear(), ocrNow.getMonth() + 6, 1)) {
+        ocrDate = ocrToday;
+      }
+      const ocrCategoryId = (draft.categoryId as string) || selectedCategoryId;
+      if (!ocrCategoryId) { showToast("warning", "Nenhuma categoria disponível."); return; }
+
       await createTransaction({
         description: (draft.description as string) || `Documento: ${asset.name}`,
         amount: Number(draft.amount),
         type: normalizeType(draft.type),
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
-        date: (draft.date as string) || toDateInputValue(new Date()),
-        categoryId: (draft.categoryId as string) || selectedCategoryId,
+        date: ocrDate,
+        categoryId: ocrCategoryId,
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: (draft.boletoNumber as string) || null,
         cnpj: (draft.cnpj as string) || null,
@@ -359,15 +387,23 @@ export default function NotificationsScreen() {
         showToast("warning", "Não foi possível identificar o valor no áudio. Revise manualmente.");
         return;
       }
-      const categoryId = draft.categoryId || selectedCategoryId;
+      const audioToday = toDateInputValue(new Date());
+      let audioDate = draft.date || audioToday;
+      const audioParsed = new Date(audioDate + "T00:00:00");
+      const audioNow = new Date();
+      if (isNaN(audioParsed.getTime()) || audioParsed < new Date(audioNow.getFullYear(), audioNow.getMonth() - 6, 1) || audioParsed > new Date(audioNow.getFullYear(), audioNow.getMonth() + 6, 1)) {
+        audioDate = audioToday;
+      }
+      const audioCategoryId = draft.categoryId || selectedCategoryId;
+      if (!audioCategoryId) { showToast("warning", "Nenhuma categoria disponível."); return; }
 
       await createTransaction({
         description: draft.description || transcribedText.substring(0, 50),
         amount: Number(draft.amount),
         type: normalizeType(draft.type),
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
-        date: draft.date || toDateInputValue(new Date()),
-        categoryId,
+        date: audioDate,
+        categoryId: audioCategoryId,
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: draft.boletoNumber || null,
         cnpj: draft.cnpj || null,
