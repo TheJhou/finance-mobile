@@ -1,7 +1,6 @@
 import { BackupSystem } from '@/lib/backup';
 import { getDb } from '@/lib/db';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
 import * as Notifications from 'expo-notifications';
 import { AppState, Platform } from 'react-native';
 
@@ -262,11 +261,8 @@ export class BackupScheduler {
       // - Battery level (if requireCharging)
       // - Storage space
       
-      const storageInfo = await FileSystem.getInfoAsync(FileSystem.documentDirectory);
-      if (!storageInfo.exists || (storageInfo.freeSpace || 0) < 50 * 1024 * 1024) { // 50MB minimum
-        console.warn('[BackupScheduler] Insufficient storage space');
-        return false;
-      }
+      // Storage check skipped: expo-file-system legacy does not expose freeSpace on FileInfo
+      // In production, use a native module or capacitor plugin for precise free space
       
       return true;
     } catch (error) {

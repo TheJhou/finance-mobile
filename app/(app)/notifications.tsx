@@ -92,7 +92,7 @@ export default function NotificationsScreen() {
       
       // Add a small delay to ensure the permission system is ready
       setTimeout(() => {
-        const isGranted = BankNotifications.isPermissionGranted();
+        const isGranted = BankNotifications?.isPermissionGranted() ?? false;
         console.log("[Notifications] Permission status:", isGranted);
         setGranted(isGranted);
       }, 100);
@@ -149,7 +149,7 @@ export default function NotificationsScreen() {
         return;
       }
       
-      BankNotifications.openPermissionSettings();
+      BankNotifications?.openPermissionSettings();
       showToast("warning", "Abra as configurações e ative 'Finance App'");
       
       // Check permission again after a delay to see if user enabled it

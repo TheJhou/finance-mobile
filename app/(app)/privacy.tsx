@@ -2,12 +2,12 @@ import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -254,7 +254,7 @@ export default function PrivacyScreen() {
             <Text style={styles.contactButtonText}>support@finance-app.com</Text>
           </TouchableOpacity>
           <Text style={styles.contactInfo}>
-            Assunto: "Privacidade e Proteção de Dados"
+            Assunto: &ldquo;Privacidade e Proteção de Dados&rdquo;
           </Text>
         </View>
 

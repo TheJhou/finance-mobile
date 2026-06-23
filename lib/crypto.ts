@@ -1,60 +1,81 @@
 import * as Crypto from 'expo-crypto';
 import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 
 /**
  * Módulo de criptografia para dados sensíveis
- * Conforme requisitos do Google Play Store para apps financeiros
+ * Usa expo-crypto (SHA-256, random bytes) + XOR com chave derivada.
+ * Para proteção robusta em produção, avalie expo-standard-web-crypto ou
+ * react-native-aes-crypto quando o Google Play Billing estiver ativo.
  */
 
 const ENCRYPTION_KEY = 'finance_app_encryption_key';
-const ALGORITHM = 'AES-GCM';
-const KEY_LENGTH = 256;
+
+// Deriva uma chave de 32 bytes a partir de uma seed via SHA-256
+async function deriveKey(seed: string): Promise<Uint8Array> {
+  const hex = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, seed);
+  const bytes = new Uint8Array(32);
+  for (let i = 0; i < 32; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
+}
 
 /**
  * Gera ou recupera a chave de criptografia do SecureStore
  */
-async function getEncryptionKey(): Promise<Crypto.CryptoDigestAlgorithm> {
+async function getEncryptionKey(): Promise<Uint8Array> {
   try {
     const existingKey = await SecureStore.getItemAsync(ENCRYPTION_KEY);
     if (existingKey) {
-      return existingKey as Crypto.CryptoDigestAlgorithm;
+      return deriveKey(existingKey);
     }
 
-    // Gerar nova chave
-    const key = await Crypto.digestStringAsync(
-      Crypto.CryptoDigestAlgorithm.SHA256,
-      `${Date.now()}-${Math.random()}-${Device.osName}`
-    );
-
-    await SecureStore.setItemAsync(ENCRYPTION_KEY, key);
-    return key as Crypto.CryptoDigestAlgorithm;
+    const seed = `${Date.now()}-${Math.random()}-${Platform.OS}`;
+    const keyHex = await Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, seed);
+    await SecureStore.setItemAsync(ENCRYPTION_KEY, keyHex);
+    return deriveKey(keyHex);
   } catch (error) {
     console.error('[Crypto] Failed to get encryption key:', error);
     throw new Error('Encryption system unavailable');
   }
 }
 
+function xorBytes(data: Uint8Array, key: Uint8Array): Uint8Array {
+  const out = new Uint8Array(data.length);
+  for (let i = 0; i < data.length; i++) {
+    out[i] = data[i] ^ key[i % key.length];
+  }
+  return out;
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  const bin = Array.from(bytes).map(b => String.fromCharCode(b)).join('');
+  return btoa(bin);
+}
+
+function base64ToBytes(base64: string): Uint8Array {
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) {
+    bytes[i] = bin.charCodeAt(i);
+  }
+  return bytes;
+}
+
 /**
- * Criptografa dados usando AES-GCM
+ * Criptografa dados (XOR + chave derivada de SHA-256 + base64)
  */
 export async function encrypt(data: string): Promise<string> {
   try {
     const key = await getEncryptionKey();
-    const iv = await Crypto.getRandomBytesAsync(12); // 96-bit IV for GCM
-    
-    const encryptedData = await Crypto.encryptAsync(
-      data,
-      key,
-      { iv, algorithm: ALGORITHM }
-    );
-
-    // Combinar IV + dados criptografados para armazenamento
-    const combined = new Uint8Array(iv.length + encryptedData.length);
+    const iv = await Crypto.getRandomBytesAsync(12);
+    const dataBytes = new TextEncoder().encode(data);
+    const combined = new Uint8Array(iv.length + dataBytes.length);
     combined.set(iv);
-    combined.set(encryptedData, iv.length);
-
-    // Converter para base64 para armazenamento seguro
-    return btoa(String.fromCharCode(...combined));
+    combined.set(dataBytes, iv.length);
+    const encrypted = xorBytes(combined, key);
+    return bytesToBase64(encrypted);
   } catch (error) {
     console.error('[Crypto] Encryption failed:', error);
     throw new Error('Failed to encrypt data');
@@ -62,28 +83,16 @@ export async function encrypt(data: string): Promise<string> {
 }
 
 /**
- * Descriptografa dados usando AES-GCM
+ * Descriptografa dados
  */
 export async function decrypt(encryptedData: string): Promise<string> {
   try {
     const key = await getEncryptionKey();
-    
-    // Converter de base64 para bytes
-    const combined = new Uint8Array(
-      atob(encryptedData).split('').map(char => char.charCodeAt(0))
-    );
-
-    // Extrair IV e dados
-    const iv = combined.slice(0, 12);
-    const data = combined.slice(12);
-
-    const decryptedData = await Crypto.decryptAsync(
-      data,
-      key,
-      { iv, algorithm: ALGORITHM }
-    );
-
-    return decryptedData;
+    const encrypted = base64ToBytes(encryptedData);
+    const decrypted = xorBytes(encrypted, key);
+    // IV é os primeiros 12 bytes
+    const dataBytes = decrypted.slice(12);
+    return new TextDecoder().decode(dataBytes);
   } catch (error) {
     console.error('[Crypto] Decryption failed:', error);
     throw new Error('Failed to decrypt data');
@@ -124,7 +133,7 @@ export async function verifyIntegrity(data: string, expectedHash: string): Promi
 export async function generateSalt(): Promise<string> {
   try {
     const salt = await Crypto.getRandomBytesAsync(16);
-    return btoa(String.fromCharCode(...salt));
+    return bytesToBase64(salt);
   } catch (error) {
     console.error('[Crypto] Salt generation failed:', error);
     throw new Error('Failed to generate salt');
@@ -195,13 +204,13 @@ export class BackupCrypto {
     }
 
     const decryptedData = await decrypt(encryptedData);
-    
+
     if (!await verifyIntegrity(decryptedData, expectedHash)) {
       throw new Error('Backup integrity check failed');
     }
 
     const backup = JSON.parse(decryptedData);
-    
+
     if (backup.version !== this.BACKUP_VERSION) {
       console.warn(`[BackupCrypto] Version mismatch: expected ${this.BACKUP_VERSION}, got ${backup.version}`);
     }

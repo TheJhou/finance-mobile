@@ -5,7 +5,7 @@ import { isAuthenticated, login, logout, register } from "@/lib/auth";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
-import { resetTokenLimitStatus } from "@/lib/token-limit";
+import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";

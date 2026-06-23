@@ -2,7 +2,7 @@ import { getStoredUserName } from '@/lib/auth';
 import { generateId, getDb } from '@/lib/db';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -70,14 +70,15 @@ export class BackupSystem {
   private static async getOrCreateDeviceId(): Promise<string> {
     const DEVICE_KEY = 'finance_device_id';
     let deviceId = await AsyncStorage.getItem(DEVICE_KEY);
-    
+
     if (!deviceId) {
-      deviceId = Crypto.getRandomBytesAsync(16).then(bytes => 
-        Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('')
-      );
-      await AsyncStorage.setItem(DEVICE_KEY, await deviceId);
+      const bytes = await Crypto.getRandomBytesAsync(16);
+      deviceId = Array.from(bytes as Uint8Array)
+        .map((b: number) => b.toString(16).padStart(2, '0'))
+        .join('');
+      await AsyncStorage.setItem(DEVICE_KEY, deviceId);
     }
-    
+
     return deviceId;
   }
 
@@ -221,9 +222,9 @@ export class BackupSystem {
           // Insert backup data
           for (const record of records) {
             const columns = Object.keys(record);
-            const values = Object.values(record);
+            const values = Object.values(record) as (string | number | null)[];
             const placeholders = values.map(() => '?').join(',');
-            
+
             await db.runAsync(
               `INSERT INTO ${tableName} (${columns.join(',')}) VALUES (${placeholders})`,
               values
@@ -284,7 +285,7 @@ export class BackupSystem {
         }
       }
 
-      return backups.sort((a, b) => 
+      return backups.toSorted((a, b) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
 
@@ -323,7 +324,7 @@ export class BackupSystem {
       if (userBackups.length <= this.MAX_BACKUPS) return;
 
       const backupsToDelete = userBackups
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+        .toSorted((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
         .slice(0, userBackups.length - this.MAX_BACKUPS);
 
       for (const backup of backupsToDelete) {

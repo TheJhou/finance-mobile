@@ -1,4 +1,5 @@
 import { BACKEND_URL } from "@/lib/config";
+import * as SecureStore from "expo-secure-store";
 
 interface AuthTokens {
   accessToken: string;

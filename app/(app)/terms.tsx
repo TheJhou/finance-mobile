@@ -2,12 +2,12 @@ import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import {
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -149,7 +149,7 @@ export default function TermsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>8. Limitação de Responsabilidade</Text>
           <Text style={styles.sectionText}>
-            O app é fornecido "como está" sem garantias. Não nos responsabilizamos por perdas diretas, indiretas, incidentais ou consequenciais resultantes do uso do app.
+            O app é fornecido &ldquo;como está&rdquo; sem garantias. Não nos responsabilizamos por perdas diretas, indiretas, incidentais ou consequenciais resultantes do uso do app.
           </Text>
         </View>
 

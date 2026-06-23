@@ -1,6 +1,5 @@
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
-import { generateId, isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
-import { getDb } from "@/lib/db";
+import { generateId, getDb, isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
 
 describe("generateId", () => {
   it("returns a non-empty string", () => {
@@ -130,7 +129,7 @@ describe("notification processing", () => {
       );
 
       const db = await getDb();
-      const rows = await db.getAllAsync("SELECT * FROM processed_notifications");
+      const rows = await db.getAllAsync<{ package_name: string; title: string; text: string; amount: number; post_time: number }>("SELECT * FROM processed_notifications");
       expect(rows.length).toBe(1);
       expect(rows[0].package_name).toBe("com.nubank");
       expect(rows[0].title).toBe("Nubank");

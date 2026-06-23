@@ -1,5 +1,6 @@
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
+import { handleTokenLimitError } from "@/lib/token-limit";
 
 // ── Helpers ────────────────────────────────────────────────────────────
 

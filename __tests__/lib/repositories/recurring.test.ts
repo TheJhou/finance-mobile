@@ -1,13 +1,13 @@
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb } from "@/lib/db";
 import {
-  createRecurring,
-  deleteRecurring,
-  getRecurring,
-  listRecurring,
-  processRecurringDue,
-  toggleRecurringActive,
-  updateRecurring,
+    createRecurring,
+    deleteRecurring,
+    getRecurring,
+    listRecurring,
+    processRecurringDue,
+    toggleRecurringActive,
+    updateRecurring,
 } from "@/lib/repositories/recurring";
 
 describe("recurring repository", () => {
@@ -244,7 +244,7 @@ describe("recurring repository", () => {
       expect(created).toBe(1);
 
       // Verify transaction was created
-      const txs = await db.getAllAsync("SELECT * FROM transactions WHERE description = ?", ["Aluguel"]);
+      const txs = await db.getAllAsync<{ amount: number }>("SELECT * FROM transactions WHERE description = ?", ["Aluguel"]);
       expect(txs.length).toBe(1);
       expect(txs[0].amount).toBe(1200);
     });

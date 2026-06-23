@@ -3,11 +3,12 @@
  * Execute com: npx ts-node scripts/test-multiuser.ts
  */
 
-import { getDb, generateId, resetDbCache } from '../lib/db';
+import * as FileSystem from 'expo-file-system/legacy';
 import { BackupSystem } from '../lib/backup';
 import { BackupScheduler } from '../lib/backup-scheduler';
-import { createTransaction, listTransactions } from '../lib/repositories/transactions';
+import { generateId, getDb, resetDbCache } from '../lib/db';
 import { createCategory, listCategories } from '../lib/repositories/categories';
+import { createTransaction, listTransactions } from '../lib/repositories/transactions';
 
 interface TestUser {
   id: string;
@@ -76,15 +77,13 @@ class MultiUserTester {
       const category1 = await createCategory({
         name: `Categoria ${user.name} 1`,
         color: '#ff0000',
-        icon: 'tag',
-        userId: user.id
+        icon: 'tag'
       });
-      
+
       const category2 = await createCategory({
         name: `Categoria ${user.name} 2`,
         color: '#00ff00',
-        icon: 'star',
-        userId: user.id
+        icon: 'star'
       });
       
       // Criar transações para este usuário
@@ -93,22 +92,20 @@ class MultiUserTester {
         amount: 100 * (parseInt(user.id.split('_')[2]) || 1),
         type: 'EXPENSE',
         categoryId: category1.id,
-        date: '2024-01-01',
-        userId: user.id
+        date: '2024-01-01'
       });
-      
+
       await createTransaction({
         description: `Transação ${user.name} 2`,
         amount: 200 * (parseInt(user.id.split('_')[2]) || 1),
         type: 'INCOME',
         categoryId: category2.id,
-        date: '2024-01-02',
-        userId: user.id
+        date: '2024-01-02'
       });
-      
+
       // Verificar que apenas os dados deste usuário são retornados
-      const userCategories = await listCategories(user.id);
-      const userTransactions = await listTransactions(user.id);
+      const userCategories = await listCategories();
+      const userTransactions = await listTransactions();
       
       if (userCategories.length !== 2) {
         throw new Error(`Usuário ${user.name} deveria ter 2 categorias, mas tem ${userCategories.length}`);
@@ -119,7 +116,7 @@ class MultiUserTester {
       }
       
       // Verificar que os dados pertencem ao usuário correto
-      const allCategories = await db.getAllAsync('SELECT * FROM categories');
+      const allCategories = await db.getAllAsync<{ user_id: string }>('SELECT * FROM categories');
       const userCategoriesInDb = allCategories.filter(c => c.user_id === user.id);
       
       if (userCategoriesInDb.length !== 2) {
@@ -146,15 +143,14 @@ class MultiUserTester {
             amount: Math.random() * 1000,
             type: Math.random() > 0.5 ? 'INCOME' : 'EXPENSE',
             categoryId: 'default-category',
-            date: '2024-01-01',
-            userId: user.id
+            date: '2024-01-01'
           })
         );
       }
-      
+
       await Promise.all(operations);
-      
-      const transactions = await listTransactions(user.id);
+
+      const transactions = await listTransactions();
       return { user: user.name, transactionCount: transactions.length };
     });
     
@@ -249,10 +245,9 @@ class MultiUserTester {
     const category = await createCategory({
       name: 'Categoria Integridade',
       color: '#ff00ff',
-      icon: 'shield',
-      userId: testUser.id
+      icon: 'shield'
     });
-    
+
     const transaction = await createTransaction({
       description: 'Transação Integridade',
       amount: 999.99,
@@ -263,8 +258,7 @@ class MultiUserTester {
       boletoNumber: '123456789',
       cnpj: '12.345.678/0001-90',
       recipientName: 'Empresa Teste',
-      documentType: 'BOLETO',
-      userId: testUser.id
+      documentType: 'BOLETO'
     });
     
     // Criar backup
@@ -279,8 +273,7 @@ class MultiUserTester {
       amount: 1,
       type: 'INCOME',
       categoryId: category.id,
-      date: '2024-01-02',
-      userId: testUser.id
+      date: '2024-01-02'
     });
     
     // Restaurar backup
@@ -293,7 +286,7 @@ class MultiUserTester {
     }
     
     // Verificar integridade
-    const transactions = await listTransactions(testUser.id);
+    const transactions = await listTransactions();
     const originalTransaction = transactions.find(t => t.id === transaction.id);
     
     if (!originalTransaction) {
@@ -329,8 +322,7 @@ class MultiUserTester {
           createCategory({
             name: `Cat ${user.name} ${i}`,
             color: `#${Math.floor(Math.random()*16777215).toString(16)}`,
-            icon: 'tag',
-            userId: user.id
+            icon: 'tag'
           })
         );
       }
@@ -346,8 +338,7 @@ class MultiUserTester {
             amount: Math.random() * 1000,
             type: Math.random() > 0.5 ? 'INCOME' : 'EXPENSE',
             categoryId: categories[i % categories.length].id,
-            date: `2024-01-${((i % 28) + 1).toString().padStart(2, '0')}`,
-            userId: user.id
+            date: `2024-01-${((i % 28) + 1).toString().padStart(2, '0')}`
           })
         );
       }

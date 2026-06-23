@@ -224,7 +224,7 @@ async function addMultiUserSupport(db: SQLite.SQLiteDatabase): Promise<void> {
       
       // For existing data, assign to a default user
       const defaultUserId = 'user_default_' + Date.now();
-      await db.execAsync(`UPDATE ${tableName} SET user_id = ? WHERE user_id IS NULL`, [defaultUserId]);
+      await db.runAsync(`UPDATE ${tableName} SET user_id = ? WHERE user_id IS NULL`, [defaultUserId]);
       
       console.log(`[DB] Added user_id to ${tableName} and migrated existing data`);
     }

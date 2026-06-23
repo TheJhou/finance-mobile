@@ -3,8 +3,9 @@ import { BackupScheduler } from "@/lib/backup-scheduler";
 import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { useFocusEffect } from "expo-router";
+import * as Sharing from 'expo-sharing';
 import { useCallback, useState } from "react";
 import {
     ActivityIndicator,
@@ -211,7 +212,7 @@ export default function BackupScreen() {
       const filePath = `${FileSystem.documentDirectory}backups/${fileName}`;
       
       if (await FileSystem.getInfoAsync(filePath).then(info => info.exists)) {
-        await FileSystem.shareAsync(filePath, {
+        await Sharing.shareAsync(filePath, {
           mimeType: "application/json",
           dialogTitle: "Compartilhar Backup",
         });
