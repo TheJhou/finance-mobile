@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.financeapp",
-      "versionCode": 3,
+      "versionCode": 4,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO",
@@ -58,8 +58,7 @@
           "color": "#6366f1",
           "sounds": []
         }
-      ],
-      "./modules/bank-notifications/app.plugin.js"
+      ]
     ],
     "content": {
       "rating": "Everyone",
