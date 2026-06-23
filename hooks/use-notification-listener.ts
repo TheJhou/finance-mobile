@@ -1,12 +1,12 @@
-import { isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
+import { analyzeText } from "@/lib/backend";
+import { generateId, isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
 import {
     BANK_APPS,
     inferCategoryFromText,
     parseNotification,
 } from "@/lib/notifications/parsers";
+import { addPendingNotification } from "@/lib/pending-notifications";
 import { listCategories } from "@/lib/repositories/categories";
-import { createTransaction } from "@/lib/repositories/transactions";
-import { toDateInputValue } from "@/lib/utils";
 import BankNotifications, {
     type BankNotificationEvent,
 } from "@/modules/bank-notifications";
@@ -25,11 +25,9 @@ export function useNotificationListener() {
     const sub = BankNotifications.addListener(
       "onNotification",
       async (event: BankNotificationEvent) => {
-        // Log ALL notifications for debugging
         const isBankApp = event.packageName in BANK_APPS;
         console.log(`[AutoImport] Notificação recebida: pkg=${event.packageName} bank=${isBankApp} title=${event.title}`);
 
-        // Prevent concurrent processing
         if (processingRef.current) return;
         processingRef.current = true;
 
@@ -52,34 +50,62 @@ export function useNotificationListener() {
             event.postTime
           );
 
-          if (alreadyProcessed) {
-            return;
-          }
+          if (alreadyProcessed) return;
 
-          // Load categories to infer the best one
           const categories = await listCategories();
-          if (categories.length === 0) {
-            return;
+          if (categories.length === 0) return;
+
+          // Tentar classificar com IA; fallback para inferência local por keywords
+          let categoryId = categories[0].id;
+          let categoryName = categories[0].name;
+          let description = parsed.description;
+
+          try {
+            const aiResult = await analyzeText(
+              text,
+              "TEXT",
+              categories.map((c) => ({ id: c.id, name: c.name }))
+            );
+            const draft = aiResult?.draft;
+            if (draft) {
+              if (draft.description) description = draft.description;
+              if (draft.categoryId) {
+                const matched = categories.find((c) => c.id === draft.categoryId);
+                if (matched) {
+                  categoryId = matched.id;
+                  categoryName = matched.name;
+                }
+              }
+            }
+          } catch {
+            // IA indisponível: usar inferência local
+            const inferredCatName = inferCategoryFromText(text);
+            const matched = inferredCatName
+              ? categories.find((c) => c.name.toLowerCase() === inferredCatName.toLowerCase())
+              : null;
+            if (matched) {
+              categoryId = matched.id;
+              categoryName = matched.name;
+            }
           }
 
-          const inferredCatName = inferCategoryFromText(text);
-          const categoryId = inferredCatName
-            ? categories.find(
-                (c) => c.name.toLowerCase() === inferredCatName.toLowerCase()
-              )?.id ?? categories[0].id
-            : categories[0].id;
-
-          await createTransaction({
-            description: parsed.description,
+          // Enfileirar como PENDENTE — aguarda aprovação do usuário na aba Importação
+          await addPendingNotification({
+            id: generateId(),
+            bank: parsed.bank,
+            packageName: event.packageName,
+            raw: text,
+            postTime: event.postTime,
+            createdAt: new Date().toISOString(),
             amount: parsed.amount,
+            description,
             type: parsed.type,
             paymentMethod: parsed.paymentMethod,
-            date: toDateInputValue(new Date(event.postTime)),
             categoryId,
-            notes: `Auto-importado de ${parsed.bank}`,
-            status: "PAID",
+            categoryName,
           });
 
+          // Marcar como processada para não re-enfileirar
           await markNotificationAsProcessed(
             event.packageName,
             event.title,
@@ -87,6 +113,8 @@ export function useNotificationListener() {
             parsed.amount,
             event.postTime
           );
+
+          console.log(`[AutoImport] Enfileirado para aprovação: ${description} R$${parsed.amount}`);
 
         } catch (err) {
           console.warn("[AutoImport] Erro ao processar notificação:", err);

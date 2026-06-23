@@ -1,9 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, logout, register } from "@/lib/auth";
 import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
-import {
-    type ParsedTransaction
-} from "@/lib/notifications/parsers";
+import { getPendingNotifications, removePendingNotification, type PendingNotification } from "@/lib/pending-notifications";
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -30,12 +28,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-interface PendingItem extends ParsedTransaction {
-  key: string;
-  raw: string;
-  postTime: number;
-}
-
 function normalizeType(type: unknown): "INCOME" | "EXPENSE" {
   if (typeof type === "string" && type.toUpperCase() === "INCOME") return "INCOME";
   return "EXPENSE";
@@ -53,7 +45,8 @@ function normalizeStatus(value: unknown, fallback: TransactionStatus): Transacti
 
 export default function NotificationsScreen() {
   const [granted, setGranted] = useState(false);
-  const [recentImports] = useState<PendingItem[]>([]);
+  const [pendingNotifications, setPendingNotifications] = useState<PendingNotification[]>([]);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
     null
@@ -110,6 +103,11 @@ export default function NotificationsScreen() {
     }
   }, []);
 
+  const loadPending = useCallback(async () => {
+    const items = await getPendingNotifications();
+    setPendingNotifications(items);
+  }, []);
+
   const checkAuth = useCallback(async () => {
     const authed = await isAuthenticated();
     setLoggedIn(authed);
@@ -119,9 +117,39 @@ export default function NotificationsScreen() {
     useCallback(() => {
       checkPermission();
       loadCategories();
+      loadPending();
       checkAuth();
-    }, [checkPermission, loadCategories, checkAuth])
+    }, [checkPermission, loadCategories, loadPending, checkAuth])
   );
+
+  const handleApprove = useCallback(async (item: PendingNotification) => {
+    setApprovingId(item.id);
+    try {
+      await createTransaction({
+        description: item.description,
+        amount: item.amount,
+        type: item.type,
+        paymentMethod: item.paymentMethod,
+        date: toDateInputValue(new Date(item.postTime)),
+        categoryId: item.categoryId,
+        notes: `Auto-importado de ${item.bank}`,
+        status: 'PAID',
+      });
+      await removePendingNotification(item.id);
+      await loadPending();
+      showToast('success', `Transação aprovada: ${item.description}`);
+    } catch {
+      showToast('error', 'Falha ao salvar transação');
+    } finally {
+      setApprovingId(null);
+    }
+  }, [loadPending, showToast]);
+
+  const handleReject = useCallback(async (id: string) => {
+    await removePendingNotification(id);
+    await loadPending();
+    showToast('warning', 'Notificação descartada');
+  }, [loadPending, showToast]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -686,80 +714,67 @@ export default function NotificationsScreen() {
           </View>
         )}
 
-        {/* Recent imports */}
+        {/* Pending bank notifications awaiting approval */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="time-outline" size={16} color={colors.primary} />
             <Text style={styles.sectionLabel}>
-              Importações recentes ({recentImports.length})
+              Notificações pendentes ({pendingNotifications.length})
             </Text>
           </View>
-          {recentImports.length === 0 ? (
+          {pendingNotifications.length === 0 ? (
             <View style={styles.empty}>
               <Ionicons name="cloud-download-outline" size={40} color={colors.textMuted} />
-              <Text style={styles.emptyText}>Nenhuma importação recente</Text>
+              <Text style={styles.emptyText}>Nenhuma notificação pendente</Text>
               <Text style={styles.emptyHint}>
-                Use os métodos acima ou ative as notificações bancárias.
+                Notificações bancárias capturadas aparecerão aqui para aprovação.
               </Text>
             </View>
           ) : (
             <FlatList
-              data={recentImports}
-              keyExtractor={(item) => item.key}
+              data={pendingNotifications}
+              keyExtractor={(item) => item.id}
               scrollEnabled={false}
               ItemSeparatorComponent={() => (
                 <View style={{ height: spacing.sm }} />
               )}
               renderItem={({ item }) => {
                 const isIncome = item.type === "INCOME";
+                const isApproving = approvingId === item.id;
                 return (
                   <View style={styles.importCard}>
                     <View style={styles.importCardHeader}>
-                      <View
-                        style={[
-                          styles.importBadge,
-                          {
-                            backgroundColor: isIncome
-                              ? colors.incomeBg
-                              : colors.expenseBg,
-                          },
-                        ]}
-                      >
-                        <Ionicons
-                          name={isIncome ? "arrow-up" : "arrow-down"}
-                          size={12}
-                          color={isIncome ? colors.incomeFg : colors.expenseFg}
-                        />
-                        <Text
-                          style={[
-                            styles.importBadgeText,
-                            {
-                              color: isIncome
-                                ? colors.incomeFg
-                                : colors.expenseFg,
-                            },
-                          ]}
-                        >
+                      <View style={[styles.importBadge, { backgroundColor: isIncome ? colors.incomeBg : colors.expenseBg }]}>
+                        <Ionicons name={isIncome ? "arrow-up" : "arrow-down"} size={12} color={isIncome ? colors.incomeFg : colors.expenseFg} />
+                        <Text style={[styles.importBadgeText, { color: isIncome ? colors.incomeFg : colors.expenseFg }]}>
                           {item.bank}
                         </Text>
                       </View>
-                      <Text
-                        style={[
-                          styles.importAmount,
-                          {
-                            color: isIncome ? colors.incomeFg : colors.expenseFg,
-                          },
-                        ]}
-                      >
+                      <Text style={[styles.importAmount, { color: isIncome ? colors.incomeFg : colors.expenseFg }]}>
                         {isIncome ? "+" : "-"}{formatCurrency(item.amount)}
                       </Text>
                     </View>
-                    <Text style={styles.importDesc} numberOfLines={2}>
-                      {item.description}
-                    </Text>
-                    <View style={styles.importFooter}>
-                      <Ionicons name="checkmark-circle" size={12} color={colors.success} />
-                      <Text style={styles.importFooterText}>Importado automaticamente</Text>
+                    <Text style={styles.importDesc} numberOfLines={2}>{item.description}</Text>
+                    <Text style={styles.importCategory}>{item.categoryName}</Text>
+                    <View style={styles.importActions}>
+                      <Pressable
+                        style={[styles.importActionBtn, styles.importApproveBtn]}
+                        onPress={() => handleApprove(item)}
+                        disabled={isApproving}
+                      >
+                        {isApproving
+                          ? <ActivityIndicator size="small" color="#fff" />
+                          : <Ionicons name="checkmark" size={14} color="#fff" />}
+                        <Text style={styles.importActionText}>Aprovar</Text>
+                      </Pressable>
+                      <Pressable
+                        style={[styles.importActionBtn, styles.importRejectBtn]}
+                        onPress={() => handleReject(item.id)}
+                        disabled={isApproving}
+                      >
+                        <Ionicons name="close" size={14} color="#fff" />
+                        <Text style={styles.importActionText}>Descartar</Text>
+                      </Pressable>
                     </View>
                   </View>
                 );
@@ -1123,6 +1138,24 @@ const styles = StyleSheet.create({
   importBadgeText: { fontSize: 11, fontWeight: "600" },
   importAmount: { fontSize: 16, fontWeight: "800" },
   importDesc: { fontSize: 13, color: colors.textSecondary },
+  importCategory: { fontSize: 11, color: colors.primary, fontWeight: '600', marginTop: 1 },
+  importActions: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  importActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    borderRadius: radius.sm,
+    gap: 4,
+  },
+  importApproveBtn: { backgroundColor: colors.success },
+  importRejectBtn: { backgroundColor: colors.danger },
+  importActionText: { fontSize: 12, fontWeight: '700', color: '#fff' },
   importFooter: {
     flexDirection: "row",
     alignItems: "center",
