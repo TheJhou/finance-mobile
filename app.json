@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.financeapp",
-      "versionCode": 4,
+      "versionCode": 6,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO",
@@ -72,9 +72,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "1d5433bf-6079-4962-90f6-70af5bb4c5ac"
+        "projectId": "4ca5dd76-1bc7-4779-9eb2-cef3b5b90c6d"
       }
     },
-    "owner": "jhoutest"
+    "owner": "thejhou"
   }
 }
