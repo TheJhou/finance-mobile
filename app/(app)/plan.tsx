@@ -51,11 +51,14 @@ export default function PlanScreen() {
         setStatus(null);
       }
     } catch (err) {
-      // Handle token limit errors specifically
-      if (handleTokenLimitError(err)) {
+      const msg = err instanceof Error ? err.message : "Erro ao carregar";
+      if (msg.toLowerCase().includes("sessão expirada") || msg.toLowerCase().includes("faça login")) {
+        setLoggedIn(false);
+        setStatus(null);
+      } else if (handleTokenLimitError(err)) {
         setError("Limite de tokens atingido. Veja seu plano atual.");
       } else {
-        setError(err instanceof Error ? err.message : "Erro ao carregar");
+        setError(msg);
         console.error("[Plan] Error fetching subscription status:", err);
       }
     } finally {

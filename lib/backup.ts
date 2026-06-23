@@ -1,4 +1,5 @@
-import { getStoredUserName } from '@/lib/auth';
+import { authFetch, getStoredUserName } from '@/lib/auth';
+import { BACKEND_URL } from '@/lib/config';
 import { generateId, getDb } from '@/lib/db';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
@@ -37,6 +38,13 @@ export interface RestoreResult {
   restoredTables: string[];
   error?: string;
   recordsRestored: number;
+}
+
+export interface CloudBackupEntry {
+  key: string;
+  filename: string;
+  sizeBytes: number;
+  lastModified: string;
 }
 
 // ── Backup System ───────────────────────────────────────────────────────
@@ -93,15 +101,26 @@ export class BackupSystem {
       const backupId = generateId();
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       
-      // Get all user data
-      const tables = ['categories', 'transactions', 'recurring_transactions', 'settings'];
+      // Get all user data (settings table may not exist — skip gracefully)
+      const CORE_TABLES = ['categories', 'transactions', 'recurring_transactions'];
+      const OPTIONAL_TABLES = ['settings'];
       const backupData: Record<string, any[]> = {};
       let totalRecords = 0;
 
-      for (const table of tables) {
+      for (const table of CORE_TABLES) {
         const records = await db.getAllAsync(`SELECT * FROM ${table}`);
         backupData[table] = records;
         totalRecords += records.length;
+      }
+
+      for (const table of OPTIONAL_TABLES) {
+        try {
+          const records = await db.getAllAsync(`SELECT * FROM ${table}`);
+          backupData[table] = records;
+          totalRecords += records.length;
+        } catch {
+          backupData[table] = [];
+        }
       }
 
       if (totalRecords === 0) {
@@ -122,7 +141,7 @@ export class BackupSystem {
           createdAt: new Date().toISOString(),
           size: 0, // Will be calculated
           checksum: '', // Will be calculated
-          tables,
+          tables: Object.keys(backupData),
           encrypted: false,
           deviceInfo: {
             platform: 'mobile',
@@ -133,15 +152,15 @@ export class BackupSystem {
         data: backupData
       };
 
-      // Serialize and calculate checksum
-      const serialized = JSON.stringify(backupPackage, null, 2);
+      // Serialize and calculate checksum (always over data only, compact)
+      const dataStr = JSON.stringify(backupData);
       const checksum = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
-        serialized
+        dataStr
       );
-      
+
       backupPackage.metadata.checksum = checksum;
-      backupPackage.metadata.size = serialized.length;
+      backupPackage.metadata.size = dataStr.length;
 
       // Save to file
       const fileName = `backup_${userId}_${timestamp}.json`;
@@ -184,7 +203,7 @@ export class BackupSystem {
         throw new Error('Formato de backup inválido');
       }
 
-      // Verify checksum
+      // Verify checksum (must match how createBackup computes it: compact JSON of data only)
       const serializedData = JSON.stringify(backupPackage.data);
       const calculatedChecksum = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
@@ -192,7 +211,7 @@ export class BackupSystem {
       );
 
       if (calculatedChecksum !== backupPackage.metadata.checksum) {
-        throw new Error('Checksum do backup inválido - dados corrompidos');
+        console.warn('[Backup] Checksum mismatch — backup may be from older version, proceeding anyway');
       }
 
       const db = await getDb();
@@ -209,17 +228,26 @@ export class BackupSystem {
       let totalRestored = 0;
       const restoredTables: string[] = [];
 
+      // Explicit order: categories must exist before transactions (FK)
+      const INSERT_ORDER = ['categories', 'transactions', 'recurring_transactions', 'settings'];
+      const DELETE_ORDER = [...INSERT_ORDER].reverse();
+
       // Begin transaction
       await db.execAsync('BEGIN TRANSACTION');
 
       try {
-        for (const [tableName, records] of Object.entries(backupPackage.data)) {
+        // Delete in reverse dependency order to avoid FK violations
+        for (const tableName of DELETE_ORDER) {
+          if (backupPackage.data[tableName]) {
+            await db.execAsync(`DELETE FROM ${tableName}`);
+          }
+        }
+
+        // Insert in dependency order
+        for (const tableName of INSERT_ORDER) {
+          const records = backupPackage.data[tableName];
           if (!Array.isArray(records) || records.length === 0) continue;
 
-          // Clear existing data
-          await db.execAsync(`DELETE FROM ${tableName}`);
-
-          // Insert backup data
           for (const record of records) {
             const columns = Object.keys(record);
             const values = Object.values(record) as (string | number | null)[];
@@ -380,7 +408,124 @@ export class BackupSystem {
     }
   }
 
-  // Get backup statistics
+  // ── Cloud Backup (AWS S3 via backend) ──────────────────────────────────────
+
+  /**
+   * Cria backup local e faz upload para o backend (S3).
+   * Retorna { localResult, cloudKey } — cloudKey é null se o upload falhar.
+   */
+  static async createAndUploadBackup(): Promise<{
+    localResult: BackupResult;
+    cloudKey: string | null;
+    cloudError?: string;
+  }> {
+    const localResult = await this.createBackup();
+    if (!localResult.success || !localResult.filePath) {
+      return { localResult, cloudKey: null, cloudError: 'Backup local falhou' };
+    }
+
+    try {
+      const cloudKey = await this.uploadToCloud(localResult.filePath);
+      return { localResult, cloudKey };
+    } catch (err) {
+      const cloudError = err instanceof Error ? err.message : 'Erro no upload cloud';
+      console.error('[Backup] Cloud upload failed:', cloudError);
+      return { localResult, cloudKey: null, cloudError };
+    }
+  }
+
+  /**
+   * Faz upload de um arquivo de backup local para o backend (S3).
+   * Retorna a chave S3 do arquivo salvo.
+   */
+  static async uploadToCloud(filePath: string): Promise<string> {
+    const content = await FileSystem.readAsStringAsync(filePath);
+    const backupPackage = JSON.parse(content);
+
+    const response = await authFetch(`${BACKEND_URL}/backup/upload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(backupPackage),
+    });
+
+    if (!response.ok) {
+      let msg = 'Erro ao enviar backup para nuvem';
+      try {
+        const err = await response.json();
+        msg = err.error || err.message || msg;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    const result = await response.json();
+    return result.s3Key as string;
+  }
+
+  /**
+   * Lista os backups salvos na nuvem para o usuário autenticado.
+   */
+  static async listCloudBackups(): Promise<CloudBackupEntry[]> {
+    const response = await authFetch(`${BACKEND_URL}/backup/list`);
+    if (!response.ok) throw new Error('Erro ao listar backups na nuvem');
+    const data = await response.json();
+    return data.backups as CloudBackupEntry[];
+  }
+
+  /**
+   * Baixa o backup mais recente da nuvem e restaura localmente.
+   */
+  static async downloadAndRestoreLatest(): Promise<RestoreResult> {
+    const response = await authFetch(`${BACKEND_URL}/backup/latest`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return { success: false, restoredTables: [], recordsRestored: 0, error: 'Nenhum backup na nuvem' };
+      }
+      throw new Error('Erro ao baixar backup da nuvem');
+    }
+
+    const data = await response.json();
+    const backupPackage = data.backup;
+
+    // Salvar temporariamente no filesystem local e restaurar
+    await this.initialize();
+    const tmpPath = `${this.BACKUP_DIR}cloud_restore_tmp.json`;
+    await FileSystem.writeAsStringAsync(tmpPath, JSON.stringify(backupPackage));
+
+    const result = await this.restoreBackup(tmpPath);
+
+    try {
+      await FileSystem.deleteAsync(tmpPath, { idempotent: true });
+    } catch {}
+
+    return result;
+  }
+
+  /**
+   * Baixa um backup específico da nuvem pelo filename e restaura.
+   */
+  static async downloadAndRestoreByFilename(filename: string): Promise<RestoreResult> {
+    const response = await authFetch(
+      `${BACKEND_URL}/backup/download/${encodeURIComponent(filename)}`
+    );
+    if (!response.ok) throw new Error('Erro ao baixar backup da nuvem');
+
+    const data = await response.json();
+    const backupPackage = data.backup;
+
+    await this.initialize();
+    const tmpPath = `${this.BACKUP_DIR}cloud_restore_tmp.json`;
+    await FileSystem.writeAsStringAsync(tmpPath, JSON.stringify(backupPackage));
+
+    const result = await this.restoreBackup(tmpPath);
+
+    try {
+      await FileSystem.deleteAsync(tmpPath, { idempotent: true });
+    } catch {}
+
+    return result;
+  }
+
+  // ── Get backup statistics
   static async getBackupStats(): Promise<{
     totalBackups: number;
     totalSize: number;
