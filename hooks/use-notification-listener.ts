@@ -77,8 +77,8 @@ export function useNotificationListener() {
                 }
               }
             }
-          } catch {
-            // IA indisponível: usar inferência local
+          } catch (aiErr) {
+            console.warn("[AutoImport] IA indisponível, usando inferência local:", aiErr instanceof Error ? aiErr.message : aiErr);
             const inferredCatName = inferCategoryFromText(text);
             const matched = inferredCatName
               ? categories.find((c) => c.name.toLowerCase() === inferredCatName.toLowerCase())
