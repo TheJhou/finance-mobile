@@ -749,8 +749,8 @@ const styles = StyleSheet.create({
   },
   createButton: { backgroundColor: colors.primary },
   importButton: { backgroundColor: colors.success },
-  cloudButton: { backgroundColor: '#0ea5e9' },
-  restoreCloudButton: { backgroundColor: '#7c3aed' },
+  cloudButton: { backgroundColor: colors.info },
+  restoreCloudButton: { backgroundColor: colors.primaryDark },
   actionButtonText: {
     fontSize: 14,
     fontWeight: "600",
