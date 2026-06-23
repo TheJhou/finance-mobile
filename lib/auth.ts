@@ -1,5 +1,4 @@
 import { BACKEND_URL } from "@/lib/config";
-import { getDb } from "@/lib/db";
 
 interface AuthTokens {
   accessToken: string;
@@ -28,32 +27,31 @@ function isTokenExpired(token: string, marginSeconds = 30): boolean {
   return Date.now() / 1000 >= payload.exp - marginSeconds;
 }
 
-// ── Storage ────────────────────────────────────────────────────────────
+// ── Secure Storage ────────────────────────────────────────────────────────
 
 async function getStoredValue(key: string): Promise<string | null> {
   try {
-    const db = await getDb();
-    const row = await db.getFirstAsync<{ value: string }>(
-      "SELECT value FROM settings WHERE key = ?",
-      [key]
-    );
-    return row?.value ?? null;
+    return await SecureStore.getItemAsync(key);
   } catch {
     return null;
   }
 }
 
 async function setStoredValue(key: string, value: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync(
-    "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-    [key, value]
-  );
+  try {
+    await SecureStore.setItemAsync(key, value);
+  } catch (error) {
+    console.error("[Auth] Failed to store secure value:", error);
+    throw new Error("Failed to store authentication data");
+  }
 }
 
 async function removeStoredValue(key: string): Promise<void> {
-  const db = await getDb();
-  await db.runAsync("DELETE FROM settings WHERE key = ?", [key]);
+  try {
+    await SecureStore.deleteItemAsync(key);
+  } catch (error) {
+    console.error("[Auth] Failed to remove secure value:", error);
+  }
 }
 
 // ── Public API ─────────────────────────────────────────────────────────

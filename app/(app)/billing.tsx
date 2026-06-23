@@ -11,30 +11,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-interface PlanFeature {
-  label: string;
-  free: boolean | string;
-  pro: boolean | string;
-}
-
-const FEATURES: PlanFeature[] = [
-  { label: "Transações ilimitadas", free: true, pro: true },
-  { label: "Categorias ilimitadas", free: true, pro: true },
-  { label: "Relatório DRE", free: true, pro: true },
-  { label: "Exportar CSV", free: true, pro: true },
-  { label: "Exportar Excel (XLSX)", free: false, pro: true },
-  { label: "Exportar PDF", free: false, pro: true },
-  { label: "IA para importar por foto", free: "5/mês", pro: "Ilimitado" },
-  { label: "IA para importar por texto", free: "10/mês", pro: "Ilimitado" },
-  { label: "OCR de documentos", free: false, pro: true },
-  { label: "Suporte prioritário", free: false, pro: true },
-];
-
 export default function BillingScreen() {
   const router = useRouter();
 
   const handleSubscribe = () => {
-    Linking.openURL("https://backend-final-production-659a.up.railway.app/purchase");
+    Linking.openURL(SUBSCRIPTION_CONFIG.purchaseUrl);
   };
 
   return (
@@ -52,43 +33,48 @@ export default function BillingScreen() {
         {/* Hero */}
         <View style={styles.heroCard}>
           <View style={styles.heroBadge}>
-            <Ionicons name="diamond" size={14} color="#f472b6" />
-            <Text style={styles.heroBadgeText}>PRO</Text>
+            <Ionicons name="diamond" size={14} color={PLANS.PRO.color} />
+            <Text style={styles.heroBadgeText}>{PLANS.PRO.badge}</Text>
           </View>
-          <Text style={styles.heroTitle}>Finance Pro</Text>
+          <Text style={styles.heroTitle}>{PLAY_STORE_TEXTS.subscriptionTitle}</Text>
           <Text style={styles.heroSubtitle}>
-            Desbloqueie exportações ilimitadas e uso ilimitado de IA para controlar suas finanças sem limites.
+            {PLAY_STORE_TEXTS.subscriptionDescription}
           </Text>
           <View style={styles.priceRow}>
-            <Text style={styles.priceValue}>R$ 14,90</Text>
+            <Text style={styles.priceValue}>{formatPrice(PLANS.PRO.price)}</Text>
             <Text style={styles.pricePeriod}> / mês</Text>
           </View>
+          <Text style={styles.heroTokens}>
+            {getTokenDisplayText(PLANS.PRO.tokenLimit)} tokens/mês • IA ilimitada
+          </Text>
         </View>
 
         {/* Planos */}
         <View style={styles.plansRow}>
           {/* Gratuito */}
           <View style={[styles.planCard, styles.planFree]}>
-            <Text style={styles.planName}>Gratuito</Text>
-            <Text style={styles.planPrice}>R$ 0</Text>
-            <Text style={styles.planPriceSub}>para sempre</Text>
+            <Text style={styles.planName}>{PLANS.FREE.name}</Text>
+            <Text style={styles.planPrice}>{formatPrice(PLANS.FREE.price)}</Text>
+            <Text style={styles.planPriceSub}>{PLANS.FREE.period}</Text>
             <View style={styles.planDivider} />
             <Text style={styles.planCurrent}>Plano atual</Text>
+            <Text style={styles.planTokens}>{getTokenDisplayText(PLANS.FREE.tokenLimit)} tokens/mês</Text>
           </View>
 
           {/* Pro */}
           <View style={[styles.planCard, styles.planPro]}>
             <View style={styles.planBadge}>
-              <Ionicons name="diamond" size={11} color="#f472b6" />
-              <Text style={styles.planBadgeText}>PRO</Text>
+              <Ionicons name="diamond" size={11} color={PLANS.PRO.color} />
+              <Text style={styles.planBadgeText}>{PLANS.PRO.badge}</Text>
             </View>
-            <Text style={[styles.planName, { color: "#f472b6" }]}>Finance Pro</Text>
-            <Text style={[styles.planPrice, { color: colors.textPrimary }]}>R$ 14,90</Text>
-            <Text style={styles.planPriceSub}>por mês</Text>
+            <Text style={[styles.planName, { color: PLANS.PRO.color }]}>{PLAY_STORE_TEXTS.subscriptionTitle}</Text>
+            <Text style={[styles.planPrice, { color: colors.textPrimary }]}>{formatPrice(PLANS.PRO.price)}</Text>
+            <Text style={styles.planPriceSub}>{PLANS.PRO.period}</Text>
             <View style={styles.planDivider} />
             <TouchableOpacity style={styles.planBtn} onPress={handleSubscribe} activeOpacity={0.8}>
               <Text style={styles.planBtnText}>Assinar agora</Text>
             </TouchableOpacity>
+            <Text style={styles.planTokens}>{getTokenDisplayText(PLANS.PRO.tokenLimit)} tokens/mês</Text>
           </View>
         </View>
 
@@ -105,28 +91,33 @@ export default function BillingScreen() {
             </View>
           </View>
 
-          {FEATURES.map((f, i) => (
+          {PLANS.FREE.features.map((feature, i) => (
             <View key={i}>
               {i > 0 && <View style={styles.featureDivider} />}
               <View style={styles.featureRow}>
-                <Text style={styles.featureLabel}>{f.label}</Text>
+                <View style={styles.featureLabelContainer}>
+                  {feature.icon && (
+                    <Ionicons name={feature.icon as any} size={16} color={colors.textMuted} style={styles.featureIcon} />
+                  )}
+                  <Text style={styles.featureLabel}>{feature.label}</Text>
+                </View>
                 <View style={styles.featureCells}>
                   <View style={styles.featureCell}>
-                    {f.free === true ? (
+                    {feature.free === true ? (
                       <Ionicons name="checkmark-circle" size={18} color={colors.success} />
-                    ) : f.free === false ? (
+                    ) : feature.free === false ? (
                       <Ionicons name="close-circle" size={18} color={colors.border} />
                     ) : (
-                      <Text style={styles.featureLimitText}>{f.free as string}</Text>
+                      <Text style={styles.featureLimitText}>{feature.free as string}</Text>
                     )}
                   </View>
                   <View style={styles.featureCell}>
-                    {f.pro === true ? (
-                      <Ionicons name="checkmark-circle" size={18} color="#f472b6" />
-                    ) : f.pro === false ? (
+                    {PLANS.PRO.features[i].pro === true ? (
+                      <Ionicons name="checkmark-circle" size={18} color={PLANS.PRO.color} />
+                    ) : PLANS.PRO.features[i].pro === false ? (
                       <Ionicons name="close-circle" size={18} color={colors.border} />
                     ) : (
-                      <Text style={[styles.featureLimitText, { color: "#f472b6" }]}>{f.pro as string}</Text>
+                      <Text style={[styles.featureLimitText, { color: PLANS.PRO.color }]}>{PLANS.PRO.features[i].pro as string}</Text>
                     )}
                   </View>
                 </View>
@@ -140,6 +131,21 @@ export default function BillingScreen() {
           <Ionicons name="diamond-outline" size={20} color="#fff" />
           <Text style={styles.ctaBtnText}>Começar com o Pro</Text>
         </TouchableOpacity>
+
+        {/* Legal Links */}
+        <View style={styles.legalSection}>
+          <Text style={styles.legalTitle}>Informações Legais</Text>
+          <View style={styles.legalLinks}>
+            <TouchableOpacity style={styles.legalLink} onPress={() => router.push('/terms')}>
+              <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+              <Text style={styles.legalLinkText}>Termos de Uso</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.legalLink} onPress={() => router.push('/privacy')}>
+              <Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />
+              <Text style={styles.legalLinkText}>Política de Privacidade</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         <Text style={styles.disclaimer}>
           Cancele a qualquer momento. Cobrança mensal recorrente via Google Play.
@@ -378,5 +384,56 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 16,
     paddingBottom: spacing.md,
+  },
+  featureLabelContainer: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  featureIcon: {
+    width: 16,
+  },
+  heroTokens: {
+    fontSize: 12,
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  planTokens: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: spacing.sm,
+  },
+  legalSection: {
+    gap: spacing.md,
+  },
+  legalTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textPrimary,
+    textAlign: "center",
+  },
+  legalLinks: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    gap: spacing.md,
+  },
+  legalLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flex: 1,
+  },
+  legalLinkText: {
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.primary,
   },
 });

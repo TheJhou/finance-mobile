@@ -1,7 +1,11 @@
+import { getGoals } from "@/lib/backend";
+import { getUpcomingBills } from "@/lib/repositories/dashboard";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
-import { getUpcomingBills } from "@/lib/repositories/dashboard";
-import { getGoals } from "@/lib/backend";
+
+// Chaves para controle de cooldown
+const COMMITMENT_ALERT_COOLDOWN_KEY = 'commitment_alert_cooldown';
+const COOLDOWN_HOURS = 24; // 24 horas entre alertas
 
 // Configurar notificações
 export async function configureNotifications(): Promise<void> {
@@ -147,12 +151,45 @@ export async function scheduleGoalAlerts(): Promise<void> {
   }
 }
 
-// Agendar alerta diário de comprometimento se estiver alto
+// Verificar se pode enviar alerta (cooldown)
+async function canSendCommitmentAlert(): Promise<boolean> {
+  try {
+    const lastAlert = await AsyncStorage.getItem(COMMITMENT_ALERT_COOLDOWN_KEY);
+    if (!lastAlert) return true;
+
+    const lastAlertTime = parseInt(lastAlert);
+    const now = Date.now();
+    const cooldownMs = COOLDOWN_HOURS * 60 * 60 * 1000;
+
+    return (now - lastAlertTime) > cooldownMs;
+  } catch {
+    return true;
+  }
+}
+
+// Marcar que alerta foi enviado
+async function markCommitmentAlertSent(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(COMMITMENT_ALERT_COOLDOWN_KEY, Date.now().toString());
+  } catch {
+    // Ignorar erro
+  }
+}
+
+// Agendar alerta de comprometimento com cooldown inteligente
 export async function scheduleDailyCommitmentCheck(commitmentPercent: number): Promise<void> {
   const hasPermission = await requestNotificationPermission();
   if (!hasPermission) return;
 
-  if (commitmentPercent > 70) {
-    await scheduleHighCommitmentAlert(commitmentPercent);
+  // Apenas alertar se comprometimento for realmente alto (>80%)
+  if (commitmentPercent > 80) {
+    const canSend = await canSendCommitmentAlert();
+    if (canSend) {
+      await scheduleHighCommitmentAlert(commitmentPercent);
+      await markCommitmentAlertSent();
+      console.log(`[Notifications] Alerta enviado: ${commitmentPercent}%`);
+    } else {
+      console.log(`[Notifications] Alerta em cooldown: ${commitmentPercent}%`);
+    }
   }
 }

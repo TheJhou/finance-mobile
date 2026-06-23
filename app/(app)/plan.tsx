@@ -3,6 +3,7 @@ import { isAuthenticated, login, logout, register } from "@/lib/auth";
 // Reativar IAP quando Google Play Billing estiver configurado
 // import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
 import { getSubscriptionStatus } from "@/lib/subscription";
+import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
 import { resetTokenLimitStatus } from "@/lib/token-limit";
 import type { SubscriptionStatus } from "@/lib/types";
@@ -204,18 +205,24 @@ export default function PlanScreen() {
 
             {/* Upgrade */}
             {!isPro && (
-              <View style={[styles.card, { borderColor: colors.primary, borderWidth: 1.5 }]}>
+              <View style={[styles.card, { borderColor: PLANS.PRO.color, borderWidth: 1.5 }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                  <Ionicons name="diamond" size={22} color="#fbbf24" />
-                  <Text style={styles.cardTitle}>Upgrade para Pro</Text>
+                  <Ionicons name="diamond" size={22} color={PLANS.PRO.color} />
+                  <Text style={styles.cardTitle}>{PLAY_STORE_TEXTS.subscriptionTitle}</Text>
                 </View>
                 <Text style={styles.cardText}>
-                  Receba 250.000 tokens/mês para usar IA, OCR, áudio e texto com prioridade.
+                  {PLAY_STORE_TEXTS.subscriptionDescription}
                 </Text>
-                <Text style={[styles.cardText, { fontWeight: "700", color: colors.primary, fontSize: 20 }]}>
-                  R$ 19,90/mês
+                <Text style={[styles.cardText, { fontWeight: "700", color: PLANS.PRO.color, fontSize: 20 }]}>
+                  {formatPrice(PLANS.PRO.price)}/mês
                 </Text>
-                <Button title="Fazer upgrade" onPress={handleUpgrade} />
+                <Text style={styles.cardText}>
+                  {getTokenDisplayText(PLANS.PRO.tokenLimit)} tokens/mês • IA ilimitada
+                </Text>
+                <Button title="Assinar agora" onPress={handleUpgrade} />
+                <Text style={styles.cardTextSmall}>
+                  {PLAY_STORE_TEXTS.autoRenewing}
+                </Text>
               </View>
             )}
 
@@ -353,6 +360,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     color: colors.textMuted,
+    fontStyle: "italic",
+  },
+  cardTextSmall: {
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: "center",
+    marginTop: spacing.sm,
     fontStyle: "italic",
   },
   card: {

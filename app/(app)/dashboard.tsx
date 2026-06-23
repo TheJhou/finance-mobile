@@ -74,6 +74,7 @@ export default function DashboardScreen() {
   const [tokenLimitStatus, setTokenLimitStatus] = useState(getTokenLimitStatus());
   const [chartModal, setChartModal] = useState<"category" | "bar" | "line" | "commitment" | null>(null);
   const [notificationModal, setNotificationModal] = useState(false);
+  const [notificationsScheduled, setNotificationsScheduled] = useState(false);
   const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
@@ -161,13 +162,15 @@ export default function DashboardScreen() {
         console.warn("[Dashboard] Pulando chamadas backend: limite de tokens atingido");
       }
 
-      // Schedule notifications (non-blocking)
-      const comprometimento = dashRes.monthlyIncome > 0 ? Math.round((dashRes.monthlyExpense / dashRes.monthlyIncome) * 100) : 0;
-      void Promise.all([
-        scheduleUpcomingBillsAlerts().catch((err) => console.warn("[Dashboard] Falha ao agendar contas:", err)),
-        scheduleGoalAlerts().catch((err) => console.warn("[Dashboard] Falha ao agendar metas:", err)),
-        scheduleDailyCommitmentCheck(comprometimento).catch((err) => console.warn("[Dashboard] Falha ao agendar comprometimento:", err)),
-      ]);
+      // Schedule notifications apenas uma vez por sessão (evita spam)
+      if (!notificationsScheduled) {
+        const comprometimento = dashRes.monthlyIncome > 0 ? Math.round((dashRes.monthlyExpense / dashRes.monthlyIncome) * 100) : 0;
+        void Promise.all([
+          scheduleUpcomingBillsAlerts().catch((err) => console.warn("[Dashboard] Falha ao agendar contas:", err)),
+          scheduleGoalAlerts().catch((err) => console.warn("[Dashboard] Falha ao agendar metas:", err)),
+          scheduleDailyCommitmentCheck(comprometimento).catch((err) => console.warn("[Dashboard] Falha ao agendar comprometimento:", err)),
+        ]).then(() => setNotificationsScheduled(true));
+      }
 
       setError(null);
     } catch (err) {
@@ -188,6 +191,7 @@ export default function DashboardScreen() {
     setRefreshing(true);
     resetTokenLimitStatus();
     setTokenLimitStatus(getTokenLimitStatus());
+    setNotificationsScheduled(false); // Permitir reagendamento no refresh
     fetchData();
   };
 
