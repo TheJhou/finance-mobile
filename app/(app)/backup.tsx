@@ -1,4 +1,4 @@
-import { BackupMetadata, BackupSystem } from "@/lib/backup";
+import { BackupMetadata, BackupSystem, CloudBackupEntry } from "@/lib/backup";
 import { BackupScheduler } from "@/lib/backup-scheduler";
 import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,6 +32,10 @@ export default function BackupScreen() {
     enabled: true,
     backupTime: "02:00",
   });
+  const [uploadingCloud, setUploadingCloud] = useState(false);
+  const [restoringCloud, setRestoringCloud] = useState(false);
+  const [cloudBackups, setCloudBackups] = useState<CloudBackupEntry[]>([]);
+  const [loadingCloud, setLoadingCloud] = useState(false);
   const [editingTime, setEditingTime] = useState("");
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [stats, setStats] = useState({
@@ -49,6 +53,17 @@ export default function BackupScreen() {
         BackupSystem.listBackups(),
         BackupScheduler.getStats(),
       ]);
+
+      // Load cloud backups silently
+      try {
+        setLoadingCloud(true);
+        const cloud = await BackupSystem.listCloudBackups();
+        setCloudBackups(cloud);
+      } catch {
+        setCloudBackups([]);
+      } finally {
+        setLoadingCloud(false);
+      }
       
       setBackups(backupList);
       setStats({
@@ -172,6 +187,58 @@ export default function BackupScreen() {
             } catch (error) {
               console.error("[Backup] Error deleting backup:", error);
               Alert.alert("Erro", "Falha ao excluir backup");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCloudBackup = async () => {
+    try {
+      setUploadingCloud(true);
+      const { localResult, cloudKey, cloudError } = await BackupSystem.createAndUploadBackup();
+
+      if (!localResult.success) {
+        Alert.alert("Erro", localResult.error || "Falha ao criar backup");
+        return;
+      }
+      if (cloudError) {
+        Alert.alert("Backup local criado", `Backup salvo localmente, mas o envio para a nuvem falhou:\n${cloudError}`);
+      } else {
+        Alert.alert("Sucesso", `Backup enviado para a nuvem!\n\nChave: ${cloudKey}`);
+      }
+      await loadData();
+    } catch (error) {
+      Alert.alert("Erro", "Falha ao fazer backup na nuvem");
+    } finally {
+      setUploadingCloud(false);
+    }
+  };
+
+  const handleRestoreFromCloud = async () => {
+    Alert.alert(
+      "Restaurar da Nuvem",
+      "Isso substituirá todos os seus dados pelo backup mais recente na nuvem. Deseja continuar?",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Restaurar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setRestoringCloud(true);
+              const result = await BackupSystem.downloadAndRestoreLatest();
+              if (result.success) {
+                Alert.alert("Sucesso", `Dados restaurados da nuvem!\n\nRegistros: ${result.recordsRestored}`);
+                await loadData();
+              } else {
+                Alert.alert("Erro", result.error || "Falha ao restaurar da nuvem");
+              }
+            } catch (error) {
+              Alert.alert("Erro", "Falha ao restaurar da nuvem");
+            } finally {
+              setRestoringCloud(false);
             }
           },
         },
@@ -336,7 +403,7 @@ export default function BackupScreen() {
           )}
         </View>
 
-        {/* Actions */}
+        {/* Actions — Local */}
         <View style={styles.actionsGrid}>
           <Pressable
             style={[styles.actionButton, styles.createButton]}
@@ -347,8 +414,8 @@ export default function BackupScreen() {
               <ActivityIndicator color="#fff" size="small" />
             ) : (
               <>
-                <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
-                <Text style={styles.actionButtonText}>Criar Backup</Text>
+                <Ionicons name="save-outline" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Backup Local</Text>
               </>
             )}
           </Pressable>
@@ -357,9 +424,108 @@ export default function BackupScreen() {
             style={[styles.actionButton, styles.importButton]}
             onPress={handleImportBackup}
           >
-            <Ionicons name="cloud-download-outline" size={20} color="#fff" />
+            <Ionicons name="folder-open-outline" size={20} color="#fff" />
             <Text style={styles.actionButtonText}>Importar</Text>
           </Pressable>
+        </View>
+
+        {/* Actions — Cloud */}
+        <View style={styles.actionsGrid}>
+          <Pressable
+            style={[styles.actionButton, styles.cloudButton]}
+            onPress={handleCloudBackup}
+            disabled={uploadingCloud}
+          >
+            {uploadingCloud ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Backup Nuvem</Text>
+              </>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={[styles.actionButton, styles.restoreCloudButton]}
+            onPress={handleRestoreFromCloud}
+            disabled={restoringCloud}
+          >
+            {restoringCloud ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="cloud-download-outline" size={20} color="#fff" />
+                <Text style={styles.actionButtonText}>Restaurar Nuvem</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+
+        {/* Cloud Backups List */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Text style={styles.cardTitle}>Backups na Nuvem</Text>
+            {loadingCloud && <ActivityIndicator size="small" color={colors.primary} />}
+          </View>
+          {cloudBackups.length === 0 ? (
+            <Text style={styles.emptyText}>
+              {loadingCloud ? "Carregando..." : "Nenhum backup na nuvem"}
+            </Text>
+          ) : (
+            <FlatList
+              data={cloudBackups}
+              keyExtractor={(item) => item.key}
+              scrollEnabled={false}
+              ItemSeparatorComponent={() => <View style={styles.separator} />}
+              renderItem={({ item }) => (
+                <View style={styles.backupItem}>
+                  <View style={styles.backupInfo}>
+                    <Text style={styles.backupDate}>
+                      {formatDate(item.lastModified)}
+                    </Text>
+                    <Text style={styles.backupDetails}>
+                      {formatFileSize(item.sizeBytes)} • {item.filename}
+                    </Text>
+                  </View>
+                  <Pressable
+                    style={styles.backupActionButton}
+                    onPress={() => {
+                      Alert.alert(
+                        "Restaurar",
+                        `Restaurar o backup "${item.filename}"?\nIsso substituirá todos os dados atuais.`,
+                        [
+                          { text: "Cancelar", style: "cancel" },
+                          {
+                            text: "Restaurar",
+                            style: "destructive",
+                            onPress: async () => {
+                              try {
+                                setRestoringCloud(true);
+                                const result = await BackupSystem.downloadAndRestoreByFilename(item.filename);
+                                if (result.success) {
+                                  Alert.alert("Sucesso", `Dados restaurados!\n\nRegistros: ${result.recordsRestored}`);
+                                  await loadData();
+                                } else {
+                                  Alert.alert("Erro", result.error || "Falha ao restaurar");
+                                }
+                              } catch {
+                                Alert.alert("Erro", "Falha ao restaurar da nuvem");
+                              } finally {
+                                setRestoringCloud(false);
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                  >
+                    <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+                  </Pressable>
+                </View>
+              )}
+            />
+          )}
         </View>
 
         {/* Backups List */}
@@ -583,6 +749,8 @@ const styles = StyleSheet.create({
   },
   createButton: { backgroundColor: colors.primary },
   importButton: { backgroundColor: colors.success },
+  cloudButton: { backgroundColor: '#0ea5e9' },
+  restoreCloudButton: { backgroundColor: '#7c3aed' },
   actionButtonText: {
     fontSize: 14,
     fontWeight: "600",
