@@ -63,7 +63,11 @@ export class BackupSystem {
     }
   }
 
-  // Get current user ID (from auth or device ID)
+  // Get current user ID (from auth or device ID) — public so BackupScheduler can delegate
+  static async getPublicUserId(): Promise<string> {
+    return this.getUserId();
+  }
+
   private static async getUserId(): Promise<string> {
     try {
       const userName = await getStoredUserName();

@@ -37,7 +37,7 @@ export default function PrivacyScreen() {
         {/* Last Updated */}
         <View style={styles.updateCard}>
           <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.updateText}>Última atualização: 22 de junho de 2024</Text>
+          <Text style={styles.updateText}>Última atualização: Junho de 2025</Text>
         </View>
 
         {/* Introduction */}

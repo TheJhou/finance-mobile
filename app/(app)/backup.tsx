@@ -49,8 +49,9 @@ export default function BackupScreen() {
     try {
       setLoading(true);
       
-      const [backupList, schedulerStats] = await Promise.all([
+      const [backupList, backupStats, schedulerStats] = await Promise.all([
         BackupSystem.listBackups(),
+        BackupSystem.getBackupStats(),
         BackupScheduler.getStats(),
       ]);
 
@@ -67,10 +68,10 @@ export default function BackupScreen() {
       
       setBackups(backupList);
       setStats({
-        totalBackups: schedulerStats.totalBackups,
-        totalSize: schedulerStats.totalBackups * 1024 * 1024, // Estimate
-        lastBackup: schedulerStats.lastBackup,
-        nextBackup: schedulerStats.nextBackup,
+        totalBackups: backupStats.totalBackups,
+        totalSize: backupStats.totalSize,
+        lastBackup: backupStats.lastBackup,
+        nextBackup: backupStats.nextBackup,
       });
       setSchedulerConfig({
         enabled: schedulerStats.enabled,

@@ -312,15 +312,9 @@ export class BackupScheduler {
     }
   }
 
-  // Get current user ID
+  // Get current user ID — delegates to BackupSystem so filenames always match
   private static async getCurrentUserId(): Promise<string> {
-    // This should match the logic in BackupSystem.getUserId()
-    try {
-      const deviceId = await AsyncStorage.getItem('finance_device_id');
-      return `user_default_${deviceId || 'unknown'}`;
-    } catch {
-      return 'user_default_unknown';
-    }
+    return BackupSystem.getPublicUserId();
   }
 
   // Get next backup time
