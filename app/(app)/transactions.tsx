@@ -4,10 +4,10 @@ import { extractTransactionFromPhoto } from "@/lib/ai";
 import { isAuthenticated } from "@/lib/auth";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-  createTransaction,
-  deleteTransaction,
-  listTransactions,
-  updateTransaction,
+    createTransaction,
+    deleteTransaction,
+    listTransactions,
+    updateTransaction,
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, DocumentType, PaymentMethod, Transaction, TransactionType } from "@/lib/types";
@@ -17,21 +17,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  LayoutAnimation,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  UIManager,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    LayoutAnimation,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    UIManager,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -857,22 +857,6 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setErr("Data inválida (use AAAA-MM-DD)");
-      return;
-    }
-    if (documentType === "BOLETO" && !boletoNumber.trim()) {
-      setErr("Informe o código de barras ou linha digitável do boleto");
-      return;
-    }
-    if (documentType === "BOLETO" && !recipientName.trim()) {
-      setErr("Informe quem recebeu o boleto");
-      return;
-    }
-    if (documentType === "COMPROVANTE_PIX" && !recipientName.trim()) {
-      setErr("Informe o pagador ou recebedor do PIX");
-      return;
-    }
-    if (documentType === "NOTA_FISCAL" && !cnpj.trim()) {
-      setErr("Informe o CNPJ/CPF da nota fiscal");
       return;
     }
     const notes = buildNotes();
