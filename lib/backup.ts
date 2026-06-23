@@ -178,7 +178,7 @@ export class BackupSystem {
         success: true,
         backupId,
         filePath,
-        size: serialized.length,
+        size: dataStr.length,
         metadata: backupPackage.metadata
       };
 
