@@ -15,7 +15,7 @@ export default function TermsScreen() {
   const router = useRouter();
 
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@finance-app.com');
+    Linking.openURL('mailto:jonathas.duarte78@gmail.com');
   };
 
   return (
@@ -33,7 +33,7 @@ export default function TermsScreen() {
         {/* Last Updated */}
         <View style={styles.updateCard}>
           <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.updateText}>Última atualização: 22 de junho de 2024</Text>
+          <Text style={styles.updateText}>Última atualização: 22 de junho de 2026</Text>
         </View>
 
         {/* Introduction */}
@@ -169,7 +169,7 @@ export default function TermsScreen() {
           </Text>
           <TouchableOpacity style={styles.contactButton} onPress={handleEmailSupport}>
             <Ionicons name="mail-outline" size={20} color={colors.primary} />
-            <Text style={styles.contactButtonText}>support@finance-app.com</Text>
+            <Text style={styles.contactButtonText}>jonathas.duarte78@gmail.com</Text>
           </TouchableOpacity>
         </View>
 

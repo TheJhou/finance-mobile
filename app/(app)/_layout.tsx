@@ -99,18 +99,12 @@ export default function AppLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="backup"
-        options={{
-          title: "Backup",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="cloud-upload-outline" size={size} color={color} />
-          ),
-        }}
-      />
       <Tabs.Screen name="account" options={{ href: null }} />
       <Tabs.Screen name="export-data" options={{ href: null }} />
       <Tabs.Screen name="billing" options={{ href: null }} />
+      <Tabs.Screen name="backup" options={{ href: null }} />
+      <Tabs.Screen name="privacy" options={{ href: null }} />
+      <Tabs.Screen name="terms" options={{ href: null }} />
     </Tabs>
   );
 }

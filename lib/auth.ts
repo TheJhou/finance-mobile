@@ -1,4 +1,5 @@
 import { BACKEND_URL } from "@/lib/config";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
 interface AuthTokens {
@@ -131,6 +132,11 @@ export async function logout(): Promise<void> {
   await removeStoredValue("jwt_refresh_token");
   await removeStoredValue("user_name");
   await removeStoredValue("user_email");
+  try {
+    await AsyncStorage.removeItem("ai_forecast_cache");
+  } catch {
+    // ignore
+  }
 }
 
 export async function getStoredUserName(): Promise<string | null> {

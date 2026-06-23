@@ -96,8 +96,16 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
     {
       icon: "save-outline",
       label: "Backup",
-      sublabel: "Em breve",
+      sublabel: "Gerencie seus backups",
+      route: "/backup",
       color: colors.warning,
+    },
+    {
+      icon: "shield-checkmark-outline",
+      label: "Política de Privacidade",
+      sublabel: "LGPD e direitos",
+      route: "/privacy",
+      color: colors.success,
     },
     {
       icon: "diamond-outline",

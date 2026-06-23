@@ -12,7 +12,7 @@ const withBankNotifications = (config) => {
 
     if (!app["service"]) app["service"] = [];
 
-    const serviceName = "com.thejhou.financeapp.BankNotificationService";
+    const serviceName = "expo.modules.banknotifications.BankNotificationListenerService";
     const alreadyAdded = app["service"].some(
       (s) => s.$?.["android:name"] === serviceName
     );

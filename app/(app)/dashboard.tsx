@@ -81,10 +81,18 @@ export default function DashboardScreen() {
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
 
+  const fetchingRef = useRef(false);
+  const lastFetchRef = useRef(0);
+
   const AI_FORECAST_KEY = "ai_forecast_cache";
 
   const loadAiForecast = useCallback(async (dashData: DashboardData) => {
     try {
+      const authed = await isAuthenticated();
+      if (!authed) {
+        setAiForecast(null);
+        return;
+      }
       const today = new Date().toISOString().slice(0, 10);
       const cached = await AsyncStorage.getItem(AI_FORECAST_KEY);
       if (cached) {
@@ -115,6 +123,11 @@ export default function DashboardScreen() {
   }, []);
 
   const fetchData = useCallback(async () => {
+    if (fetchingRef.current) return;
+    if (Date.now() - lastFetchRef.current < 5000 && !refreshing) return;
+    fetchingRef.current = true;
+    lastFetchRef.current = Date.now();
+
     try {
       // Load cached name immediately
       const cachedName = await getStoredUserName();
@@ -132,38 +145,50 @@ export default function DashboardScreen() {
       // AI Forecast (1x por dia, non-blocking)
       void loadAiForecast(dashRes);
 
-      // Backend calls (check token limit first)
+      // Backend calls serialized with delays to avoid rate limiting
       const currentTokenStatus = getTokenLimitStatus();
       setTokenLimitStatus(currentTokenStatus);
-      
+
       if (!currentTokenStatus.exceeded) {
-        void Promise.all([
-          getMe().then((u) => { if (u.name) setUserName(u.name); }).catch((err) => {
-            console.warn("[Dashboard] Falha ao buscar perfil:", err);
-            setTokenLimitStatus(getTokenLimitStatus());
-          }),
-          getGoals().then(setGoals).catch((err) => {
-            console.warn("[Dashboard] Falha ao buscar metas:", err);
-            setTokenLimitStatus(getTokenLimitStatus());
-          }),
-          getStreak().then(setStreak).catch((err) => {
-            console.warn("[Dashboard] Falha ao buscar streak:", err);
-            setTokenLimitStatus(getTokenLimitStatus());
-          }),
-          getDashboardScore().then(setScore).catch((err) => {
-            console.warn("[Dashboard] Falha ao buscar score:", err);
-            setTokenLimitStatus(getTokenLimitStatus());
-          }),
-          checkinStreak().catch((err) => {
-            console.warn("[Dashboard] Falha ao registrar streak:", err);
-            setTokenLimitStatus(getTokenLimitStatus());
-          }),
-        ]);
+        const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
+        try {
+          const u = await getMe();
+          if (u.name) setUserName(u.name);
+        } catch (err) {
+          console.warn("[Dashboard] Falha ao buscar perfil:", err);
+        }
+        await delay(300);
+        try {
+          const g = await getGoals();
+          setGoals(g);
+        } catch (err) {
+          console.warn("[Dashboard] Falha ao buscar metas:", err);
+        }
+        await delay(300);
+        try {
+          const s = await getStreak();
+          setStreak(s);
+        } catch (err) {
+          console.warn("[Dashboard] Falha ao buscar streak:", err);
+        }
+        await delay(300);
+        try {
+          const sc = await getDashboardScore();
+          setScore(sc);
+        } catch (err) {
+          console.warn("[Dashboard] Falha ao buscar score:", err);
+        }
+        await delay(300);
+        try {
+          await checkinStreak();
+        } catch (err) {
+          console.warn("[Dashboard] Falha ao registrar streak:", err);
+        }
       } else {
         console.warn("[Dashboard] Pulando chamadas backend: limite de tokens atingido");
       }
 
-      // Schedule notifications apenas uma vez por sessão (evita spam)
+      // Schedule notifications apenas uma vez por sessao (evita spam)
       if (!notificationsScheduled) {
         const comprometimento = dashRes.monthlyIncome > 0 ? Math.round((dashRes.monthlyExpense / dashRes.monthlyIncome) * 100) : 0;
         void Promise.all([
@@ -177,10 +202,11 @@ export default function DashboardScreen() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao carregar");
     } finally {
+      fetchingRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [refreshing, notificationsScheduled]);
 
   useFocusEffect(
     useCallback(() => {
