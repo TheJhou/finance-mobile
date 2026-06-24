@@ -55,11 +55,17 @@ export default function BackupScreen() {
         BackupScheduler.getStats(),
       ]);
 
-      // Load cloud backups silently
+      // Load cloud backups — only if authenticated
       try {
         setLoadingCloud(true);
-        const cloud = await BackupSystem.listCloudBackups();
-        setCloudBackups(cloud);
+        const { isAuthenticated } = await import("@/lib/auth");
+        const authed = await isAuthenticated();
+        if (authed) {
+          const cloud = await BackupSystem.listCloudBackups();
+          setCloudBackups(cloud);
+        } else {
+          setCloudBackups([]);
+        }
       } catch {
         setCloudBackups([]);
       } finally {
@@ -119,52 +125,53 @@ export default function BackupScreen() {
     setShowRestoreModal(true);
   };
 
-  const confirmRestore = async () => {
+  const confirmRestore = () => {
     if (!selectedBackup) return;
 
-    try {
-      setRestoring(true);
-      
-      Alert.alert(
-        "Confirmar Restauração",
-        "Isso substituirá todos os seus dados atuais. Deseja continuar?",
-        [
-          { text: "Cancelar", style: "cancel" },
-          {
-            text: "Restaurar",
-            style: "destructive",
-            onPress: async () => {
-              try {
-                const fileName = `backup_${selectedBackup.userId}_${selectedBackup.createdAt.replace(/[:.]/g, '-')}.json`;
-                const filePath = `${FileSystem.documentDirectory}backups/${fileName}`;
-                
-                const result = await BackupSystem.restoreBackup(filePath);
-                
-                if (result.success) {
-                  Alert.alert(
-                    "Sucesso",
-                    `Backup restaurado com sucesso!\n\nTabelas: ${result.restoredTables.join(", ")}\nRegistros: ${result.recordsRestored}`
-                  );
-                  await loadData();
-                } else {
-                  Alert.alert("Erro", result.error || "Falha ao restaurar backup");
-                }
-              } catch (error) {
-                console.error("[Backup] Error restoring backup:", error);
-                Alert.alert("Erro", "Falha ao restaurar backup");
-              } finally {
-                setRestoring(false);
-                setShowRestoreModal(false);
-                setSelectedBackup(null);
-              }
-            },
+    Alert.alert(
+      "Confirmar Restauração",
+      "Isso substituirá todos os seus dados atuais. Deseja continuar?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+          onPress: () => {
+            setRestoring(false);
+            setShowRestoreModal(false);
+            setSelectedBackup(null);
           },
-        ]
-      );
-    } catch (error) {
-      console.error("[Backup] Error in restore flow:", error);
-      setRestoring(false);
-    }
+        },
+        {
+          text: "Restaurar",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setRestoring(true);
+              const filePath = BackupSystem.getBackupFilePath(selectedBackup.userId, selectedBackup.createdAt);
+              
+              const result = await BackupSystem.restoreBackup(filePath);
+              
+              if (result.success) {
+                Alert.alert(
+                  "Sucesso",
+                  `Backup restaurado com sucesso!\n\nTabelas: ${result.restoredTables.join(", ")}\nRegistros: ${result.recordsRestored}`
+                );
+                await loadData();
+              } else {
+                Alert.alert("Erro", result.error || "Falha ao restaurar backup");
+              }
+            } catch (error) {
+              console.error("[Backup] Error restoring backup:", error);
+              Alert.alert("Erro", "Falha ao restaurar backup");
+            } finally {
+              setRestoring(false);
+              setShowRestoreModal(false);
+              setSelectedBackup(null);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleDeleteBackup = async (backup: BackupMetadata) => {
@@ -291,8 +298,7 @@ export default function BackupScreen() {
 
   const handleExportBackup = async (backup: BackupMetadata) => {
     try {
-      const fileName = `backup_${backup.userId}_${backup.createdAt.replace(/[:.]/g, '-')}.json`;
-      const filePath = `${FileSystem.documentDirectory}backups/${fileName}`;
+      const filePath = BackupSystem.getBackupFilePath(backup.userId, backup.createdAt);
       
       if (await FileSystem.getInfoAsync(filePath).then(info => info.exists)) {
         await Sharing.shareAsync(filePath, {

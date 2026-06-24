@@ -51,7 +51,13 @@ export interface CloudBackupEntry {
 
 export class BackupSystem {
   private static readonly BACKUP_VERSION = '1.0.0';
-  private static readonly BACKUP_DIR = `${FileSystem.documentDirectory}backups/`;
+  private static get BACKUP_DIR(): string {
+    const base = FileSystem.documentDirectory;
+    if (!base) {
+      throw new Error('FileSystem.documentDirectory is null — native module not ready');
+    }
+    return `${base}backups/`;
+  }
   private static readonly MAX_BACKUPS = 7; // Keep last 7 days
   private static readonly BACKUP_KEY = 'finance_backup_schedule';
 
@@ -131,7 +137,7 @@ export class BackupSystem {
         return {
           success: false,
           backupId,
-          error: 'Nenhum dado para backup'
+          error: 'Nenhum dado encontrado para backup. Crie uma transação ou categoria primeiro.'
         };
       }
 
@@ -174,6 +180,7 @@ export class BackupSystem {
       const filePath = `${this.BACKUP_DIR}${fileName}`;
       
       await FileSystem.writeAsStringAsync(filePath, JSON.stringify(backupPackage, null, 2));
+      console.log('[Backup] File written:', filePath);
       
       // Clean old backups
       await this.cleanOldBackups(userId);
@@ -255,13 +262,20 @@ export class BackupSystem {
           const records = backupPackage.data[tableName];
           if (!Array.isArray(records) || records.length === 0) continue;
 
+          // Get actual columns from DB schema to filter backup records
+          const dbColumns = await db.getAllAsync<{ name: string }>(
+            `PRAGMA table_info(${tableName})`
+          );
+          const validColumns = new Set(dbColumns.map((c) => c.name));
+
           for (const record of records) {
-            const columns = Object.keys(record);
-            const values = Object.values(record) as (string | number | null)[];
+            const recordCols = Object.keys(record).filter((c) => validColumns.has(c));
+            if (recordCols.length === 0) continue;
+            const values = recordCols.map((c) => record[c]) as (string | number | null)[];
             const placeholders = values.map(() => '?').join(',');
 
             await db.runAsync(
-              `INSERT INTO ${tableName} (${columns.join(',')}) VALUES (${placeholders})`,
+              `INSERT INTO ${tableName} (${recordCols.join(',')}) VALUES (${placeholders})`,
               values
             );
           }
@@ -300,6 +314,7 @@ export class BackupSystem {
       const userId = await this.getUserId();
       
       const files = await FileSystem.readDirectoryAsync(this.BACKUP_DIR);
+      console.log('[Backup] All files in dir:', files, 'filtering by userId:', userId);
       const backupFiles = files.filter(f => 
         f.startsWith(`backup_${userId}_`) && f.endsWith('.json')
       );
@@ -330,6 +345,12 @@ export class BackupSystem {
     }
   }
 
+  // Get backup file path from metadata fields
+  static getBackupFilePath(userId: string, createdAt: string): string {
+    const fileName = `backup_${userId}_${createdAt.replace(/[:.]/g, '-')}.json`;
+    return `${this.BACKUP_DIR}${fileName}`;
+  }
+
   // Delete backup
   static async deleteBackup(backupId: string): Promise<boolean> {
     try {
@@ -338,8 +359,7 @@ export class BackupSystem {
       
       if (!backup) return false;
 
-      const fileName = `backup_${backup.userId}_${backup.createdAt.replace(/[:.]/g, '-')}.json`;
-      const filePath = `${this.BACKUP_DIR}${fileName}`;
+      const filePath = this.getBackupFilePath(backup.userId, backup.createdAt);
       
       await FileSystem.deleteAsync(filePath);
       return true;
