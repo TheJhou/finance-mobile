@@ -47,3 +47,6 @@ backend-repo/
 backend-final/
 .env
 .env
+
+# EAS build logs
+build-output.json
