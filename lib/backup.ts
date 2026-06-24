@@ -136,6 +136,7 @@ export class BackupSystem {
       }
 
       // Create backup package
+      const deviceId = await this.getOrCreateDeviceId();
       const backupPackage = {
         metadata: {
           id: backupId,
@@ -147,9 +148,11 @@ export class BackupSystem {
           checksum: '', // Will be calculated
           tables: Object.keys(backupData),
           encrypted: false,
+          deviceId,
+          appVersion: '1.0.0',
           deviceInfo: {
             platform: 'mobile',
-            osVersion: 'unknown', // Could get from expo-constants
+            osVersion: 'unknown',
             appVersion: '1.0.0'
           }
         },
