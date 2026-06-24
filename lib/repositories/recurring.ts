@@ -209,6 +209,52 @@ function advanceDate(date: string, frequency: Frequency): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+export async function postRecurringTransaction(
+  id: string,
+  date?: string
+): Promise<void> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<RecurringRow>(
+    `${BASE_SELECT} WHERE r.id = ?`,
+    [id]
+  );
+  if (!row) throw new Error("Recorrência não encontrada");
+  if (!row.is_active) throw new Error("Recorrência inativa");
+
+  const txDate = date ?? formatDateLocal(new Date());
+  const txId = generateId();
+
+  await db.runAsync(
+    `INSERT INTO transactions
+      (id, description, amount, type, status, payment_method, date, notes, category_id)
+     VALUES (?, ?, ?, ?, 'PAID', ?, ?, ?, ?)`,
+    [
+      txId,
+      row.description,
+      row.amount,
+      row.type,
+      row.payment_method,
+      txDate,
+      `Lançada manualmente (recorrente)`,
+      row.category_id,
+    ]
+  );
+
+  const nextDue = advanceDate(txDate, row.frequency as Frequency);
+
+  if (row.end_date && nextDue > row.end_date) {
+    await db.runAsync(
+      "UPDATE recurring_transactions SET is_active = 0, next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
+      [nextDue, id]
+    );
+  } else {
+    await db.runAsync(
+      "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
+      [nextDue, id]
+    );
+  }
+}
+
 export async function processRecurringDue(): Promise<number> {
   const db = await getDb();
   const today = formatDateLocal(new Date());

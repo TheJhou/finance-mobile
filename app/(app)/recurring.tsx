@@ -2,11 +2,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-  createRecurring,
-  deleteRecurring,
-  listRecurring,
-  toggleRecurringActive,
-  updateRecurring,
+    createRecurring,
+    deleteRecurring,
+    listRecurring,
+    toggleRecurringActive,
+    updateRecurring
 } from "@/lib/repositories/recurring";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, Frequency, RecurringTransaction, TransactionType } from "@/lib/types";
@@ -15,18 +15,18 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
+    ActivityIndicator,
+    Alert,
+    FlatList,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -48,9 +48,14 @@ export default function RecurringScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<RecurringTransaction | null>(null);
+  const [showPostModal, setShowPostModal] = useState(false);
+  const [postingItem, setPostingItem] = useState<RecurringTransaction | null>(null);
+  const [postDate, setPostDate] = useState(toDateInputValue(new Date()));
+  const [posting, setPosting] = useState(false);
 
   const fetchItems = useCallback(async () => {
     try {
+      await processRecurringDue();
       const res = await listRecurring();
       setItems(res);
       setError(null);
@@ -105,6 +110,32 @@ export default function RecurringScreen() {
       fetchItems();
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Falha");
+    }
+  };
+
+  const handlePost = (item: RecurringTransaction) => {
+    setPostingItem(item);
+    setPostDate(toDateInputValue(new Date()));
+    setShowPostModal(true);
+  };
+
+  const confirmPost = async () => {
+    if (!postingItem) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(postDate)) {
+      Alert.alert("Data inválida", "Use o formato AAAA-MM-DD");
+      return;
+    }
+    setPosting(true);
+    try {
+      await postRecurringTransaction(postingItem.id, postDate);
+      setShowPostModal(false);
+      setPostingItem(null);
+      Alert.alert("Sucesso", `"${postingItem.description}" lançada como transação em ${postDate}.`);
+      fetchItems();
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao lançar");
+    } finally {
+      setPosting(false);
     }
   };
 
@@ -192,11 +223,20 @@ export default function RecurringScreen() {
                   {item.isActive ? "Ativa" : "Inativa"}
                 </Text>
                 <View style={styles.actionButtons}>
+                  {item.isActive && (
+                    <Pressable
+                      style={styles.actionButton}
+                      onPress={() => handlePost(item)}
+                      hitSlop={10}
+                    >
+                      <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
+                    </Pressable>
+                  )}
                   <Pressable
                     style={styles.actionButton}
                     onPress={() => handleToggle(item)}
                     hitSlop={10}
-                  >
+                    >
                     <Ionicons
                       name={item.isActive ? "pause-outline" : "play-outline"}
                       size={18}
@@ -250,6 +290,48 @@ export default function RecurringScreen() {
           fetchItems();
         }}
       />
+
+      {/* Modal: Lançar recorrência em transação */}
+      <Modal visible={showPostModal} transparent animationType="slide" onRequestClose={() => setShowPostModal(false)}>
+        <Pressable style={styles.modalOverlay} onPress={() => setShowPostModal(false)}>
+          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
+            <Text style={styles.modalTitle}>Lançar transação</Text>
+            {postingItem && (
+              <Text style={styles.modalSubtitle}>
+                {postingItem.description} · {formatCurrency(postingItem.amount)}
+              </Text>
+            )}
+            <Text style={styles.inputLabel}>Data do lançamento (AAAA-MM-DD)</Text>
+            <TextInput
+              style={styles.textInput}
+              placeholder="2025-06-24"
+              placeholderTextColor={colors.textMuted}
+              value={postDate}
+              onChangeText={setPostDate}
+              keyboardType="numeric"
+            />
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnSecondary]}
+                onPress={() => setShowPostModal(false)}
+              >
+                <Text style={styles.modalBtnTextSecondary}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalBtn, styles.modalBtnPrimary, posting && { opacity: 0.6 }]}
+                onPress={confirmPost}
+                disabled={posting}
+              >
+                {posting ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.modalBtnTextPrimary}>Lançar</Text>
+                )}
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -598,5 +680,72 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 3 },
     elevation: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  modalSheet: {
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing["2xl"],
+    gap: spacing.md,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  inputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textSecondary,
+    marginBottom: -spacing.xs,
+    marginTop: 4,
+  },
+  textInput: {
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
+    color: colors.textPrimary,
+    fontSize: 14,
+  },
+  modalActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: 4,
+  },
+  modalBtn: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalBtnSecondary: {
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  modalBtnPrimary: {
+    backgroundColor: colors.primary,
+  },
+  modalBtnTextSecondary: {
+    color: colors.textSecondary,
+    fontWeight: "600",
+    fontSize: 15,
+  },
+  modalBtnTextPrimary: {
+    color: "#fff",
+    fontWeight: "700",
+    fontSize: 15,
   },
 });

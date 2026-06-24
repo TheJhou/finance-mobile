@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { processRecurringDue } from "@/lib/repositories/recurring";
 import { formatDateLocal } from "@/lib/utils";
 
 export type DrePeriod = "month" | "quarter" | "semester" | "year" | "custom";
@@ -89,6 +90,7 @@ export function buildPeriodRange(type: DrePeriod, customFrom?: string, customTo?
 // ─── Main query ───────────────────────────────────────────────────────────────
 
 export async function getDreData(period: DrePeriodRange): Promise<DreData> {
+  await processRecurringDue();
   const db = await getDb();
   const { from, to } = period;
 
