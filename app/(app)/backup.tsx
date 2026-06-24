@@ -98,11 +98,11 @@ export default function BackupScreen() {
       const result = await BackupSystem.createBackup();
       
       if (result.success) {
+        await loadData();
         Alert.alert(
           "Sucesso",
-          `Backup criado com sucesso!\n\nID: ${result.backupId}\nTamanho: ${formatFileSize(result.size || 0)}`
+          `Backup criado com sucesso!\n\nTamanho: ${formatFileSize(result.size || 0)}`
         );
-        await loadData();
       } else {
         Alert.alert("Erro", result.error || "Falha ao criar backup");
       }
@@ -198,20 +198,35 @@ export default function BackupScreen() {
   const handleCloudBackup = async () => {
     try {
       setUploadingCloud(true);
+
+      const { isAuthenticated } = await import("@/lib/auth");
+      const authed = await isAuthenticated();
+      if (!authed) {
+        Alert.alert(
+          "Login necessário",
+          "Faça login na aba Importar para usar o backup na nuvem."
+        );
+        return;
+      }
+
       const { localResult, cloudKey, cloudError } = await BackupSystem.createAndUploadBackup();
 
       if (!localResult.success) {
         Alert.alert("Erro", localResult.error || "Falha ao criar backup");
         return;
       }
-      if (cloudError) {
-        Alert.alert("Backup local criado", `Backup salvo localmente, mas o envio para a nuvem falhou:\n${cloudError}`);
-      } else {
-        Alert.alert("Sucesso", `Backup enviado para a nuvem!\n\nChave: ${cloudKey}`);
-      }
       await loadData();
+      if (cloudError) {
+        Alert.alert(
+          "Backup local criado",
+          `Backup salvo localmente, mas o envio para a nuvem falhou:\n\n${cloudError}`
+        );
+      } else {
+        Alert.alert("Sucesso", `Backup enviado para a nuvem com sucesso!`);
+      }
     } catch (error) {
-      Alert.alert("Erro", "Falha ao fazer backup na nuvem");
+      console.error("[Backup] Cloud error:", error);
+      Alert.alert("Erro", error instanceof Error ? error.message : "Falha ao fazer backup na nuvem");
     } finally {
       setUploadingCloud(false);
     }

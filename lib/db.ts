@@ -102,8 +102,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
       encrypted INTEGER NOT NULL DEFAULT 0,
       device_info TEXT, -- JSON object
       restored_at TEXT,
-      restore_user_id TEXT,
-      FOREIGN KEY (restore_user_id) REFERENCES users(id)
+      restore_user_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS backup_schedule (
@@ -114,8 +113,7 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
       is_active INTEGER NOT NULL DEFAULT 1,
       backup_time TEXT NOT NULL DEFAULT '02:00', -- HH:MM format
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id)
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     -- Multi-user support tables
