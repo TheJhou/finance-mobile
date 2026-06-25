@@ -20,6 +20,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.financeapp",
       "versionCode": 14,
+      "privacyPolicyUrl": "https://finance-app.com/privacy",
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO",
@@ -58,15 +59,8 @@
           "sounds": []
         }
       ],
-      "./modules/bank-notifications/app.plugin",
-      "react-native-iap"
+      "./modules/bank-notifications/app.plugin"
     ],
-    "content": {
-      "rating": "Everyone",
-      "category": "Finance"
-    },
-    "privacy": "https://finance-app.com/privacy",
-    "terms": "https://finance-app.com/terms",
     "experiments": {
       "typedRoutes": true
     },
