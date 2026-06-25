@@ -50,3 +50,6 @@ backend-final/
 
 # EAS build logs
 build-output.json
+
+# legal pages (separate repo)
+finance-app-legal/

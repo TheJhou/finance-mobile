@@ -3,6 +3,7 @@ import type { BankNotificationsModuleEvents } from "./BankNotifications.types";
 
 declare class BankNotificationsModule extends NativeModule<BankNotificationsModuleEvents> {
   isPermissionGranted(): boolean;
+  isListenerConnected(): boolean;
   openPermissionSettings(): void;
 }
 

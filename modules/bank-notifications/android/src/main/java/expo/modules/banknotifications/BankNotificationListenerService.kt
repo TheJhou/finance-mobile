@@ -2,8 +2,22 @@ package expo.modules.banknotifications
 
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import android.util.Log
 
 class BankNotificationListenerService : NotificationListenerService() {
+
+  override fun onListenerConnected() {
+    Log.i(TAG, "Notification listener connected")
+    isConnected = true
+    connectionCallback?.invoke(true)
+  }
+
+  override fun onListenerDisconnected() {
+    Log.w(TAG, "Notification listener disconnected")
+    isConnected = false
+    connectionCallback?.invoke(false)
+  }
+
   override fun onNotificationPosted(sbn: StatusBarNotification) {
     val cb = listener ?: return
     val extras = sbn.notification.extras
@@ -22,13 +36,21 @@ class BankNotificationListenerService : NotificationListenerService() {
     )
     try {
       cb.invoke(payload)
-    } catch (_: Throwable) {
-      // Silently ignore errors from JS-side handler.
+    } catch (e: Throwable) {
+      Log.e(TAG, "Error dispatching notification to JS", e)
     }
   }
 
   companion object {
+    private const val TAG = "BankNotifService"
+
+    @Volatile
+    var isConnected: Boolean = false
+
     @Volatile
     var listener: ((Map<String, Any?>) -> Unit)? = null
+
+    @Volatile
+    var connectionCallback: ((Boolean) -> Unit)? = null
   }
 }

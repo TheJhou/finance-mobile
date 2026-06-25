@@ -9,4 +9,5 @@ export interface BankNotificationEvent {
 
 export type BankNotificationsModuleEvents = {
   onNotification: (event: BankNotificationEvent) => void;
+  onConnectionChange: (event: { connected: boolean }) => void;
 };

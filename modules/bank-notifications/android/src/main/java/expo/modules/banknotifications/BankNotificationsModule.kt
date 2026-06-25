@@ -10,7 +10,7 @@ class BankNotificationsModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("BankNotifications")
 
-    Events("onNotification")
+    Events("onNotification", "onConnectionChange")
 
     Function("isPermissionGranted") {
       val context = appContext.reactContext ?: return@Function false
@@ -21,6 +21,10 @@ class BankNotificationsModule : Module() {
       val componentName =
         "${context.packageName}/${BankNotificationListenerService::class.java.name}"
       enabledListeners.split(":").any { it == componentName }
+    }
+
+    Function("isListenerConnected") {
+      BankNotificationListenerService.isConnected
     }
 
     Function("openPermissionSettings") {
@@ -37,10 +41,14 @@ class BankNotificationsModule : Module() {
       BankNotificationListenerService.listener = { payload ->
         weakModule.get()?.sendEvent("onNotification", payload)
       }
+      BankNotificationListenerService.connectionCallback = { connected ->
+        weakModule.get()?.sendEvent("onConnectionChange", mapOf("connected" to connected))
+      }
     }
 
     OnStopObserving("onNotification") {
       BankNotificationListenerService.listener = null
+      BankNotificationListenerService.connectionCallback = null
     }
   }
 }

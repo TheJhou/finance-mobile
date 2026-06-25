@@ -26,8 +26,7 @@
         "com.android.vending.BILLING",
         "android.permission.POST_NOTIFICATIONS",
         "android.permission.SCHEDULE_EXACT_ALARM",
-        "android.permission.USE_EXACT_ALARM",
-        "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
+        "android.permission.USE_EXACT_ALARM"
       ]
     },
     "platforms": [
@@ -58,7 +57,9 @@
           "color": "#6366f1",
           "sounds": []
         }
-      ]
+      ],
+      "./modules/bank-notifications/app.plugin",
+      "react-native-iap"
     ],
     "content": {
       "rating": "Everyone",
