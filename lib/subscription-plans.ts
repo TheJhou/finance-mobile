@@ -33,7 +33,7 @@ export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
     price: 0,
     priceDisplay: 'R$ 0',
     period: 'para sempre',
-    tokenLimit: 1500,
+    tokenLimit: Number(process.env.EXPO_PUBLIC_FREE_TOKEN_LIMIT ?? 100000),
     color: '#6b7280',
     features: [
       { label: 'Transações ilimitadas', free: true, pro: true },
@@ -58,7 +58,7 @@ export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
     price: 14.99,
     priceDisplay: 'R$ 14,99',
     period: 'por mês',
-    tokenLimit: 30000,
+    tokenLimit: Number(process.env.EXPO_PUBLIC_PRO_TOKEN_LIMIT ?? 30000000),
     color: '#f472b6',
     badge: 'PRO',
     popular: true,
@@ -115,10 +115,10 @@ O Finance App é a solução completa para controle financeiro pessoal com intel
 • Relatórios financeiros completos
 • Exportação em CSV
 • Backup automático
-• 1.500 tokens de IA por mês
+• ${PLANS.FREE.tokenLimit.toLocaleString('pt-BR')} tokens de IA por mês
 
 💎 **FINANCE PRO - R$ 14,99/mês**
-• 30.000 tokens de IA por mês (uso intensivo)
+• ${PLANS.PRO.tokenLimit.toLocaleString('pt-BR')} tokens de IA por mês (uso intensivo)
 • Importação por foto, texto e áudio ilimitados
 • OCR de documentos (boleto, nota fiscal, etc.)
 • Exportação em Excel e PDF
