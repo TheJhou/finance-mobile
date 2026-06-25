@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
-import { isAuthenticated, login, logout, register } from "@/lib/auth";
-// Reativar IAP quando Google Play Billing estiver configurado
-// import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
+import { authFetch, isAuthenticated, login, logout, register } from "@/lib/auth";
+import { BACKEND_URL } from "@/lib/config";
+import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -9,7 +9,7 @@ import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit"
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -38,6 +38,7 @@ export default function PlanScreen() {
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
+  const [purchasing, setPurchasing] = useState(false);
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -115,8 +116,60 @@ export default function PlanScreen() {
     setStatus(null);
   };
 
+  useEffect(() => {
+    initIAP();
+    const listener = startPurchaseListener(
+      async (purchase) => {
+        try {
+          setPurchasing(true);
+          const productId = purchase.productId ?? "finance_pro_monthly";
+          const purchaseToken = purchase.purchaseToken ?? "";
+          if (!purchaseToken) {
+            console.warn("[IAP] Purchase without token");
+            return;
+          }
+          const response = await authFetch(`${BACKEND_URL}/subscription/purchase`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ productId, purchaseToken }),
+          });
+          if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            Alert.alert("Erro", err.error || err.message || "Falha ao ativar assinatura");
+            return;
+          }
+          Alert.alert("Sucesso!", "Assinatura PRO ativada com sucesso!");
+          fetchStatus();
+        } catch (err) {
+          Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao ativar assinatura");
+        } finally {
+          setPurchasing(false);
+        }
+      },
+      (error) => {
+        setPurchasing(false);
+        if (!error.toLowerCase().includes("cancel")) {
+          Alert.alert("Erro na compra", error);
+        }
+      }
+    );
+    return () => {
+      listener.remove();
+      closeIAP();
+    };
+  }, []);
+
   const handleUpgrade = async () => {
-    Alert.alert("Em breve", "Assinaturas serão disponibilizadas em breve pelo Google Play.");
+    try {
+      setPurchasing(true);
+      await requestProSubscription();
+    } catch (err) {
+      setPurchasing(false);
+      const msg = err instanceof Error ? err.message : "Erro ao iniciar compra";
+      if (!msg.toLowerCase().includes("cancel") && !msg.toLowerCase().includes("user")) {
+        Alert.alert("Erro", msg);
+      }
+    }
   };
 
   if (loading) {
@@ -222,7 +275,7 @@ export default function PlanScreen() {
                 <Text style={styles.cardText}>
                   {getTokenDisplayText(PLANS.PRO.tokenLimit)} tokens/mês • IA ilimitada
                 </Text>
-                <Button title="Assinar agora" onPress={handleUpgrade} />
+                <Button title="Assinar agora" onPress={handleUpgrade} loading={purchasing} />
                 <Text style={styles.cardTextSmall}>
                   {PLAY_STORE_TEXTS.autoRenewing}
                 </Text>

@@ -1,17 +1,26 @@
 import { Platform } from "react-native";
-import * as RNIap from "react-native-iap";
+import {
+    type EventSubscription,
+    type Purchase,
+    endConnection,
+    fetchProducts,
+    getAvailablePurchases,
+    initConnection,
+    purchaseErrorListener,
+    purchaseUpdatedListener,
+    requestPurchase,
+} from "react-native-iap";
 
 const PRO_PRODUCT_ID = "finance_pro_monthly";
 
 let initialized = false;
-let purchaseListener: { remove: () => void } | null = null;
 
 export async function initIAP(): Promise<void> {
   if (initialized) return;
   if (Platform.OS !== "android") return;
 
   try {
-    await RNIap.initConnection();
+    await initConnection();
     initialized = true;
     console.log("[IAP] Connection initialized");
   } catch (err) {
@@ -22,11 +31,7 @@ export async function initIAP(): Promise<void> {
 export async function closeIAP(): Promise<void> {
   if (!initialized) return;
   try {
-    if (purchaseListener) {
-      purchaseListener.remove();
-      purchaseListener = null;
-    }
-    await RNIap.endConnection();
+    await endConnection();
     initialized = false;
     console.log("[IAP] Connection closed");
   } catch (err) {
@@ -34,33 +39,24 @@ export async function closeIAP(): Promise<void> {
   }
 }
 
-export function getAvailableSubscriptions(): RNIap.SubscriptionSkus[] {
-  return [];
-}
-
 export function startPurchaseListener(
-  onSuccess: (purchase: RNIap.SubscriptionPurchase) => void,
+  onSuccess: (purchase: Purchase) => void,
   onError: (error: string) => void
-): { remove: () => void } {
-  if (Platform.OS !== "android") {
-    return { remove: () => {} };
-  }
-
-  purchaseListener = RNIap.purchaseUpdatedListener((purchase) => {
-    console.log("[IAP] Purchase updated:", purchase);
-    onSuccess(purchase as RNIap.SubscriptionPurchase);
+): EventSubscription {
+  const sub = purchaseUpdatedListener((purchase: Purchase) => {
+    console.log("[IAP] Purchase updated:", purchase.productId);
+    onSuccess(purchase);
   });
 
-  const errorListener = RNIap.purchaseErrorListener((error) => {
-    console.warn("[IAP] Purchase error:", error);
+  const errSub = purchaseErrorListener((error) => {
+    console.warn("[IAP] Purchase error:", error.message);
     onError(error.message || "Erro na compra");
   });
 
   return {
     remove: () => {
-      purchaseListener?.remove();
-      errorListener.remove();
-      purchaseListener = null;
+      sub.remove();
+      errSub.remove();
     },
   };
 }
@@ -73,22 +69,29 @@ export async function requestProSubscription(): Promise<void> {
   await initIAP();
 
   try {
-    const subscriptions = await RNIap.getSubscriptions({ skus: [PRO_PRODUCT_ID] });
-    if (subscriptions.length === 0) {
+    const result = await fetchProducts({ skus: [PRO_PRODUCT_ID], type: "subs" });
+    if (!result || (Array.isArray(result) && result.length === 0)) {
       throw new Error("Produto de assinatura não encontrado na Google Play Store.");
     }
 
-    await RNIap.requestSubscription({ sku: PRO_PRODUCT_ID });
+    await requestPurchase({
+      request: {
+        google: {
+          skus: [PRO_PRODUCT_ID],
+        },
+      },
+      type: "subs",
+    });
   } catch (err) {
     console.error("[IAP] requestProSubscription error:", err);
     throw err instanceof Error ? err : new Error("Erro ao iniciar compra");
   }
 }
 
-export async function getActivePurchases(): Promise<RNIap.SubscriptionPurchase[]> {
+export async function getActivePurchases(): Promise<Purchase[]> {
   if (Platform.OS !== "android" || !initialized) return [];
   try {
-    return await RNIap.getAvailablePurchases();
+    return await getAvailablePurchases();
   } catch {
     return [];
   }
