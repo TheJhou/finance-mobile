@@ -75,7 +75,9 @@ export function clearProCache(): void {
 export async function checkProFeature(featureName: string): Promise<boolean> {
   const isPro = await isProUser();
   if (!isPro) {
+    console.info(`[Subscription] Feature "${featureName}" bloqueada - usuário FREE`);
     return false;
   }
+  console.info(`[Subscription] Feature "${featureName}" liberada - usuário PRO`);
   return true;
 }

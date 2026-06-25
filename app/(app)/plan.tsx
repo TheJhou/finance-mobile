@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button";
 import { authFetch, isAuthenticated, login, logout, register } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
-import { getSubscriptionStatus } from "@/lib/subscription";
+import { clearProCache, getSubscriptionStatus } from "@/lib/subscription";
 import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
 import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit";
@@ -41,6 +41,7 @@ export default function PlanScreen() {
   const [purchasing, setPurchasing] = useState(false);
 
   const fetchStatus = useCallback(async () => {
+    clearProCache();
     try {
       const authed = await isAuthenticated();
       setLoggedIn(authed);
@@ -102,6 +103,7 @@ export default function PlanScreen() {
       setAuthName("");
       setAuthEmail("");
       setAuthPassword("");
+      clearProCache();
       fetchStatus();
     } catch (err) {
       Alert.alert("Erro", err instanceof Error ? err.message : "Falha na autenticação");
@@ -112,6 +114,7 @@ export default function PlanScreen() {
 
   const handleLogout = async () => {
     await logout();
+    clearProCache();
     setLoggedIn(false);
     setStatus(null);
   };
@@ -139,6 +142,7 @@ export default function PlanScreen() {
             return;
           }
           Alert.alert("Sucesso!", "Assinatura PRO ativada com sucesso!");
+          clearProCache();
           fetchStatus();
         } catch (err) {
           Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao ativar assinatura");

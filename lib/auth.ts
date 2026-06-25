@@ -137,6 +137,13 @@ export async function logout(): Promise<void> {
   } catch {
     // ignore
   }
+  // Clear pro cache so next login fetches fresh status
+  try {
+    const { clearProCache } = await import("@/lib/subscription");
+    clearProCache();
+  } catch {
+    // ignore if module not available
+  }
 }
 
 export async function getStoredUserName(): Promise<string | null> {
