@@ -42,15 +42,40 @@ export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
       plan: {
         code: "FREE",
         name: "Grátis",
-        tokenLimit: 50,
+        tokenLimit: Number(process.env.EXPO_PUBLIC_FREE_TOKEN_LIMIT ?? 100000),
       },
       usage: {
         used: 0,
-        limit: 50,
-        remaining: 50,
+        limit: Number(process.env.EXPO_PUBLIC_FREE_TOKEN_LIMIT ?? 100000),
+        remaining: Number(process.env.EXPO_PUBLIC_FREE_TOKEN_LIMIT ?? 100000),
         period: "monthly",
         resetsAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
       },
     };
   }
+}
+
+let cachedIsPro: boolean | null = null;
+
+export async function isProUser(): Promise<boolean> {
+  if (cachedIsPro !== null) return cachedIsPro;
+  try {
+    const status = await getSubscriptionStatus();
+    cachedIsPro = status.plan.code === "PRO";
+    return cachedIsPro;
+  } catch {
+    return false;
+  }
+}
+
+export function clearProCache(): void {
+  cachedIsPro = null;
+}
+
+export async function checkProFeature(featureName: string): Promise<boolean> {
+  const isPro = await isProUser();
+  if (!isPro) {
+    return false;
+  }
+  return true;
 }

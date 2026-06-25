@@ -4,6 +4,7 @@ import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backe
 import { getPendingNotifications, removePendingNotification, type PendingNotification } from "@/lib/pending-notifications";
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
+import { checkProFeature } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, DocumentType, TransactionStatus } from "@/lib/types";
 import { formatCurrency, normalizePaymentMethod, toDateInputValue } from "@/lib/utils";
@@ -45,6 +46,7 @@ function normalizeStatus(value: unknown, fallback: TransactionStatus): Transacti
 
 export default function NotificationsScreen() {
   const [granted, setGranted] = useState(false);
+  const [connected, setConnected] = useState(false);
   const [pendingNotifications, setPendingNotifications] = useState<PendingNotification[]>([]);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -80,18 +82,22 @@ export default function NotificationsScreen() {
     try {
       if (!BankNotifications) {
         setGranted(false);
+        setConnected(false);
         return;
       }
       
       // Add a small delay to ensure the permission system is ready
       setTimeout(() => {
         const isGranted = BankNotifications?.isPermissionGranted() ?? false;
-        console.log("[Notifications] Permission status:", isGranted);
+        const isConnected = BankNotifications?.isListenerConnected() ?? false;
+        console.log("[Notifications] Permission:", isGranted, "Connected:", isConnected);
         setGranted(isGranted);
+        setConnected(isConnected);
       }, 100);
     } catch (error) {
       console.warn("[Notifications] Error checking permission:", error);
       setGranted(false);
+      setConnected(false);
     }
   }, []);
 
@@ -157,6 +163,17 @@ export default function NotificationsScreen() {
     });
     return () => sub.remove();
   }, [checkPermission]);
+
+  useEffect(() => {
+    if (!moduleAvailable) return;
+    const interval = setInterval(() => {
+      if (BankNotifications) {
+        const isConnected = BankNotifications.isListenerConnected();
+        setConnected(isConnected);
+      }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [moduleAvailable]);
 
   useEffect(() => {
     recordingRef.current = recording;
@@ -331,6 +348,11 @@ export default function NotificationsScreen() {
     }
     if (!selectedCategoryId) {
       showToast("warning", "Configure uma categoria padrão primeiro.");
+      return;
+    }
+    const isPro = await checkProFeature("OCR");
+    if (!isPro) {
+      showToast("warning", "OCR de documentos é exclusivo do plano Pro. Faça upgrade na aba Meu Plano.");
       return;
     }
     try {
@@ -551,6 +573,22 @@ export default function NotificationsScreen() {
             </Pressable>
           )}
         </View>
+
+        {granted && !connected && moduleAvailable && (
+          <View style={[styles.statusCard, { borderColor: colors.danger }]}>
+            <Ionicons name="alert-circle" size={20} color={colors.danger} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.statusTitle}>Listener desconectado</Text>
+              <Text style={styles.statusText}>
+                O serviço de captura foi interrompido pelo Android. Reinicie o app
+                ou desative e reative o acesso nas configurações.
+              </Text>
+            </View>
+            <Pressable style={styles.statusBtn} onPress={openSettings}>
+              <Text style={styles.statusBtnText}>Config</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Import methods */}
         <Text style={styles.sectionTitle}>Métodos de importação</Text>

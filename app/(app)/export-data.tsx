@@ -1,17 +1,18 @@
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
+import { checkProFeature } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -76,6 +77,18 @@ export default function ExportDataScreen() {
   const handleExport = async () => {
     setExporting(true);
     try {
+      if (selectedFormat !== "csv") {
+        const isPro = await checkProFeature(selectedFormat.toUpperCase());
+        if (!isPro) {
+          Alert.alert(
+            "Recurso PRO",
+            `Exportar em ${selectedFormat.toUpperCase()} é exclusivo do plano Finance Pro.\n\nFaça upgrade na aba "Meu Plano" para desbloquear.`,
+            [{ text: "OK" }]
+          );
+          return;
+        }
+      }
+
       const periodRange = buildPeriodRange(selectedPeriod);
       const data = await getDreData(periodRange);
 
