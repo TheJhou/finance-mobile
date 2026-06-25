@@ -377,6 +377,10 @@ class InMemoryDatabase {
     }
   }
 
+  async closeAsync(): Promise<void> {
+    // no-op for in-memory mock
+  }
+
   async execAsync(sql: string): Promise<void> {
     const createMatch = sql.match(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)/i);
     if (createMatch) this.getTable(createMatch[1]);
@@ -396,11 +400,18 @@ class InMemoryDatabase {
 
 let mockDb: InMemoryDatabase | null = null;
 
-export function openDatabaseAsync(_name: string): Promise<InMemoryDatabase> {
+export function openDatabaseAsync(
+  _name: string,
+  _options?: { useNewConnection?: boolean; onDatabaseChange?: boolean; key?: string }
+): Promise<InMemoryDatabase> {
   if (!mockDb) mockDb = new InMemoryDatabase();
   return Promise.resolve(mockDb);
 }
 
 export function resetMockDatabase(): void {
   mockDb = new InMemoryDatabase();
+}
+
+export async function deleteDatabaseAsync(_name: string): Promise<void> {
+  // no-op for in-memory mock
 }

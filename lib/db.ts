@@ -1,11 +1,102 @@
+import * as Crypto from "expo-crypto";
+import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
+import { Platform } from "react-native";
+
+const DB_NAME = "finance.db";
+const DB_KEY_SECURE_STORE = "db_encryption_key_v1";
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
+
+/**
+ * Gera ou recupera a chave de criptografia do banco do SecureStore.
+ * A chave é gerada uma única vez e armazenada de forma segura no keystore/keychain
+ * do dispositivo, protegida contra acesso por malware mesmo em dispositivos com root.
+ */
+async function getOrCreateDbKey(): Promise<string> {
+  const existing = await SecureStore.getItemAsync(DB_KEY_SECURE_STORE);
+  if (existing) return existing;
+
+  const randomBytes = await Crypto.getRandomBytesAsync(32);
+  const hexKey = Array.from(randomBytes)
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  await SecureStore.setItemAsync(DB_KEY_SECURE_STORE, hexKey);
+  return hexKey;
+}
+
+/**
+ * Verifica se um banco plaintext já existe tentando abri-lo sem PRAGMA key.
+ * Se conseguir ler a primeira linha, é plaintext e precisa de migração.
+ */
+async function isPlaintextDatabase(): Promise<boolean> {
+  try {
+    const db = await SQLite.openDatabaseAsync(DB_NAME, { useNewConnection: true });
+    try {
+      await db.getFirstAsync<{ c: number }>("SELECT 1 as c");
+      return true;
+    } catch {
+      return false;
+    } finally {
+      await db.closeAsync();
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Migra um banco plaintext para criptografado usando SQLCipher:
+ * 1. Abre o banco antigo sem chave (plaintext)
+ * 2. Usa sqlcipher_export() para copiar tudo para um novo banco criptografado
+ * 3. Substitui o arquivo antigo pelo novo
+ */
+async function migrateToEncrypted(encryptionKey: string): Promise<SQLite.SQLiteDatabase> {
+  const tempDbName = "finance_encrypted_tmp";
+
+  const plainDb = await SQLite.openDatabaseAsync(DB_NAME, { useNewConnection: true });
+  try {
+    await plainDb.execAsync(`ATTACH DATABASE '${tempDbName}' AS encrypted KEY '${encryptionKey}'`);
+    await plainDb.execAsync("SELECT sqlcipher_export('encrypted')");
+    await plainDb.execAsync("DETACH DATABASE encrypted");
+  } finally {
+    await plainDb.closeAsync();
+  }
+
+  await SQLite.deleteDatabaseAsync(DB_NAME);
+
+  const encryptedDb = await SQLite.openDatabaseAsync(tempDbName, { useNewConnection: true });
+  await encryptedDb.closeAsync();
+
+  const finalDb = await SQLite.openDatabaseAsync(DB_NAME);
+  await finalDb.execAsync(`PRAGMA key = '${encryptionKey}'`);
+  return finalDb;
+}
 
 export function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = (async () => {
-      const db = await SQLite.openDatabaseAsync("finance.db");
+      const encryptionKey = await getOrCreateDbKey();
+
+      if (Platform.OS === "web") {
+        const db = await SQLite.openDatabaseAsync(DB_NAME);
+        await migrate(db);
+        return db;
+      }
+
+      const isPlaintext = await isPlaintextDatabase();
+      let db: SQLite.SQLiteDatabase;
+
+      if (isPlaintext) {
+        console.log("[DB] Migrating plaintext database to SQLCipher encryption...");
+        db = await migrateToEncrypted(encryptionKey);
+        console.log("[DB] Migration to encrypted database complete.");
+      } else {
+        db = await SQLite.openDatabaseAsync(DB_NAME);
+        await db.execAsync(`PRAGMA key = '${encryptionKey}'`);
+      }
+
       await migrate(db);
       return db;
     })();
