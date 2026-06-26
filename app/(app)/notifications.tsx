@@ -439,8 +439,8 @@ export default function NotificationsScreen() {
       }
 
       await setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
+        allowsRecording: true,
+        playsInSilentMode: true,
       });
       await audioRecorder.prepareToRecordAsync();
       audioRecorder.record();

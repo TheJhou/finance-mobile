@@ -81,9 +81,9 @@ async function isPlaintextDatabase(): Promise<boolean> {
  */
 async function migrateToEncrypted(encryptionKey: string): Promise<SQLite.SQLiteDatabase> {
   const tempDbName = "finance_encrypted_tmp";
-  const dir = SQLite.defaultDatabaseDirectory as string;
-  const tempDbPath = `${dir}/${tempDbName}`;
-  const finalDbPath = `${dir}/${DB_NAME}`;
+  const dbDir = SQLite.defaultDatabaseDirectory as string;
+  const tempDbPath = `${dbDir}/${tempDbName}`;
+  const finalDbPath = `${dbDir}/${DB_NAME}`;
 
   // Limpa arquivo temp órfão de migração anterior que pode ter falhado
   try {
@@ -104,8 +104,7 @@ async function migrateToEncrypted(encryptionKey: string): Promise<SQLite.SQLiteD
 
   // Move o banco criptografado temp para o nome final (sobrescreve o antigo)
   // Constrói URI file:// absoluta a partir do diretório do SQLite
-  const dir = SQLite.defaultDatabaseDirectory as string;
-  new File(`file://${dir}/${tempDbName}`).move(new File(`file://${dir}/${DB_NAME}`));
+  new File(`file://${dbDir}/${tempDbName}`).move(new File(`file://${dbDir}/${DB_NAME}`));
 
   // Abre o banco final criptografado
   const finalDb = await SQLite.openDatabaseAsync(DB_NAME);

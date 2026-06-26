@@ -24,7 +24,7 @@ export async function configureNotifications(): Promise<void> {
       shouldShowAlert: true,
       shouldPlaySound: true,
       shouldSetBadge: true,
-    }),
+    } as Notifications.NotificationBehavior),
   });
 }
 
@@ -64,7 +64,7 @@ export async function scheduleBillReminder(
       body: `${billName} - R$ ${amount.toFixed(2)} vence hoje!`,
       data: { type: "bill", billId },
     },
-    trigger: { seconds: Math.floor(trigger / 1000) },
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.floor(trigger / 1000) },
   });
 
   return identifier;
@@ -76,15 +76,13 @@ export async function scheduleGoalReminder(
   goalName: string,
   progress: number
 ): Promise<string> {
-  const trigger = { seconds: 86400 }; // 24 horas
-
   const identifier = await Notifications.scheduleNotificationAsync({
     content: {
       title: "Lembrete de meta",
       body: `Sua meta "${goalName}" está ${progress.toFixed(0)}% completa. Continue assim!`,
       data: { type: "goal", goalId },
     },
-    trigger,
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 86400 },
   });
 
   return identifier;
@@ -94,15 +92,13 @@ export async function scheduleGoalReminder(
 export async function scheduleHighCommitmentAlert(
   commitmentPercent: number
 ): Promise<string> {
-  const trigger = { seconds: 3600 }; // 1 hora
-
   const identifier = await Notifications.scheduleNotificationAsync({
     content: {
       title: "Alerta de comprometimento",
       body: `Seu comprometimento da renda está em ${commitmentPercent}%. Tente reduzir gastos!`,
       data: { type: "commitment" },
     },
-    trigger,
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 3600 },
   });
 
   return identifier;
