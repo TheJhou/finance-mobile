@@ -20,7 +20,6 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.financeapp",
       "versionCode": 15,
-      "privacyPolicyUrl": "https://finance-app.com/privacy",
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO",
@@ -64,7 +63,8 @@
           "sounds": []
         }
       ],
-      "./modules/bank-notifications/app.plugin"
+      "./modules/bank-notifications/app.plugin",
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true
