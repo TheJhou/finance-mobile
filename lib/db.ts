@@ -1,4 +1,5 @@
 import * as Crypto from "expo-crypto";
+import * as FileSystem from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
@@ -27,8 +28,19 @@ async function getOrCreateDbKey(): Promise<string> {
 }
 
 /**
- * Verifica se um banco plaintext já existe tentando abri-lo sem PRAGMA key.
- * Se conseguir ler a primeira linha, é plaintext e precisa de migração.
+ * Verifica se o arquivo de banco de dados já existe no disco.
+ */
+async function databaseExists(): Promise<boolean> {
+  const dbPath = `${SQLite.defaultDatabaseDirectory}/${DB_NAME}`;
+  const fileInfo = await FileSystem.getInfoAsync(dbPath);
+  return fileInfo.exists;
+}
+
+/**
+ * Verifica se um banco existente é plaintext (sem criptografia).
+ * Tenta abrir sem PRAGMA key e ler uma linha.
+ * Se conseguir, é plaintext e precisa de migração.
+ * Se falhar, já está criptografado com SQLCipher.
  */
 async function isPlaintextDatabase(): Promise<boolean> {
   try {
@@ -48,27 +60,39 @@ async function isPlaintextDatabase(): Promise<boolean> {
 
 /**
  * Migra um banco plaintext para criptografado usando SQLCipher:
- * 1. Abre o banco antigo sem chave (plaintext)
- * 2. Usa sqlcipher_export() para copiar tudo para um novo banco criptografado
- * 3. Substitui o arquivo antigo pelo novo
+ * 1. Limpa qualquer arquivo temp órfão de migração anterior falha
+ * 2. Abre o banco antigo sem chave (plaintext)
+ * 3. Usa ATTACH DATABASE com path absoluto + sqlcipher_export() para copiar tudo
+ * 4. Deleta o banco antigo e move o temp criptografado para o nome final
  */
 async function migrateToEncrypted(encryptionKey: string): Promise<SQLite.SQLiteDatabase> {
   const tempDbName = "finance_encrypted_tmp";
+  const dir = SQLite.defaultDatabaseDirectory as string;
+  const tempDbPath = `${dir}/${tempDbName}`;
+  const finalDbPath = `${dir}/${DB_NAME}`;
+
+  // Limpa arquivo temp órfão de migração anterior que pode ter falhado
+  try {
+    await SQLite.deleteDatabaseAsync(tempDbName);
+  } catch {
+    // ignora se não existir
+  }
 
   const plainDb = await SQLite.openDatabaseAsync(DB_NAME, { useNewConnection: true });
   try {
-    await plainDb.execAsync(`ATTACH DATABASE '${tempDbName}' AS encrypted KEY '${encryptionKey}'`);
+    // ATTACH DATABASE com path absoluto (não relativo) para funcionar no Android
+    await plainDb.execAsync(`ATTACH DATABASE '${tempDbPath}' AS encrypted KEY '${encryptionKey}'`);
     await plainDb.execAsync("SELECT sqlcipher_export('encrypted')");
     await plainDb.execAsync("DETACH DATABASE encrypted");
   } finally {
     await plainDb.closeAsync();
   }
 
-  await SQLite.deleteDatabaseAsync(DB_NAME);
+  // Move o banco criptografado temp para o nome final (sobrescreve o antigo)
+  // Faz isso ANTES de deletar para evitar perda de dados se o move falhar
+  await FileSystem.moveAsync({ from: tempDbPath, to: finalDbPath });
 
-  const encryptedDb = await SQLite.openDatabaseAsync(tempDbName, { useNewConnection: true });
-  await encryptedDb.closeAsync();
-
+  // Abre o banco final criptografado
   const finalDb = await SQLite.openDatabaseAsync(DB_NAME);
   await finalDb.execAsync(`PRAGMA key = '${encryptionKey}'`);
   return finalDb;
@@ -85,21 +109,32 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
         return db;
       }
 
-      const isPlaintext = await isPlaintextDatabase();
+      const dbExists = await databaseExists();
       let db: SQLite.SQLiteDatabase;
 
-      if (isPlaintext) {
-        console.log("[DB] Migrating plaintext database to SQLCipher encryption...");
-        db = await migrateToEncrypted(encryptionKey);
-        console.log("[DB] Migration to encrypted database complete.");
-      } else {
+      if (!dbExists) {
+        // First run - cria novo banco criptografado diretamente (sem migração)
         db = await SQLite.openDatabaseAsync(DB_NAME);
         await db.execAsync(`PRAGMA key = '${encryptionKey}'`);
+      } else {
+        const isPlaintext = await isPlaintextDatabase();
+        if (isPlaintext) {
+          console.log("[DB] Migrating plaintext database to SQLCipher encryption...");
+          db = await migrateToEncrypted(encryptionKey);
+          console.log("[DB] Migration to encrypted database complete.");
+        } else {
+          db = await SQLite.openDatabaseAsync(DB_NAME);
+          await db.execAsync(`PRAGMA key = '${encryptionKey}'`);
+        }
       }
 
       await migrate(db);
       return db;
-    })();
+    })().catch((err) => {
+      // Reset cache em caso de falha para permitir retry na próxima chamada
+      dbPromise = null;
+      throw err;
+    });
   }
   return dbPromise;
 }
@@ -179,6 +214,31 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     );
 
     CREATE INDEX IF NOT EXISTS idx_processed_notifications_hash ON processed_notifications(package_name, title, text, amount, post_time);
+
+    -- Notification processing queue (persistent, survives app kill)
+    CREATE TABLE IF NOT EXISTS notification_queue (
+      id TEXT PRIMARY KEY,
+      package_name TEXT NOT NULL,
+      title TEXT NOT NULL,
+      text TEXT NOT NULL,
+      big_text TEXT,
+      sub_text TEXT,
+      post_time INTEGER NOT NULL,
+      raw_text TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      status TEXT NOT NULL DEFAULT 'PENDING_AI' CHECK(status IN ('PENDING_AI','AI_PROCESSED','APPROVED','REJECTED')),
+      ai_enriched INTEGER NOT NULL DEFAULT 0,
+      amount REAL,
+      description TEXT,
+      type TEXT,
+      payment_method TEXT,
+      bank TEXT,
+      category_id TEXT,
+      category_name TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_notif_queue_status ON notification_queue(status);
+    CREATE INDEX IF NOT EXISTS idx_notif_queue_dedup ON notification_queue(package_name, title, text, amount, post_time);
 
     -- Backup system tables
     CREATE TABLE IF NOT EXISTS backup_metadata (

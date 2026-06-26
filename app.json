@@ -19,7 +19,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.financeapp",
-      "versionCode": 14,
+      "versionCode": 15,
       "privacyPolicyUrl": "https://finance-app.com/privacy",
       "permissions": [
         "android.permission.INTERNET",

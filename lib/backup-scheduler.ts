@@ -1,6 +1,7 @@
 import { BackupSystem } from '@/lib/backup';
 import { getDb } from '@/lib/db';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import NetInfo from '@react-native-community/netinfo';
 import * as Notifications from 'expo-notifications';
 import { AppState, Platform } from 'react-native';
 
@@ -205,26 +206,32 @@ export class BackupScheduler {
       try {
         // Check preconditions
         if (await this.checkPreconditions()) {
-          const result = await BackupSystem.createBackup();
-          
-          if (result.success) {
+          // S4: Use createAndUploadBackup to sync to cloud
+          const { localResult, cloudKey, cloudError } = await BackupSystem.createAndUploadBackup();
+
+          if (localResult.success) {
             // Mark as completed
             await AsyncStorage.setItem(this.LAST_RUN_KEY, new Date().toDateString());
-            
+
             // Show success notification
+            const cloudStatus = cloudKey
+              ? ` (nuvem OK)`
+              : cloudError
+                ? ` (nuvem falhou: ${cloudError})`
+                : '';
             await this.showNotification(
               'Backup Concluído',
-              `Seus dados foram backupados com sucesso (${this.formatFileSize(result.size || 0)})`,
+              `Seus dados foram backupados com sucesso (${this.formatFileSize(localResult.size || 0)})${cloudStatus}`,
               'success'
             );
-            
+
             // Save to database
-            await this.saveBackupRecord(result);
-            
-            console.log('[BackupScheduler] Backup completed successfully');
+            await this.saveBackupRecord(localResult);
+
+            console.log('[BackupScheduler] Backup completed successfully', cloudKey ? '(cloud synced)' : '(cloud failed)');
             return;
           } else {
-            throw new Error(result.error || 'Backup failed');
+            throw new Error(localResult.error || 'Backup failed');
           }
         } else {
           console.log('[BackupScheduler] Preconditions not met, skipping backup');
@@ -255,15 +262,22 @@ export class BackupScheduler {
   // Check backup preconditions (wifi, charging, etc.)
   private static async checkPreconditions(): Promise<boolean> {
     try {
-      // For now, always return true
-      // In a real implementation, you would check:
-      // - Network connection (if requireWifi)
-      // - Battery level (if requireCharging)
-      // - Storage space
-      
+      // Check network connectivity
+      const netState = await NetInfo.fetch();
+      if (!netState.isConnected) {
+        console.log('[BackupScheduler] No network connection, skipping backup');
+        return false;
+      }
+
+      // Check Wi-Fi requirement
+      if (this.config.requireWifi && netState.type !== 'wifi') {
+        console.log('[BackupScheduler] Wi-Fi required but not connected, skipping backup');
+        return false;
+      }
+
       // Storage check skipped: expo-file-system legacy does not expose freeSpace on FileInfo
       // In production, use a native module or capacitor plugin for precise free space
-      
+
       return true;
     } catch (error) {
       console.error('[BackupScheduler] Failed to check preconditions:', error);

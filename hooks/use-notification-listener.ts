@@ -1,22 +1,28 @@
 import { analyzeText } from "@/lib/backend";
-import { generateId, isNotificationProcessed, markNotificationAsProcessed } from "@/lib/db";
+import {
+    enqueueNotification,
+    getPendingAiNotifications,
+    isNotificationInQueue,
+    updateWithAiResult,
+} from "@/lib/notification-queue";
 import {
     BANK_APPS,
     inferCategoryFromText,
     parseNotification,
 } from "@/lib/notifications/parsers";
-import { addPendingNotification } from "@/lib/pending-notifications";
 import { listCategories } from "@/lib/repositories/categories";
 import BankNotifications, {
     type BankNotificationEvent,
 } from "@/modules/bank-notifications";
+import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef } from "react";
 
 const HEALTH_CHECK_INTERVAL_MS = 60_000;
+const AI_RETRY_INTERVAL_MS = 30_000;
 
 export function useNotificationListener() {
-  const queueRef = useRef<BankNotificationEvent[]>([]);
-  const processingRef = useRef(false);
+  const isOnlineRef = useRef(true);
+  const aiRetryInProgressRef = useRef(false);
 
   useEffect(() => {
     if (!BankNotifications) {
@@ -27,25 +33,31 @@ export function useNotificationListener() {
 
     let destroyed = false;
 
-    async function processQueue() {
-      if (processingRef.current) return;
-      processingRef.current = true;
+    // ── NetInfo: monitora conectividade em tempo real ──────────────────
+    const netInfoSub = NetInfo.addEventListener((state) => {
+      const wasOnline = isOnlineRef.current;
+      const isOnline = state.isConnected === true && state.isInternetReachable !== false;
+      isOnlineRef.current = isOnline;
 
-      while (queueRef.current.length > 0 && !destroyed) {
-        const event = queueRef.current.shift()!;
-        try {
-          await processNotification(event);
-        } catch (err) {
-          console.warn("[AutoImport] Erro ao processar notificação:", err);
-        }
+      if (isOnline && !wasOnline) {
+        console.log("[AutoImport] Internet restaurada — reprocessando notificações pendentes");
+        void retryPendingAiEnrichment();
+      } else if (!isOnline && wasOnline) {
+        console.log("[AutoImport] Sem internet — notificações serão salvas com fallback local");
       }
+    });
 
-      processingRef.current = false;
-    }
+    // ── Verifica estado inicial de conectividade ────────────────────────
+    NetInfo.fetch().then((state) => {
+      isOnlineRef.current = state.isConnected === true && state.isInternetReachable !== false;
+    });
 
+    // ── Processa notificação bruta: parse local → enfileira no SQLite ──
     async function processNotification(event: BankNotificationEvent) {
       const isBankApp = event.packageName in BANK_APPS;
-      console.log(`[AutoImport] Notificação recebida: pkg=${event.packageName} bank=${isBankApp} title=${event.title}`);
+      console.log(
+        `[AutoImport] Notificação recebida: pkg=${event.packageName} bank=${isBankApp} title=${event.title}`
+      );
 
       const parsed = parseNotification(event);
       if (!parsed) {
@@ -57,15 +69,17 @@ export function useNotificationListener() {
         .filter(Boolean)
         .join(" ");
 
-      const alreadyProcessed = await isNotificationProcessed(
+      const alreadyInQueue = await isNotificationInQueue(
         event.packageName,
         event.title,
         text,
         parsed.amount,
         event.postTime
       );
-
-      if (alreadyProcessed) return;
+      if (alreadyInQueue) {
+        console.log("[AutoImport] Notificação já está na fila — ignorando");
+        return;
+      }
 
       const categories = await listCategories();
       if (categories.length === 0) return;
@@ -74,66 +88,175 @@ export function useNotificationListener() {
       let categoryName = categories[0].name;
       let description = parsed.description;
 
-      try {
-        const aiResult = await analyzeText(
-          text,
-          "TEXT",
-          categories.map((c) => ({ id: c.id, name: c.name }))
-        );
-        const draft = aiResult?.draft;
-        if (draft) {
-          if (draft.description) description = draft.description;
-          if (draft.categoryId) {
-            const matched = categories.find((c) => c.id === draft.categoryId);
-            if (matched) {
-              categoryId = matched.id;
-              categoryName = matched.name;
+      // Tenta IA apenas se online
+      if (isOnlineRef.current) {
+        try {
+          const aiResult = await analyzeText(
+            text,
+            "TEXT",
+            categories.map((c) => ({ id: c.id, name: c.name }))
+          );
+          const draft = aiResult?.draft;
+          if (draft) {
+            if (draft.description) description = draft.description;
+            if (draft.categoryId) {
+              const matched = categories.find((c) => c.id === draft.categoryId);
+              if (matched) {
+                categoryId = matched.id;
+                categoryName = matched.name;
+              }
             }
           }
+
+          const added = await enqueueNotification({
+            packageName: event.packageName,
+            title: event.title,
+            text,
+            bigText: event.bigText,
+            subText: event.subText,
+            postTime: event.postTime,
+            rawText: text,
+            amount: parsed.amount,
+            description,
+            type: parsed.type,
+            paymentMethod: parsed.paymentMethod,
+            bank: parsed.bank,
+            categoryId,
+            categoryName,
+          });
+
+          if (added) {
+            // Marca como enriquecida pela IA
+            const items = await getPendingAiNotifications();
+            const item = items.find(
+              (i) =>
+                i.packageName === event.packageName &&
+                i.postTime === event.postTime &&
+                i.amount === parsed.amount
+            );
+            if (item) {
+              await updateWithAiResult(item.id, {
+                description,
+                categoryId,
+                categoryName,
+              });
+            }
+          }
+
+          console.log(
+            `[AutoImport] Enfileirado com IA: ${description} R$${parsed.amount}`
+          );
+          return;
+        } catch (aiErr) {
+          console.warn(
+            "[AutoImport] IA falhou, usando inferência local:",
+            aiErr instanceof Error ? aiErr.message : aiErr
+          );
         }
-      } catch (aiErr) {
-        console.warn("[AutoImport] IA indisponível, usando inferência local:", aiErr instanceof Error ? aiErr.message : aiErr);
-        const inferredCatName = inferCategoryFromText(text);
-        const matched = inferredCatName
-          ? categories.find((c) => c.name.toLowerCase() === inferredCatName.toLowerCase())
-          : null;
-        if (matched) {
-          categoryId = matched.id;
-          categoryName = matched.name;
-        }
+      } else {
+        console.log("[AutoImport] Offline — usando inferência local");
       }
 
-      await addPendingNotification({
-        id: generateId(),
-        bank: parsed.bank,
+      // Fallback local (offline ou IA falhou) — enfileira com ai_enriched=0
+      const inferredCatName = inferCategoryFromText(text);
+      const matched = inferredCatName
+        ? categories.find(
+            (c) => c.name.toLowerCase() === inferredCatName.toLowerCase()
+          )
+        : null;
+      if (matched) {
+        categoryId = matched.id;
+        categoryName = matched.name;
+      }
+
+      await enqueueNotification({
         packageName: event.packageName,
-        raw: text,
+        title: event.title,
+        text,
+        bigText: event.bigText,
+        subText: event.subText,
         postTime: event.postTime,
-        createdAt: new Date().toISOString(),
+        rawText: text,
         amount: parsed.amount,
         description,
         type: parsed.type,
         paymentMethod: parsed.paymentMethod,
+        bank: parsed.bank,
         categoryId,
         categoryName,
       });
 
-      await markNotificationAsProcessed(
-        event.packageName,
-        event.title,
-        text,
-        parsed.amount,
-        event.postTime
+      console.log(
+        `[AutoImport] Enfileirado (fallback local): ${description} R$${parsed.amount}`
       );
-
-      console.log(`[AutoImport] Enfileirado para aprovação: ${description} R$${parsed.amount}`);
     }
 
+    // ── Reprocesso de notificações que ficaram sem IA (offline) ────────
+    async function retryPendingAiEnrichment() {
+      if (aiRetryInProgressRef.current) return;
+      if (!isOnlineRef.current) return;
+      aiRetryInProgressRef.current = true;
+
+      try {
+        const pendingItems = await getPendingAiNotifications();
+        if (pendingItems.length === 0) return;
+
+        console.log(
+          `[AutoImport] Reprocessando ${pendingItems.length} notificações pendentes com IA`
+        );
+
+        const categories = await listCategories();
+        if (categories.length === 0) return;
+
+        for (const item of pendingItems) {
+          if (destroyed || !isOnlineRef.current) break;
+
+          try {
+            const aiResult = await analyzeText(
+              item.rawText,
+              "TEXT",
+              categories.map((c) => ({ id: c.id, name: c.name }))
+            );
+            const draft = aiResult?.draft;
+            if (draft) {
+              let description = item.description || "";
+              let categoryId = item.categoryId || categories[0].id;
+              let categoryName = item.categoryName || categories[0].name;
+
+              if (draft.description) description = draft.description;
+              if (draft.categoryId) {
+                const matched = categories.find((c) => c.id === draft.categoryId);
+                if (matched) {
+                  categoryId = matched.id;
+                  categoryName = matched.name;
+                }
+              }
+
+              await updateWithAiResult(item.id, {
+                description,
+                categoryId,
+                categoryName,
+              });
+              console.log(`[AutoImport] IA reprocessou: ${description}`);
+            }
+          } catch (err) {
+            console.warn(
+              `[AutoImport] Falha ao reprocessar ${item.id}:`,
+              err instanceof Error ? err.message : err
+            );
+            break;
+          }
+        }
+      } finally {
+        aiRetryInProgressRef.current = false;
+      }
+    }
+
+    // ── Inscrição nos eventos nativos ──────────────────────────────────
     const notifSub = BankNotifications.addListener(
       "onNotification",
       (event: BankNotificationEvent) => {
-        queueRef.current.push(event);
-        void processQueue();
+        void processNotification(event);
       }
     );
 
@@ -142,12 +265,14 @@ export function useNotificationListener() {
       (event: { connected: boolean }) => {
         if (event.connected) {
           console.log("[AutoImport] Listener reconectado");
+          void retryPendingAiEnrichment();
         } else {
           console.warn("[AutoImport] Listener desconectado pelo Android");
         }
       }
     );
 
+    // ── Health check periódico ─────────────────────────────────────────
     const healthCheck = setInterval(() => {
       if (BankNotifications) {
         const connected = BankNotifications.isListenerConnected();
@@ -155,16 +280,30 @@ export function useNotificationListener() {
         if (!granted) {
           console.warn("[AutoImport] Permissão de notificação revogada");
         } else if (!connected) {
-          console.warn("[AutoImport] Listener desconectado — reinicie o app ou reative nas configurações");
+          console.warn(
+            "[AutoImport] Listener desconectado — reinicie o app ou reative nas configurações"
+          );
         }
       }
     }, HEALTH_CHECK_INTERVAL_MS);
 
+    // ── Retry periódico de IA (caso NetInfo não dispare) ───────────────
+    const aiRetryInterval = setInterval(() => {
+      if (isOnlineRef.current) {
+        void retryPendingAiEnrichment();
+      }
+    }, AI_RETRY_INTERVAL_MS);
+
+    // ── Retry inicial (notificações que ficaram pendentes de sessão anterior)
+    void retryPendingAiEnrichment();
+
     return () => {
       destroyed = true;
+      netInfoSub();
       notifSub.remove();
       connSub.remove();
       clearInterval(healthCheck);
+      clearInterval(aiRetryInterval);
     };
   }, []);
 }

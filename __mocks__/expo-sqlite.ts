@@ -415,3 +415,5 @@ export function resetMockDatabase(): void {
 export async function deleteDatabaseAsync(_name: string): Promise<void> {
   // no-op for in-memory mock
 }
+
+export const defaultDatabaseDirectory = "/mock/databases";

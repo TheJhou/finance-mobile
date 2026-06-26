@@ -9,6 +9,8 @@ module.exports = {
     "^expo-sqlite$": "<rootDir>/__mocks__/expo-sqlite.ts",
     "^expo-secure-store$": "<rootDir>/__mocks__/expo-secure-store.ts",
     "^expo-crypto$": "<rootDir>/__mocks__/expo-crypto.ts",
+    "^expo-file-system$": "<rootDir>/__mocks__/expo-file-system.ts",
+    "^@react-native-community/netinfo$": "<rootDir>/__mocks__/@react-native-community/netinfo.ts",
     "^react-native$": "<rootDir>/__mocks__/react-native.ts",
   },
   transform: {

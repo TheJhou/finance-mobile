@@ -36,6 +36,7 @@ export default function BackupScreen() {
   const [restoringCloud, setRestoringCloud] = useState(false);
   const [cloudBackups, setCloudBackups] = useState<CloudBackupEntry[]>([]);
   const [loadingCloud, setLoadingCloud] = useState(false);
+  const [cloudError, setCloudError] = useState<string | null>(null);
   const [editingTime, setEditingTime] = useState("");
   const [showTimeModal, setShowTimeModal] = useState(false);
   const [stats, setStats] = useState({
@@ -58,6 +59,7 @@ export default function BackupScreen() {
       // Load cloud backups — only if authenticated
       try {
         setLoadingCloud(true);
+        setCloudError(null);
         const { isAuthenticated } = await import("@/lib/auth");
         const authed = await isAuthenticated();
         if (authed) {
@@ -66,8 +68,11 @@ export default function BackupScreen() {
         } else {
           setCloudBackups([]);
         }
-      } catch {
+      } catch (error) {
         setCloudBackups([]);
+        const msg = error instanceof Error ? error.message : "Erro ao carregar backups da nuvem";
+        setCloudError(msg);
+        console.warn("[Backup] Cloud list error:", msg);
       } finally {
         setLoadingCloud(false);
       }
@@ -101,17 +106,22 @@ export default function BackupScreen() {
   const handleCreateBackup = async () => {
     try {
       setCreatingBackup(true);
-      const result = await BackupSystem.createBackup();
-      
-      if (result.success) {
-        await loadData();
-        Alert.alert(
-          "Sucesso",
-          `Backup criado com sucesso!\n\nTamanho: ${formatFileSize(result.size || 0)}`
-        );
-      } else {
-        Alert.alert("Erro", result.error || "Falha ao criar backup");
+      const { localResult, cloudKey, cloudError } = await BackupSystem.createAndUploadBackup();
+
+      if (!localResult.success) {
+        Alert.alert("Erro", localResult.error || "Falha ao criar backup");
+        return;
       }
+      await loadData();
+      const cloudMsg = cloudKey
+        ? "\n\nNuvem: sincronizada com sucesso!"
+        : cloudError
+          ? `\n\nNuvem: falhou — ${cloudError}`
+          : "\n\nNuvem: não enviada (faça login)";
+      Alert.alert(
+        "Sucesso",
+        `Backup criado com sucesso!\n\nTamanho: ${formatFileSize(localResult.size || 0)}${cloudMsg}`
+      );
     } catch (error) {
       console.error("[Backup] Error creating backup:", error);
       Alert.alert("Erro", "Falha ao criar backup");
@@ -152,9 +162,10 @@ export default function BackupScreen() {
               const result = await BackupSystem.restoreBackup(filePath);
               
               if (result.success) {
+                const warning = result.error ? `\n\n⚠️ ${result.error}` : "";
                 Alert.alert(
                   "Sucesso",
-                  `Backup restaurado com sucesso!\n\nTabelas: ${result.restoredTables.join(", ")}\nRegistros: ${result.recordsRestored}`
+                  `Backup restaurado com sucesso!\n\nTabelas: ${result.restoredTables.join(", ")}\nRegistros: ${result.recordsRestored}${warning}`
                 );
                 await loadData();
               } else {
@@ -492,7 +503,11 @@ export default function BackupScreen() {
           </View>
           {cloudBackups.length === 0 ? (
             <Text style={styles.emptyText}>
-              {loadingCloud ? "Carregando..." : "Nenhum backup na nuvem"}
+              {loadingCloud
+                ? "Carregando..."
+                : cloudError
+                  ? `Erro ao carregar: ${cloudError}`
+                  : "Nenhum backup na nuvem"}
             </Text>
           ) : (
             <FlatList

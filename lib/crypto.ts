@@ -225,7 +225,8 @@ export class BackupCrypto {
     try {
       await this.processBackup(backupString);
       return true;
-    } catch {
+    } catch (error) {
+      console.warn('[BackupCrypto] Validation failed:', error instanceof Error ? error.message : error);
       return false;
     }
   }

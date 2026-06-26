@@ -1,7 +1,12 @@
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, logout, register } from "@/lib/auth";
 import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
-import { getPendingNotifications, removePendingNotification, type PendingNotification } from "@/lib/pending-notifications";
+import {
+    getPendingApprovalNotifications,
+    markApproved,
+    markRejected,
+    type NotificationQueueItem,
+} from "@/lib/notification-queue";
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { checkProFeature } from "@/lib/subscription";
@@ -47,7 +52,7 @@ function normalizeStatus(value: unknown, fallback: TransactionStatus): Transacti
 export default function NotificationsScreen() {
   const [granted, setGranted] = useState(false);
   const [connected, setConnected] = useState(false);
-  const [pendingNotifications, setPendingNotifications] = useState<PendingNotification[]>([]);
+  const [pendingNotifications, setPendingNotifications] = useState<NotificationQueueItem[]>([]);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
@@ -110,7 +115,7 @@ export default function NotificationsScreen() {
   }, []);
 
   const loadPending = useCallback(async () => {
-    const items = await getPendingNotifications();
+    const items = await getPendingApprovalNotifications();
     setPendingNotifications(items);
   }, []);
 
@@ -128,20 +133,20 @@ export default function NotificationsScreen() {
     }, [checkPermission, loadCategories, loadPending, checkAuth])
   );
 
-  const handleApprove = useCallback(async (item: PendingNotification) => {
+  const handleApprove = useCallback(async (item: NotificationQueueItem) => {
     setApprovingId(item.id);
     try {
       await createTransaction({
-        description: item.description,
-        amount: item.amount,
-        type: item.type,
-        paymentMethod: item.paymentMethod,
+        description: item.description || "Transação",
+        amount: item.amount || 0,
+        type: (item.type || "EXPENSE") as "INCOME" | "EXPENSE",
+        paymentMethod: (item.paymentMethod || "OTHER") as any,
         date: toDateInputValue(new Date(item.postTime)),
-        categoryId: item.categoryId,
-        notes: `Auto-importado de ${item.bank}`,
+        categoryId: item.categoryId || "",
+        notes: `Auto-importado de ${item.bank || "Banco"}`,
         status: 'PAID',
       });
-      await removePendingNotification(item.id);
+      await markApproved(item.id);
       await loadPending();
       showToast('success', `Transação aprovada: ${item.description}`);
     } catch {
@@ -152,7 +157,7 @@ export default function NotificationsScreen() {
   }, [loadPending, showToast]);
 
   const handleReject = useCallback(async (id: string) => {
-    await removePendingNotification(id);
+    await markRejected(id);
     await loadPending();
     showToast('warning', 'Notificação descartada');
   }, [loadPending, showToast]);
@@ -785,15 +790,15 @@ export default function NotificationsScreen() {
                       <View style={[styles.importBadge, { backgroundColor: isIncome ? colors.incomeBg : colors.expenseBg }]}>
                         <Ionicons name={isIncome ? "arrow-up" : "arrow-down"} size={12} color={isIncome ? colors.incomeFg : colors.expenseFg} />
                         <Text style={[styles.importBadgeText, { color: isIncome ? colors.incomeFg : colors.expenseFg }]}>
-                          {item.bank}
+                          {item.bank || "Banco"}
                         </Text>
                       </View>
                       <Text style={[styles.importAmount, { color: isIncome ? colors.incomeFg : colors.expenseFg }]}>
-                        {isIncome ? "+" : "-"}{formatCurrency(item.amount)}
+                        {isIncome ? "+" : "-"}{formatCurrency(item.amount || 0)}
                       </Text>
                     </View>
-                    <Text style={styles.importDesc} numberOfLines={2}>{item.description}</Text>
-                    <Text style={styles.importCategory}>{item.categoryName}</Text>
+                    <Text style={styles.importDesc} numberOfLines={2}>{item.description || "Transação"}</Text>
+                    <Text style={styles.importCategory}>{item.categoryName || "Outros"}</Text>
                     <View style={styles.importActions}>
                       <Pressable
                         style={[styles.importActionBtn, styles.importApproveBtn]}

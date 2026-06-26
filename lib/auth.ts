@@ -34,7 +34,8 @@ function isTokenExpired(token: string, marginSeconds = 30): boolean {
 async function getStoredValue(key: string): Promise<string | null> {
   try {
     return await SecureStore.getItemAsync(key);
-  } catch {
+  } catch (error) {
+    console.warn(`[Auth] Failed to read secure value for key "${key}":`, error);
     return null;
   }
 }
@@ -52,7 +53,7 @@ async function removeStoredValue(key: string): Promise<void> {
   try {
     await SecureStore.deleteItemAsync(key);
   } catch (error) {
-    console.error("[Auth] Failed to remove secure value:", error);
+    console.warn(`[Auth] Failed to remove secure value for key "${key}":`, error);
   }
 }
 
@@ -134,15 +135,15 @@ export async function logout(): Promise<void> {
   await removeStoredValue("user_email");
   try {
     await AsyncStorage.removeItem("ai_forecast_cache");
-  } catch {
-    // ignore
+  } catch (error) {
+    console.warn("[Auth] Failed to clear AI forecast cache:", error);
   }
   // Clear pro cache so next login fetches fresh status
   try {
     const { clearProCache } = await import("@/lib/subscription");
     clearProCache();
-  } catch {
-    // ignore if module not available
+  } catch (error) {
+    console.warn("[Auth] Failed to clear pro cache:", error);
   }
 }
 
@@ -180,7 +181,8 @@ async function refreshAccessToken(): Promise<string | null> {
         await setStoredValue("jwt_refresh_token", data.refreshToken);
       }
       return data.accessToken;
-    } catch {
+    } catch (error) {
+      console.warn("[Auth] Token refresh failed — logging out:", error);
       await logout();
       return null;
     }

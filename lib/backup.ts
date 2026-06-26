@@ -112,8 +112,8 @@ export class BackupSystem {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       
       // Get all user data (settings table may not exist — skip gracefully)
-      const CORE_TABLES = ['categories', 'transactions', 'recurring_transactions'];
-      const OPTIONAL_TABLES = ['settings'];
+      const CORE_TABLES = ['categories', 'transactions', 'recurring_transactions', 'notification_queue'];
+      const OPTIONAL_TABLES = ['settings', 'processed_notifications'];
       const backupData: Record<string, any[]> = {};
       let totalRecords = 0;
 
@@ -208,6 +208,7 @@ export class BackupSystem {
 
   // Restore backup from file
   static async restoreBackup(filePath: string): Promise<RestoreResult> {
+    let checksumWarning = false;
     try {
       const fileContent = await FileSystem.readAsStringAsync(filePath);
       const backupPackage = JSON.parse(fileContent);
@@ -225,7 +226,9 @@ export class BackupSystem {
       );
 
       if (calculatedChecksum !== backupPackage.metadata.checksum) {
-        console.warn('[Backup] Checksum mismatch — backup may be from older version, proceeding anyway');
+        console.warn('[Backup] Checksum mismatch — backup may be corrupted or from older version, proceeding anyway');
+        // S10: Retorna warning para o chamador poder exibir ao usuário
+        checksumWarning = true;
       }
 
       const db = await getDb();
@@ -243,7 +246,8 @@ export class BackupSystem {
       const restoredTables: string[] = [];
 
       // Explicit order: categories must exist before transactions (FK)
-      const INSERT_ORDER = ['categories', 'transactions', 'recurring_transactions', 'settings'];
+      // notification_queue and processed_notifications have no FK deps
+      const INSERT_ORDER = ['categories', 'transactions', 'recurring_transactions', 'settings', 'notification_queue', 'processed_notifications'];
       const DELETE_ORDER = [...INSERT_ORDER].reverse();
 
       // Begin transaction
@@ -293,7 +297,8 @@ export class BackupSystem {
       return {
         success: true,
         restoredTables,
-        recordsRestored: totalRestored
+        recordsRestored: totalRestored,
+        error: checksumWarning ? 'Aviso: checksum do backup não confere — dados podem estar corrompidos.' : undefined
       };
 
     } catch (error) {
@@ -388,6 +393,7 @@ export class BackupSystem {
 
     } catch (error) {
       console.error('[Backup] Error cleaning old backups:', error);
+      // S11: Não silencioso — registra mas não interrompe fluxo principal
     }
   }
 
