@@ -64,7 +64,8 @@
         }
       ],
       "./modules/bank-notifications/app.plugin",
-      "expo-font"
+      "expo-font",
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": true

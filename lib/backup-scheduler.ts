@@ -28,6 +28,7 @@ export interface SchedulerConfig {
 // ── Backup Scheduler ────────────────────────────────────────────────────
 
 export class BackupScheduler {
+  private static appStateSub: { remove: () => void } | null = null;
   private static readonly SCHEDULE_KEY = 'backup_scheduler_config';
   private static readonly LAST_RUN_KEY = 'backup_scheduler_last_run';
   private static readonly NOTIFICATION_ID = 'backup-daily';
@@ -144,7 +145,7 @@ export class BackupScheduler {
           body: 'Seus dados financeiros serão backupados automaticamente',
           data: { type: 'backup_scheduled' },
         },
-        trigger: { seconds: Math.floor(trigger / 1000) },
+        trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.floor(trigger / 1000) },
       });
 
       console.log('[BackupScheduler] Daily notification scheduled for:', scheduledTime);
@@ -156,12 +157,20 @@ export class BackupScheduler {
 
   // Setup app state listeners to trigger backup when app becomes active
   private static setupAppStateListeners(): void {
-    AppState.addEventListener('change', (state) => {
+    if (this.appStateSub) this.appStateSub.remove();
+    this.appStateSub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         // Check if we missed a scheduled backup
         this.checkAndRunBackup();
       }
     });
+  }
+
+  static cleanup(): void {
+    if (this.appStateSub) {
+      this.appStateSub.remove();
+      this.appStateSub = null;
+    }
   }
 
   // Check if backup should run and execute it

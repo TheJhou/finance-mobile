@@ -15,7 +15,7 @@ import type { Category, DocumentType, TransactionStatus } from "@/lib/types";
 import { formatCurrency, normalizePaymentMethod, toDateInputValue } from "@/lib/utils";
 import BankNotifications from "@/modules/bank-notifications";
 import { Ionicons } from "@expo/vector-icons";
-import { Audio } from "expo-av";
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "expo-router";
@@ -70,8 +70,9 @@ export default function NotificationsScreen() {
   const [processingText, setProcessingText] = useState(false);
   const [processingDocument, setProcessingDocument] = useState(false);
   const [processingAudio, setProcessingAudio] = useState(false);
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const [recording, setRecording] = useState(false);
+  const recordingRef = useRef(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -92,13 +93,14 @@ export default function NotificationsScreen() {
       }
       
       // Add a small delay to ensure the permission system is ready
-      setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         const isGranted = BankNotifications?.isPermissionGranted() ?? false;
         const isConnected = BankNotifications?.isListenerConnected() ?? false;
         console.log("[Notifications] Permission:", isGranted, "Connected:", isConnected);
         setGranted(isGranted);
         setConnected(isConnected);
       }, 100);
+      return () => clearTimeout(timeoutId);
     } catch (error) {
       console.warn("[Notifications] Error checking permission:", error);
       setGranted(false);
@@ -186,9 +188,11 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     return () => {
-      recordingRef.current?.stopAndUnloadAsync().catch(() => {});
+      if (recordingRef.current && audioRecorder.isRecording) {
+        audioRecorder.stop().catch(() => {});
+      }
     };
-  }, []);
+  }, [audioRecorder]);
 
   // Listener de notificações agora é global (useNotificationListener no _layout.tsx)
 
@@ -203,7 +207,7 @@ export default function NotificationsScreen() {
       showToast("warning", "Abra as configurações e ative 'Finance App'");
       
       // Check permission again after a delay to see if user enabled it
-      setTimeout(() => {
+      const settingsTimeout = setTimeout(() => {
         checkPermission();
       }, 2000);
     } catch (err) {
@@ -428,21 +432,20 @@ export default function NotificationsScreen() {
       return;
     }
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== "granted") {
+      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+      if (!granted) {
         showToast("error", "Permissão de microfone negada");
         return;
       }
 
-      await Audio.setAudioModeAsync({
+      await setAudioModeAsync({
         allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
       });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(recording);
-      recordingRef.current = recording;
+      await audioRecorder.prepareToRecordAsync();
+      audioRecorder.record();
+      setRecording(true);
+      recordingRef.current = true;
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : "Falha ao iniciar gravação");
     }
@@ -450,12 +453,12 @@ export default function NotificationsScreen() {
 
   const handleStopRecording = async () => {
     if (!recording) return;
-    const currentRecording = recording;
-    setRecording(null);
+    setRecording(false);
+    recordingRef.current = false;
     try {
       setProcessingAudio(true);
-      await currentRecording.stopAndUnloadAsync();
-      const uri = currentRecording.getURI();
+      await audioRecorder.stop();
+      const uri = audioRecorder.uri;
       if (!uri) throw new Error("Falha ao obter URI do áudio");
 
       const transcribedText = await transcribeAudio(uri, "audio/webm");
