@@ -1,5 +1,5 @@
 import type { DreData } from "@/lib/repositories/dre";
-import * as FileSystem from "expo-file-system/legacy";
+import { File, Paths } from "expo-file-system";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import Papa from "papaparse";
@@ -56,11 +56,11 @@ export async function exportDreCSV(data: DreData): Promise<void> {
   const txCSV = Papa.unparse(txRows, { delimiter: ";" });
 
   const combined = `DRE - ${data.period.label}\n\n${summaryCSV}\n\n--- TRANSAÇÕES ---\n\n${txCSV}`;
-  const uri = `${FileSystem.cacheDirectory}DRE_${label}.csv`;
-  await FileSystem.writeAsStringAsync(uri, combined, { encoding: FileSystem.EncodingType.UTF8 });
+  const file = new File(Paths.cache, `DRE_${label}.csv`);
+  file.write(combined);
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, { mimeType: "text/csv", dialogTitle: `Exportar DRE — ${data.period.label}` });
+    await Sharing.shareAsync(file.uri, { mimeType: "text/csv", dialogTitle: `Exportar DRE — ${data.period.label}` });
   }
 }
 
@@ -124,11 +124,11 @@ export async function exportDreXLSX(data: DreData): Promise<void> {
   XLSX.utils.book_append_sheet(wb, wsTx, "Transações");
 
   const wbout = XLSX.write(wb, { type: "base64", bookType: "xlsx" });
-  const uri = `${FileSystem.cacheDirectory}DRE_${label}.xlsx`;
-  await FileSystem.writeAsStringAsync(uri, wbout, { encoding: FileSystem.EncodingType.Base64 });
+  const file = new File(Paths.cache, `DRE_${label}.xlsx`);
+  file.write(wbout, { encoding: "base64" });
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
+    await Sharing.shareAsync(file.uri, {
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       dialogTitle: `Exportar DRE — ${data.period.label}`,
     });
@@ -257,10 +257,10 @@ export async function exportDrePDF(data: DreData): Promise<void> {
   const html = buildPdfHtml(data);
   const { uri: pdfUri } = await Print.printToFileAsync({ html, base64: false });
 
-  const dest = `${FileSystem.cacheDirectory}DRE_${label}.pdf`;
-  await FileSystem.moveAsync({ from: pdfUri, to: dest });
+  const dest = new File(Paths.cache, `DRE_${label}.pdf`);
+  new File(pdfUri).move(dest);
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(dest, { mimeType: "application/pdf", dialogTitle: `Exportar DRE — ${data.period.label}` });
+    await Sharing.shareAsync(dest.uri, { mimeType: "application/pdf", dialogTitle: `Exportar DRE — ${data.period.label}` });
   }
 }

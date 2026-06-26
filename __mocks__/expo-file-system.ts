@@ -1,38 +1,112 @@
-// Mock expo-file-system for unit testing
+// Mock expo-file-system for unit testing (new API: File, Directory, Paths)
 
-const files: Map<string, { exists: boolean }> = new Map();
+const fileStore: Map<string, { content: string; exists: boolean }> = new Map();
+const dirStore: Set<string> = new Set();
 
-export const documentDirectory = "/mock/documents";
-
-export async function getInfoAsync(path: string): Promise<{ exists: boolean }> {
-  return { exists: files.has(path) };
+function resolveUri(uris: (string | MockFile | MockDirectory)[]): string {
+  return uris
+    .map((u) => (typeof u === 'string' ? u : u.uri))
+    .join('/')
+    .replace(/\/+/g, '/');
 }
 
-export async function moveAsync(options: { from: string; to: string }): Promise<void> {
-  if (files.has(options.from)) {
-    files.set(options.to, { exists: true });
-    files.delete(options.from);
+class MockDirectory {
+  readonly uri: string;
+
+  constructor(...uris: (string | MockFile | MockDirectory)[]) {
+    this.uri = resolveUri(uris);
+  }
+
+  get exists(): boolean {
+    return dirStore.has(this.uri);
+  }
+
+  create(options?: { intermediates?: boolean; idempotent?: boolean }): void {
+    if (this.exists && !options?.idempotent) return;
+    dirStore.add(this.uri);
+  }
+
+  list(): (MockDirectory | MockFile)[] {
+    const prefix = this.uri.endsWith('/') ? this.uri : this.uri + '/';
+    const items: (MockDirectory | MockFile)[] = [];
+    for (const path of fileStore.keys()) {
+      if (path.startsWith(prefix)) {
+        const rest = path.slice(prefix.length);
+        if (!rest.includes('/')) {
+          items.push(new MockFile(path));
+        }
+      }
+    }
+    return items;
+  }
+
+  get name(): string {
+    return this.uri.split('/').pop() || '';
   }
 }
 
-export async function copyAsync(options: { from: string; to: string }): Promise<void> {
-  if (files.has(options.from)) {
-    files.set(options.to, { exists: true });
+class MockFile {
+  readonly uri: string;
+
+  constructor(...uris: (string | MockFile | MockDirectory)[]) {
+    this.uri = resolveUri(uris);
+  }
+
+  get exists(): boolean {
+    return fileStore.has(this.uri);
+  }
+
+  async text(): Promise<string> {
+    return fileStore.get(this.uri)?.content ?? '';
+  }
+
+  write(content: string, _options?: { encoding?: string }): void {
+    fileStore.set(this.uri, { content, exists: true });
+  }
+
+  delete(): void {
+    fileStore.delete(this.uri);
+  }
+
+  move(destination: MockFile | MockDirectory): void {
+    const entry = fileStore.get(this.uri);
+    if (entry) {
+      const destUri = destination instanceof MockFile ? destination.uri : destination.uri;
+      fileStore.set(destUri, { ...entry });
+      fileStore.delete(this.uri);
+    }
+  }
+
+  copy(destination: MockFile | MockDirectory): void {
+    const entry = fileStore.get(this.uri);
+    if (entry) {
+      const destUri = destination instanceof MockFile ? destination.uri : destination.uri;
+      fileStore.set(destUri, { ...entry });
+    }
+  }
+
+  get name(): string {
+    return this.uri.split('/').pop() || '';
+  }
+
+  get size(): number {
+    return fileStore.get(this.uri)?.content?.length ?? 0;
+  }
+
+  info(): { exists: boolean; uri?: string; size?: number } {
+    return { exists: this.exists, uri: this.uri, size: this.size };
   }
 }
 
-export async function deleteAsync(path: string): Promise<void> {
-  files.delete(path);
-}
+const Paths = {
+  document: new MockDirectory('/mock/documents'),
+  cache: new MockDirectory('/mock/cache'),
+  bundle: new MockDirectory('/mock/bundle'),
+};
 
-export function makeDirectoryAsync(_path: string): Promise<void> {
-  return Promise.resolve();
-}
-
-export function readDirectoryAsync(_path: string): Promise<string[]> {
-  return Promise.resolve([]);
-}
+export { MockDirectory as Directory, MockFile as File, Paths };
 
 export function resetFileSystemMock(): void {
-  files.clear();
+  fileStore.clear();
+  dirStore.clear();
 }

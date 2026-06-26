@@ -3,7 +3,7 @@
  * Execute com: npx ts-node scripts/test-multiuser.ts
  */
 
-import * as FileSystem from 'expo-file-system/legacy';
+import { File, Paths } from 'expo-file-system';
 import { BackupSystem } from '../lib/backup';
 import { BackupScheduler } from '../lib/backup-scheduler';
 import { generateId, getDb, resetDbCache } from '../lib/db';
@@ -278,7 +278,7 @@ class MultiUserTester {
     
     // Restaurar backup
     const fileName = `backup_${testUser.deviceId}_${backupResult.metadata?.createdAt.replace(/[:.]/g, '-')}.json`;
-    const filePath = `${FileSystem.documentDirectory}backups/${fileName}`;
+    const filePath = new File(Paths.document, 'backups', fileName).uri;
     
     const restoreResult = await BackupSystem.restoreBackup(filePath);
     if (!restoreResult.success) {

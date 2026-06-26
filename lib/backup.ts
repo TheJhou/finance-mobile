@@ -3,7 +3,7 @@ import { BACKEND_URL } from '@/lib/config';
 import { generateId, getDb } from '@/lib/db';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Crypto from 'expo-crypto';
-import * as FileSystem from 'expo-file-system/legacy';
+import { Directory, File, Paths } from 'expo-file-system';
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -51,21 +51,17 @@ export interface CloudBackupEntry {
 
 export class BackupSystem {
   private static readonly BACKUP_VERSION = '1.0.0';
-  private static get BACKUP_DIR(): string {
-    const base = FileSystem.documentDirectory;
-    if (!base) {
-      throw new Error('FileSystem.documentDirectory is null — native module not ready');
-    }
-    return `${base}backups/`;
+  private static get BACKUP_DIR(): Directory {
+    return new Directory(Paths.document, 'backups');
   }
   private static readonly MAX_BACKUPS = 7; // Keep last 7 days
   private static readonly BACKUP_KEY = 'finance_backup_schedule';
 
   // Initialize backup directory
   static async initialize(): Promise<void> {
-    const dirInfo = await FileSystem.getInfoAsync(this.BACKUP_DIR);
-    if (!dirInfo.exists) {
-      await FileSystem.makeDirectoryAsync(this.BACKUP_DIR, { intermediates: true });
+    const dir = this.BACKUP_DIR;
+    if (!dir.exists) {
+      dir.create({ intermediates: true });
     }
   }
 
@@ -177,9 +173,10 @@ export class BackupSystem {
 
       // Save to file
       const fileName = `backup_${userId}_${timestamp}.json`;
-      const filePath = `${this.BACKUP_DIR}${fileName}`;
+      const file = new File(this.BACKUP_DIR, fileName);
+      const filePath = file.uri;
       
-      await FileSystem.writeAsStringAsync(filePath, JSON.stringify(backupPackage, null, 2));
+      file.write(JSON.stringify(backupPackage, null, 2));
       console.log('[Backup] File written:', filePath);
       
       // Clean old backups
@@ -210,7 +207,7 @@ export class BackupSystem {
   static async restoreBackup(filePath: string): Promise<RestoreResult> {
     let checksumWarning = false;
     try {
-      const fileContent = await FileSystem.readAsStringAsync(filePath);
+      const fileContent = await new File(filePath).text();
       const backupPackage = JSON.parse(fileContent);
 
       // Validate backup structure
@@ -318,25 +315,28 @@ export class BackupSystem {
       await this.initialize();
       const userId = await this.getUserId();
       
-      const files = await FileSystem.readDirectoryAsync(this.BACKUP_DIR);
-      console.log('[Backup] All files in dir:', files, 'filtering by userId:', userId);
-      const backupFiles = files.filter(f => 
-        f.startsWith(`backup_${userId}_`) && f.endsWith('.json')
-      );
+      const items = this.BACKUP_DIR.list();
+      console.log('[Backup] All items in dir:', items, 'filtering by userId:', userId);
+      const backupFiles = items
+        .filter((item): item is File => item instanceof File)
+        .map(item => item.name)
+        .filter(name =>
+          name.startsWith(`backup_${userId}_`) && name.endsWith('.json')
+        );
 
       const backups: BackupMetadata[] = [];
 
-      for (const file of backupFiles) {
+      for (const fileName of backupFiles) {
         try {
-          const filePath = `${this.BACKUP_DIR}${file}`;
-          const content = await FileSystem.readAsStringAsync(filePath);
+          const filePath = new File(this.BACKUP_DIR, fileName).uri;
+          const content = await new File(filePath).text();
           const backupPackage = JSON.parse(content);
           
           if (backupPackage.metadata) {
             backups.push(backupPackage.metadata);
           }
         } catch (error) {
-          console.warn(`[Backup] Invalid backup file: ${file}`, error);
+          console.warn(`[Backup] Invalid backup file: ${fileName}`, error);
         }
       }
 
@@ -353,7 +353,7 @@ export class BackupSystem {
   // Get backup file path from metadata fields
   static getBackupFilePath(userId: string, createdAt: string): string {
     const fileName = `backup_${userId}_${createdAt.replace(/[:.]/g, '-')}.json`;
-    return `${this.BACKUP_DIR}${fileName}`;
+    return new File(this.BACKUP_DIR, fileName).uri;
   }
 
   // Delete backup
@@ -366,7 +366,7 @@ export class BackupSystem {
 
       const filePath = this.getBackupFilePath(backup.userId, backup.createdAt);
       
-      await FileSystem.deleteAsync(filePath);
+      new File(filePath).delete();
       return true;
 
     } catch (error) {
@@ -472,7 +472,7 @@ export class BackupSystem {
    * Retorna a chave S3 do arquivo salvo.
    */
   static async uploadToCloud(filePath: string): Promise<string> {
-    const content = await FileSystem.readAsStringAsync(filePath);
+    const content = await new File(filePath).text();
     const backupPackage = JSON.parse(content);
 
     const response = await authFetch(`${BACKEND_URL}/backup/upload`, {
@@ -521,13 +521,13 @@ export class BackupSystem {
 
     // Salvar temporariamente no filesystem local e restaurar
     await this.initialize();
-    const tmpPath = `${this.BACKUP_DIR}cloud_restore_tmp.json`;
-    await FileSystem.writeAsStringAsync(tmpPath, JSON.stringify(backupPackage));
+    const tmpFile = new File(this.BACKUP_DIR, 'cloud_restore_tmp.json');
+    tmpFile.write(JSON.stringify(backupPackage));
 
-    const result = await this.restoreBackup(tmpPath);
+    const result = await this.restoreBackup(tmpFile.uri);
 
     try {
-      await FileSystem.deleteAsync(tmpPath, { idempotent: true });
+      tmpFile.delete();
     } catch {}
 
     return result;
@@ -546,13 +546,13 @@ export class BackupSystem {
     const backupPackage = data.backup;
 
     await this.initialize();
-    const tmpPath = `${this.BACKUP_DIR}cloud_restore_tmp.json`;
-    await FileSystem.writeAsStringAsync(tmpPath, JSON.stringify(backupPackage));
+    const tmpFile = new File(this.BACKUP_DIR, 'cloud_restore_tmp.json');
+    tmpFile.write(JSON.stringify(backupPackage));
 
-    const result = await this.restoreBackup(tmpPath);
+    const result = await this.restoreBackup(tmpFile.uri);
 
     try {
-      await FileSystem.deleteAsync(tmpPath, { idempotent: true });
+      tmpFile.delete();
     } catch {}
 
     return result;
