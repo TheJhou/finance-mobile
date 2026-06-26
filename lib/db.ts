@@ -1,5 +1,5 @@
 import * as Crypto from "expo-crypto";
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import * as SQLite from "expo-sqlite";
 import { Platform } from "react-native";
@@ -28,11 +28,26 @@ async function getOrCreateDbKey(): Promise<string> {
 }
 
 /**
- * Verifica se o arquivo de banco de dados já existe no disco.
+ * Verifica se o banco de dados já existe e tem tabelas.
+ * Usa a própria API do SQLite em vez de File para evitar problemas de URI.
  */
 async function databaseExists(): Promise<boolean> {
-  const dbFile = new File(Paths.document, DB_NAME);
-  return dbFile.exists;
+  try {
+    const db = await SQLite.openDatabaseAsync(DB_NAME, { useNewConnection: true });
+    try {
+      const tables = await db.getAllAsync<{ name: string }>(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+      );
+      return tables.length > 0;
+    } catch {
+      // Banco criptografado: não consegue ler sem chave, mas existe
+      return true;
+    } finally {
+      await db.closeAsync();
+    }
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -88,9 +103,9 @@ async function migrateToEncrypted(encryptionKey: string): Promise<SQLite.SQLiteD
   }
 
   // Move o banco criptografado temp para o nome final (sobrescreve o antigo)
-  // Faz isso ANTES de deletar para evitar perda de dados se o move falhar
-  // Usa Paths.document (URI absoluta file:///) para o construtor de File
-  new File(Paths.document, tempDbName).move(new File(Paths.document, DB_NAME));
+  // Constrói URI file:// absoluta a partir do diretório do SQLite
+  const dir = SQLite.defaultDatabaseDirectory as string;
+  new File(`file://${dir}/${tempDbName}`).move(new File(`file://${dir}/${DB_NAME}`));
 
   // Abre o banco final criptografado
   const finalDb = await SQLite.openDatabaseAsync(DB_NAME);
