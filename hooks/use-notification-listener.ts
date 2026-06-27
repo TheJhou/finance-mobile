@@ -11,6 +11,7 @@ import {
     parseNotification,
 } from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
+import type { PaymentMethod, TransactionType } from "@/lib/types";
 import BankNotifications, {
     type BankNotificationEvent,
 } from "@/modules/bank-notifications";
@@ -102,7 +103,8 @@ export function useNotificationListener() {
             const aiResult = await analyzeText(
               text,
               "TEXT",
-              categories.map((c) => ({ id: c.id, name: c.name }))
+              categories.map((c) => ({ id: c.id, name: c.name })),
+              { bank: parsed.bank, paymentMethod: parsed.paymentMethod }
             );
             if (destroyed) return;
             const draft = aiResult?.draft;
@@ -117,7 +119,7 @@ export function useNotificationListener() {
               }
             }
 
-            const added = await enqueueNotification({
+            const insertedId = await enqueueNotification({
               packageName: event.packageName,
               title: event.title,
               text,
@@ -125,34 +127,25 @@ export function useNotificationListener() {
               subText: event.subText,
               postTime: event.postTime,
               rawText: text,
-              amount: parsed.amount,
+              amount: draft?.amount ?? parsed.amount,
               description,
-              type: parsed.type,
-              paymentMethod: parsed.paymentMethod,
+              type: (draft?.type as TransactionType) ?? parsed.type,
+              paymentMethod: (draft?.paymentMethod as PaymentMethod) ?? parsed.paymentMethod,
               bank: parsed.bank,
               categoryId,
               categoryName,
             });
 
-            if (added) {
-              const items = await getPendingAiNotifications();
-              const item = items.find(
-                (i) =>
-                  i.packageName === event.packageName &&
-                  i.postTime === event.postTime &&
-                  i.amount === parsed.amount
-              );
-              if (item) {
-                await updateWithAiResult(item.id, {
-                  description,
-                  categoryId,
-                  categoryName,
-                });
-              }
+            if (insertedId) {
+              await updateWithAiResult(insertedId, {
+                description,
+                categoryId,
+                categoryName,
+              });
             }
 
             console.log(
-              `[AutoImport] Enfileirado com IA: ${description} R$${parsed.amount}`
+              `[AutoImport] Enfileirado com IA: ${description} R$${draft?.amount ?? parsed.amount}`
             );
             return;
           } catch (aiErr) {
@@ -179,7 +172,7 @@ export function useNotificationListener() {
           categoryName = matched.name;
         }
 
-        await enqueueNotification({
+        const fallbackId = await enqueueNotification({
           packageName: event.packageName,
           title: event.title,
           text,
@@ -195,6 +188,14 @@ export function useNotificationListener() {
           categoryId,
           categoryName,
         });
+
+        if (fallbackId) {
+          await updateWithAiResult(fallbackId, {
+            description,
+            categoryId,
+            categoryName,
+          });
+        }
 
         console.log(
           `[AutoImport] Enfileirado (fallback local): ${description} R$${parsed.amount}`

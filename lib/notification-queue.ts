@@ -90,7 +90,7 @@ export async function isNotificationInQueue(
 /**
  * Adiciona uma notificação à fila com status PENDING_AI.
  * Faz dedup: se já existe com mesmos (package, title, text, amount, postTime), não adiciona.
- * Retorna true se adicionou, false se era duplicata.
+ * Retorna o ID do item inserido, ou null se era duplicata.
  */
 export async function enqueueNotification(
   data: {
@@ -109,7 +109,7 @@ export async function enqueueNotification(
     categoryId: string;
     categoryName: string;
   }
-): Promise<boolean> {
+): Promise<string | null> {
   const db = await getDb();
 
   const existing = await isNotificationInQueue(
@@ -119,7 +119,7 @@ export async function enqueueNotification(
     data.amount,
     data.postTime
   );
-  if (existing) return false;
+  if (existing) return null;
 
   const id = generateId();
   await db.runAsync(
@@ -144,7 +144,7 @@ export async function enqueueNotification(
       data.categoryName,
     ]
   );
-  return true;
+  return id;
 }
 
 /**
