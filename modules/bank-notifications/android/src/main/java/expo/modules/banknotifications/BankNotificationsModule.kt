@@ -41,7 +41,7 @@ class BankNotificationsModule : Module() {
       }
     }
 
-    OnStartObserving("onNotification") {
+    OnStartObserving {
       val weakModule = WeakReference(this@BankNotificationsModule)
       BankNotificationListenerService.listener = { payload ->
         weakModule.get()?.sendEvent("onNotification", payload)
@@ -51,7 +51,7 @@ class BankNotificationsModule : Module() {
       }
     }
 
-    OnStopObserving("onNotification") {
+    OnStopObserving {
       BankNotificationListenerService.listener = null
       BankNotificationListenerService.connectionCallback = null
     }

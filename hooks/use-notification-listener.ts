@@ -19,10 +19,14 @@ import { useEffect, useRef } from "react";
 
 const HEALTH_CHECK_INTERVAL_MS = 30_000;
 const AI_RETRY_INTERVAL_MS = 30_000;
+const REBIND_BACKOFF_MS = 10_000;
 
 export function useNotificationListener() {
   const isOnlineRef = useRef(true);
   const aiRetryInProgressRef = useRef(false);
+  const processingQueueRef = useRef<BankNotificationEvent[]>([]);
+  const isProcessingRef = useRef(false);
+  const lastRebindRef = useRef(0);
 
   useEffect(() => {
     if (!BankNotifications) {
@@ -54,141 +58,167 @@ export function useNotificationListener() {
 
     // ── Processa notificação bruta: parse local → enfileira no SQLite ──
     async function processNotification(event: BankNotificationEvent) {
+      if (destroyed) return;
       const isBankApp = event.packageName in BANK_APPS;
       console.log(
         `[AutoImport] Notificação recebida: pkg=${event.packageName} bank=${isBankApp} title=${event.title}`
       );
 
-      const parsed = parseNotification(event);
-      if (!parsed) {
-        console.log("[AutoImport] Não classificada:", event.packageName, event.title);
-        return;
-      }
+      try {
+        const parsed = parseNotification(event);
+        if (!parsed) {
+          console.log("[AutoImport] Não classificada:", event.packageName, event.title);
+          return;
+        }
 
-      const text = [event.title, event.text, event.bigText]
-        .filter(Boolean)
-        .join(" ");
+        const text = [event.title, event.text, event.bigText]
+          .filter(Boolean)
+          .join(" ");
 
-      const alreadyInQueue = await isNotificationInQueue(
-        event.packageName,
-        event.title,
-        text,
-        parsed.amount,
-        event.postTime
-      );
-      if (alreadyInQueue) {
-        console.log("[AutoImport] Notificação já está na fila — ignorando");
-        return;
-      }
+        const alreadyInQueue = await isNotificationInQueue(
+          event.packageName,
+          event.title,
+          text,
+          parsed.amount,
+          event.postTime
+        );
+        if (alreadyInQueue) {
+          console.log("[AutoImport] Notificação já está na fila — ignorando");
+          return;
+        }
 
-      const categories = await listCategories();
-      if (categories.length === 0) return;
+        if (destroyed) return;
 
-      let categoryId = categories[0].id;
-      let categoryName = categories[0].name;
-      let description = parsed.description;
+        const categories = await listCategories();
+        if (categories.length === 0) return;
 
-      // Tenta IA apenas se online
-      if (isOnlineRef.current) {
-        try {
-          const aiResult = await analyzeText(
-            text,
-            "TEXT",
-            categories.map((c) => ({ id: c.id, name: c.name }))
-          );
-          const draft = aiResult?.draft;
-          if (draft) {
-            if (draft.description) description = draft.description;
-            if (draft.categoryId) {
-              const matched = categories.find((c) => c.id === draft.categoryId);
-              if (matched) {
-                categoryId = matched.id;
-                categoryName = matched.name;
+        let categoryId = categories[0].id;
+        let categoryName = categories[0].name;
+        let description = parsed.description;
+
+        // Tenta IA apenas se online
+        if (isOnlineRef.current) {
+          try {
+            const aiResult = await analyzeText(
+              text,
+              "TEXT",
+              categories.map((c) => ({ id: c.id, name: c.name }))
+            );
+            if (destroyed) return;
+            const draft = aiResult?.draft;
+            if (draft) {
+              if (draft.description) description = draft.description;
+              if (draft.categoryId) {
+                const matched = categories.find((c) => c.id === draft.categoryId);
+                if (matched) {
+                  categoryId = matched.id;
+                  categoryName = matched.name;
+                }
               }
             }
-          }
 
-          const added = await enqueueNotification({
-            packageName: event.packageName,
-            title: event.title,
-            text,
-            bigText: event.bigText,
-            subText: event.subText,
-            postTime: event.postTime,
-            rawText: text,
-            amount: parsed.amount,
-            description,
-            type: parsed.type,
-            paymentMethod: parsed.paymentMethod,
-            bank: parsed.bank,
-            categoryId,
-            categoryName,
-          });
+            const added = await enqueueNotification({
+              packageName: event.packageName,
+              title: event.title,
+              text,
+              bigText: event.bigText,
+              subText: event.subText,
+              postTime: event.postTime,
+              rawText: text,
+              amount: parsed.amount,
+              description,
+              type: parsed.type,
+              paymentMethod: parsed.paymentMethod,
+              bank: parsed.bank,
+              categoryId,
+              categoryName,
+            });
 
-          if (added) {
-            // Marca como enriquecida pela IA
-            const items = await getPendingAiNotifications();
-            const item = items.find(
-              (i) =>
-                i.packageName === event.packageName &&
-                i.postTime === event.postTime &&
-                i.amount === parsed.amount
-            );
-            if (item) {
-              await updateWithAiResult(item.id, {
-                description,
-                categoryId,
-                categoryName,
-              });
+            if (added) {
+              const items = await getPendingAiNotifications();
+              const item = items.find(
+                (i) =>
+                  i.packageName === event.packageName &&
+                  i.postTime === event.postTime &&
+                  i.amount === parsed.amount
+              );
+              if (item) {
+                await updateWithAiResult(item.id, {
+                  description,
+                  categoryId,
+                  categoryName,
+                });
+              }
             }
+
+            console.log(
+              `[AutoImport] Enfileirado com IA: ${description} R$${parsed.amount}`
+            );
+            return;
+          } catch (aiErr) {
+            console.warn(
+              "[AutoImport] IA falhou, usando inferência local:",
+              aiErr instanceof Error ? aiErr.message : aiErr
+            );
           }
-
-          console.log(
-            `[AutoImport] Enfileirado com IA: ${description} R$${parsed.amount}`
-          );
-          return;
-        } catch (aiErr) {
-          console.warn(
-            "[AutoImport] IA falhou, usando inferência local:",
-            aiErr instanceof Error ? aiErr.message : aiErr
-          );
+        } else {
+          console.log("[AutoImport] Offline — usando inferência local");
         }
-      } else {
-        console.log("[AutoImport] Offline — usando inferência local");
+
+        if (destroyed) return;
+
+        // Fallback local (offline ou IA falhou) — enfileira com ai_enriched=0
+        const inferredCatName = inferCategoryFromText(text);
+        const matched = inferredCatName
+          ? categories.find(
+              (c) => c.name.toLowerCase() === inferredCatName.toLowerCase()
+            )
+          : null;
+        if (matched) {
+          categoryId = matched.id;
+          categoryName = matched.name;
+        }
+
+        await enqueueNotification({
+          packageName: event.packageName,
+          title: event.title,
+          text,
+          bigText: event.bigText,
+          subText: event.subText,
+          postTime: event.postTime,
+          rawText: text,
+          amount: parsed.amount,
+          description,
+          type: parsed.type,
+          paymentMethod: parsed.paymentMethod,
+          bank: parsed.bank,
+          categoryId,
+          categoryName,
+        });
+
+        console.log(
+          `[AutoImport] Enfileirado (fallback local): ${description} R$${parsed.amount}`
+        );
+      } catch (err) {
+        console.error(
+          "[AutoImport] Erro ao processar notificação:",
+          err instanceof Error ? err.message : err
+        );
       }
+    }
 
-      // Fallback local (offline ou IA falhou) — enfileira com ai_enriched=0
-      const inferredCatName = inferCategoryFromText(text);
-      const matched = inferredCatName
-        ? categories.find(
-            (c) => c.name.toLowerCase() === inferredCatName.toLowerCase()
-          )
-        : null;
-      if (matched) {
-        categoryId = matched.id;
-        categoryName = matched.name;
+    // ── Fila de processamento: garante que notificações não se percam ──
+    async function drainQueue() {
+      if (isProcessingRef.current) return;
+      isProcessingRef.current = true;
+      try {
+        while (processingQueueRef.current.length > 0 && !destroyed) {
+          const event = processingQueueRef.current.shift()!;
+          await processNotification(event);
+        }
+      } finally {
+        isProcessingRef.current = false;
       }
-
-      await enqueueNotification({
-        packageName: event.packageName,
-        title: event.title,
-        text,
-        bigText: event.bigText,
-        subText: event.subText,
-        postTime: event.postTime,
-        rawText: text,
-        amount: parsed.amount,
-        description,
-        type: parsed.type,
-        paymentMethod: parsed.paymentMethod,
-        bank: parsed.bank,
-        categoryId,
-        categoryName,
-      });
-
-      console.log(
-        `[AutoImport] Enfileirado (fallback local): ${description} R$${parsed.amount}`
-      );
     }
 
     // ── Reprocesso de notificações que ficaram sem IA (offline) ────────
@@ -256,7 +286,8 @@ export function useNotificationListener() {
     const notifSub = BankNotifications.addListener(
       "onNotification",
       (event: BankNotificationEvent) => {
-        void processNotification(event);
+        processingQueueRef.current.push(event);
+        void drainQueue();
       }
     );
 
@@ -267,11 +298,15 @@ export function useNotificationListener() {
           console.log("[AutoImport] Listener reconectado");
           void retryPendingAiEnrichment();
         } else {
-          console.warn("[AutoImport] Listener desconectado pelo Android — tentando rebind");
-          try {
-            BankNotifications?.requestRebind();
-          } catch (e) {
-            console.warn("[AutoImport] requestRebind falhou:", e);
+          const now = Date.now();
+          if (now - lastRebindRef.current >= REBIND_BACKOFF_MS) {
+            lastRebindRef.current = now;
+            console.warn("[AutoImport] Listener desconectado pelo Android — tentando rebind");
+            try {
+              BankNotifications?.requestRebind();
+            } catch (e) {
+              console.warn("[AutoImport] requestRebind falhou:", e);
+            }
           }
         }
       }
@@ -285,13 +320,17 @@ export function useNotificationListener() {
         if (!granted) {
           console.warn("[AutoImport] Permissão de notificação revogada");
         } else if (!connected) {
-          console.warn(
-            "[AutoImport] Listener desconectado — tentando rebind automático"
-          );
-          try {
-            BankNotifications?.requestRebind();
-          } catch (e) {
-            console.warn("[AutoImport] requestRebind falhou:", e);
+          const now = Date.now();
+          if (now - lastRebindRef.current >= REBIND_BACKOFF_MS) {
+            lastRebindRef.current = now;
+            console.warn(
+              "[AutoImport] Listener desconectado — tentando rebind automático"
+            );
+            try {
+              BankNotifications?.requestRebind();
+            } catch (e) {
+              console.warn("[AutoImport] requestRebind falhou:", e);
+            }
           }
         }
       }
