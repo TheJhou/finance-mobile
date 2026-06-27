@@ -27,6 +27,11 @@ class BankNotificationsModule : Module() {
       BankNotificationListenerService.isConnected
     }
 
+    Function("requestRebind") {
+      val context = appContext.reactContext ?: return@Function
+      BankNotificationListenerService.requestRebind(context)
+    }
+
     Function("openPermissionSettings") {
       val context = appContext.reactContext
       if (context != null) {

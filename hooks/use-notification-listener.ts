@@ -17,7 +17,7 @@ import BankNotifications, {
 import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef } from "react";
 
-const HEALTH_CHECK_INTERVAL_MS = 60_000;
+const HEALTH_CHECK_INTERVAL_MS = 30_000;
 const AI_RETRY_INTERVAL_MS = 30_000;
 
 export function useNotificationListener() {
@@ -267,7 +267,12 @@ export function useNotificationListener() {
           console.log("[AutoImport] Listener reconectado");
           void retryPendingAiEnrichment();
         } else {
-          console.warn("[AutoImport] Listener desconectado pelo Android");
+          console.warn("[AutoImport] Listener desconectado pelo Android — tentando rebind");
+          try {
+            BankNotifications?.requestRebind();
+          } catch (e) {
+            console.warn("[AutoImport] requestRebind falhou:", e);
+          }
         }
       }
     );
@@ -281,8 +286,13 @@ export function useNotificationListener() {
           console.warn("[AutoImport] Permissão de notificação revogada");
         } else if (!connected) {
           console.warn(
-            "[AutoImport] Listener desconectado — reinicie o app ou reative nas configurações"
+            "[AutoImport] Listener desconectado — tentando rebind automático"
           );
+          try {
+            BankNotifications?.requestRebind();
+          } catch (e) {
+            console.warn("[AutoImport] requestRebind falhou:", e);
+          }
         }
       }
     }, HEALTH_CHECK_INTERVAL_MS);

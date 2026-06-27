@@ -1,5 +1,7 @@
 package expo.modules.banknotifications
 
+import android.content.Context
+import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -13,9 +15,14 @@ class BankNotificationListenerService : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    Log.w(TAG, "Notification listener disconnected")
+    Log.w(TAG, "Notification listener disconnected — requesting rebind")
     isConnected = false
     connectionCallback?.invoke(false)
+    try {
+      requestRebind()
+    } catch (e: Throwable) {
+      Log.e(TAG, "requestRebind failed", e)
+    }
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -52,5 +59,15 @@ class BankNotificationListenerService : NotificationListenerService() {
 
     @Volatile
     var connectionCallback: ((Boolean) -> Unit)? = null
+
+    fun requestRebind(context: Context) {
+      try {
+        val intent = Intent(context, BankNotificationListenerService::class.java)
+        context.startService(intent)
+        Log.i(TAG, "requestRebind: startService sent")
+      } catch (e: Throwable) {
+        Log.e(TAG, "requestRebind failed", e)
+      }
+    }
   }
 }

@@ -7,10 +7,10 @@
  */
 
 import {
-  parseNotification,
-  extractAmount,
-  extractCardLastDigits,
-  parseBankNotification,
+    extractAmount,
+    extractCardLastDigits,
+    parseBankNotification,
+    parseNotification,
 } from "@/lib/notifications/parsers";
 
 describe("notification parsers — extractAmount", () => {
@@ -64,7 +64,7 @@ describe("notification parsers — parseBankNotification", () => {
     const result = parseBankNotification(
       "Itaú",
       "Pagamento de R$ 1.200,00 realizado",
-      "com.itau
+      "com.itau"
     );
 
     expect(result).not.toBeNull();

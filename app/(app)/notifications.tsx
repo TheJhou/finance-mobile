@@ -166,7 +166,21 @@ export default function NotificationsScreen() {
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") checkPermission();
+      if (state === "active") {
+        checkPermission();
+        if (BankNotifications) {
+          const granted = BankNotifications.isPermissionGranted();
+          const connected = BankNotifications.isListenerConnected();
+          if (granted && !connected) {
+            try {
+              BankNotifications.requestRebind();
+              console.log("[Notifications] Auto-rebind on app foreground");
+            } catch (e) {
+              console.warn("[Notifications] Auto-rebind failed:", e);
+            }
+          }
+        }
+      }
     });
     return () => sub.remove();
   }, [checkPermission]);
@@ -588,10 +602,24 @@ export default function NotificationsScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.statusTitle}>Listener desconectado</Text>
               <Text style={styles.statusText}>
-                O serviço de captura foi interrompido pelo Android. Reinicie o app
-                ou desative e reative o acesso nas configurações.
+                O serviço de captura foi interrompido pelo Android. Tente reativar
+                abaixo ou desative e reative o acesso nas configurações.
               </Text>
             </View>
+            <Pressable
+              style={[styles.statusBtn, { backgroundColor: colors.primary }]}
+              onPress={() => {
+                try {
+                  BankNotifications?.requestRebind();
+                  showToast("success", "Tentando reconectar...");
+                  setTimeout(() => checkPermission(), 2000);
+                } catch {
+                  showToast("error", "Falha ao reativar listener");
+                }
+              }}
+            >
+              <Text style={styles.statusBtnText}>Reativar</Text>
+            </Pressable>
             <Pressable style={styles.statusBtn} onPress={openSettings}>
               <Text style={styles.statusBtnText}>Config</Text>
             </Pressable>
