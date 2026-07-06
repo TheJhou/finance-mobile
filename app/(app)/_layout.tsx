@@ -105,6 +105,7 @@ export default function AppLayout() {
       <Tabs.Screen name="backup" options={{ href: null }} />
       <Tabs.Screen name="privacy" options={{ href: null }} />
       <Tabs.Screen name="terms" options={{ href: null }} />
+      <Tabs.Screen name="forgot-password" options={{ href: null }} />
     </Tabs>
   );
 }

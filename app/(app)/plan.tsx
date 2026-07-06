@@ -25,6 +25,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PlanScreen() {
+  const router = useRouter();
   const [loggedIn, setLoggedIn] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -352,6 +353,19 @@ export default function PlanScreen() {
               onPress={handleAuth}
               loading={authLoading}
             />
+            {!isRegister && (
+              <Pressable
+                style={{ alignItems: "center", paddingVertical: spacing.xs }}
+                onPress={() => {
+                  setShowAuthModal(false);
+                  router.push("/forgot-password");
+                }}
+              >
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "600" }}>
+                  Esqueci minha senha
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               onPress={() => setIsRegister(!isRegister)}
               style={{ alignItems: "center", paddingVertical: spacing.md }}

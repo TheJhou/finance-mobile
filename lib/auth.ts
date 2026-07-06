@@ -128,6 +128,49 @@ export async function login(email: string, password: string): Promise<void> {
   if (data.user?.email) await setStoredValue("user_email", data.user.email);
 }
 
+export async function forgotPassword(email: string): Promise<{ message: string }> {
+  const response = await fetch(`${BACKEND_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+
+  if (!response.ok) {
+    let msg = "Falha ao solicitar recuperação";
+    try {
+      const err = await response.json();
+      msg = err.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  return response.json();
+}
+
+export async function resetPassword(
+  email: string,
+  code: string,
+  password: string,
+  confirmPassword: string
+): Promise<{ message: string }> {
+  const response = await fetch(`${BACKEND_URL}/auth/reset-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code, password, confirmPassword }),
+  });
+
+  if (!response.ok) {
+    let msg = "Falha ao redefinir senha";
+    try {
+      const err = await response.json();
+      msg = err.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+
+  return response.json();
+}
+
 export async function logout(): Promise<void> {
   await removeStoredValue("jwt_access_token");
   await removeStoredValue("jwt_refresh_token");

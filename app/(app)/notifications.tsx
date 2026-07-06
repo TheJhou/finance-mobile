@@ -50,6 +50,7 @@ function normalizeStatus(value: unknown, fallback: TransactionStatus): Transacti
 }
 
 export default function NotificationsScreen() {
+  const router = useRouter();
   const [granted, setGranted] = useState(false);
   const [connected, setConnected] = useState(false);
   const [pendingNotifications, setPendingNotifications] = useState<NotificationQueueItem[]>([]);
@@ -1018,6 +1019,20 @@ export default function NotificationsScreen() {
               onPress={authMode === "login" ? handleLogin : handleRegister}
               loading={loggingIn}
             />
+
+            {authMode === "login" && (
+              <Pressable
+                style={{ alignItems: "center", paddingVertical: spacing.xs }}
+                onPress={() => {
+                  setShowLoginModal(false);
+                  router.push("/forgot-password");
+                }}
+              >
+                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "600" }}>
+                  Esqueci minha senha
+                </Text>
+              </Pressable>
+            )}
 
             <Pressable
               style={styles.switchAuthBtn}
