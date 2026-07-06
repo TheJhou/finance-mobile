@@ -19,7 +19,7 @@ class BankNotificationListenerService : NotificationListenerService() {
     isConnected = false
     connectionCallback?.invoke(false)
     try {
-      requestRebind()
+      requestRebind(this)
     } catch (e: Throwable) {
       Log.e(TAG, "requestRebind failed", e)
     }
