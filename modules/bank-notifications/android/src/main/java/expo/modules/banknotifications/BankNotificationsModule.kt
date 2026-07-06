@@ -27,6 +27,11 @@ class BankNotificationsModule : Module() {
       BankNotificationListenerService.isConnected
     }
 
+    Function("requestRebind") {
+      val context = appContext.reactContext ?: return@Function
+      BankNotificationListenerService.requestRebind(context)
+    }
+
     Function("openPermissionSettings") {
       val context = appContext.reactContext
       if (context != null) {
@@ -36,7 +41,7 @@ class BankNotificationsModule : Module() {
       }
     }
 
-    OnStartObserving("onNotification") {
+    OnStartObserving {
       val weakModule = WeakReference(this@BankNotificationsModule)
       BankNotificationListenerService.listener = { payload ->
         weakModule.get()?.sendEvent("onNotification", payload)
@@ -46,7 +51,7 @@ class BankNotificationsModule : Module() {
       }
     }
 
-    OnStopObserving("onNotification") {
+    OnStopObserving {
       BankNotificationListenerService.listener = null
       BankNotificationListenerService.connectionCallback = null
     }

@@ -85,11 +85,16 @@ export async function ocrDocument(
 
 // ── Análise de texto ───────────────────────────────────────────────────
 
-export async function analyzeText(text: string, source: "TEXT" | "DOCUMENT" | "AUDIO", categories: Array<{ id: string; name: string }>) {
+export async function analyzeText(
+  text: string,
+  source: "TEXT" | "DOCUMENT" | "AUDIO",
+  categories: Array<{ id: string; name: string }>,
+  context?: { bank?: string; paymentMethod?: string }
+) {
   const response = await authFetch(`${BACKEND_URL}/imports/analyze`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rawText: text, source, categories }),
+    body: JSON.stringify({ rawText: text, source, categories, context }),
   });
 
   if (!response.ok) await handleError(response, "Erro ao analisar texto");
