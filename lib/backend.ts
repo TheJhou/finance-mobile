@@ -98,11 +98,15 @@ export async function analyzeText(text: string, source: "TEXT" | "DOCUMENT" | "A
 
 // ── Extração de foto (via backend, sem API key no client) ──────────────
 
-export async function extractFromPhoto(base64Image: string, mimeType: string) {
+export async function extractFromPhoto(
+  base64Image: string,
+  mimeType: string,
+  categories: Array<{ id: string; name: string }> = []
+) {
   const response = await authFetch(`${BACKEND_URL}/imports/extract-photo`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image: base64Image, mimeType }),
+    body: JSON.stringify({ image: base64Image, mimeType, categories }),
   });
 
   if (!response.ok) await handleError(response, "Erro ao processar foto");

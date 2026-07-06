@@ -47,15 +47,17 @@ function normalize(data: Record<string, unknown>, fallbackDesc: string): Extract
 
 export async function extractTransactionFromPhoto(
   base64Image: string,
-  mimeType: string
+  mimeType: string,
+  categories: Array<{ id: string; name: string }> = []
 ): Promise<ExtractedTransaction> {
-  const raw = await extractFromPhoto(base64Image, mimeType);
+  const raw = await extractFromPhoto(base64Image, mimeType, categories);
   return normalize(raw, "");
 }
 
 export async function extractTransactionFromText(
-  text: string
+  text: string,
+  categories: Array<{ id: string; name: string }> = []
 ): Promise<ExtractedTransaction> {
-  const raw = await extractFromText(text);
+  const raw = await extractFromText(text, categories);
   return normalize(raw, text.substring(0, 50));
 }

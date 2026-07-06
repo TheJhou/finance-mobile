@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, logout, register } from "@/lib/auth";
-import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
+import { ApiError, analyzeText, autoSaveTransaction, ocrDocument, transcribeAudio } from "@/lib/backend";
 import {
     getPendingApprovalNotifications,
     markApproved,
@@ -151,6 +151,21 @@ export default function NotificationsScreen() {
       await markApproved(item.id);
       await loadPending();
       showToast('success', `Transação aprovada: ${item.description}`);
+
+      try {
+        await autoSaveTransaction({
+          description: item.description || "Transação",
+          amount: item.amount || 0,
+          type: (item.type || "EXPENSE") as "INCOME" | "EXPENSE",
+          paymentMethod: (item.paymentMethod || "OTHER") as any,
+          date: toDateInputValue(new Date(item.postTime)),
+          categoryId: item.categoryId || undefined,
+          notes: `Auto-importado de ${item.bank || "Banco"}`,
+          source: "TEXT",
+        });
+      } catch (syncErr) {
+        console.warn("[AutoImport] Falha ao sincronizar com backend:", syncErr);
+      }
     } catch {
       showToast('error', 'Falha ao salvar transação');
     } finally {
