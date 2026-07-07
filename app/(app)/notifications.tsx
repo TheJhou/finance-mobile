@@ -18,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
