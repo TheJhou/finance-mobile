@@ -17,6 +17,8 @@ export interface BackupMetadata {
   checksum: string;
   tables: string[];
   encrypted: boolean;
+  fileName?: string;
+  filePath?: string;
   deviceInfo: {
     platform: string;
     osVersion: string;
@@ -105,7 +107,8 @@ export class BackupSystem {
       const userId = await this.getUserId();
       const userName = await getStoredUserName();
       const backupId = generateId();
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const createdAt = new Date().toISOString();
+      const timestamp = createdAt.replace(/[:.]/g, '-');
       
       // Get all user data (settings table may not exist — skip gracefully)
       const CORE_TABLES = ['categories', 'transactions', 'recurring_transactions', 'notification_queue'];
@@ -145,7 +148,7 @@ export class BackupSystem {
           userId,
           userName,
           version: this.BACKUP_VERSION,
-          createdAt: new Date().toISOString(),
+          createdAt,
           size: 0, // Will be calculated
           checksum: '', // Will be calculated
           tables: Object.keys(backupData),
@@ -175,6 +178,8 @@ export class BackupSystem {
       const fileName = `backup_${userId}_${timestamp}.json`;
       const file = new File(this.BACKUP_DIR, fileName);
       const filePath = file.uri;
+      backupPackage.metadata.fileName = fileName;
+      backupPackage.metadata.filePath = filePath;
       
       file.write(JSON.stringify(backupPackage, null, 2));
       console.log('[Backup] File written:', filePath);
@@ -333,7 +338,11 @@ export class BackupSystem {
           const backupPackage = JSON.parse(content);
           
           if (backupPackage.metadata) {
-            backups.push(backupPackage.metadata);
+            backups.push({
+              ...backupPackage.metadata,
+              fileName,
+              filePath,
+            });
           }
         } catch (error) {
           console.warn(`[Backup] Invalid backup file: ${fileName}`, error);
@@ -351,9 +360,16 @@ export class BackupSystem {
   }
 
   // Get backup file path from metadata fields
-  static getBackupFilePath(userId: string, createdAt: string): string {
-    const fileName = `backup_${userId}_${createdAt.replace(/[:.]/g, '-')}.json`;
-    return new File(this.BACKUP_DIR, fileName).uri;
+  static getBackupFilePath(userId: string, createdAt: string, fileName?: string): string {
+    if (fileName) {
+      return new File(this.BACKUP_DIR, fileName).uri;
+    }
+    const legacyFileName = `backup_${userId}_${createdAt.replace(/[:.]/g, '-')}.json`;
+    return new File(this.BACKUP_DIR, legacyFileName).uri;
+  }
+
+  static getBackupFilePathFromMetadata(backup: BackupMetadata): string {
+    return this.getBackupFilePath(backup.userId, backup.createdAt, backup.fileName);
   }
 
   // Delete backup
@@ -364,7 +380,7 @@ export class BackupSystem {
       
       if (!backup) return false;
 
-      const filePath = this.getBackupFilePath(backup.userId, backup.createdAt);
+      const filePath = this.getBackupFilePathFromMetadata(backup);
       
       new File(filePath).delete();
       return true;

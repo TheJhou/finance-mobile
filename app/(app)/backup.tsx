@@ -157,7 +157,7 @@ export default function BackupScreen() {
           onPress: async () => {
             try {
               setRestoring(true);
-              const filePath = BackupSystem.getBackupFilePath(selectedBackup.userId, selectedBackup.createdAt);
+              const filePath = BackupSystem.getBackupFilePathFromMetadata(selectedBackup);
               
               const result = await BackupSystem.restoreBackup(filePath);
               
@@ -227,7 +227,7 @@ export default function BackupScreen() {
         return;
       }
 
-      const { localResult, cloudKey, cloudError } = await BackupSystem.createAndUploadBackup();
+      const { localResult, cloudError } = await BackupSystem.createAndUploadBackup();
 
       if (!localResult.success) {
         Alert.alert("Erro", localResult.error || "Falha ao criar backup");
@@ -269,7 +269,7 @@ export default function BackupScreen() {
               } else {
                 Alert.alert("Erro", result.error || "Falha ao restaurar da nuvem");
               }
-            } catch (error) {
+            } catch {
               Alert.alert("Erro", "Falha ao restaurar da nuvem");
             } finally {
               setRestoringCloud(false);
@@ -309,7 +309,7 @@ export default function BackupScreen() {
 
   const handleExportBackup = async (backup: BackupMetadata) => {
     try {
-      const filePath = BackupSystem.getBackupFilePath(backup.userId, backup.createdAt);
+      const filePath = BackupSystem.getBackupFilePathFromMetadata(backup);
       
       if (new File(filePath).exists) {
         await Sharing.shareAsync(filePath, {
@@ -583,6 +583,9 @@ export default function BackupScreen() {
                     <Text style={styles.backupDetails}>
                       {formatFileSize(item.size)} • {item.tables.length} tabelas
                     </Text>
+                    {item.fileName && (
+                      <Text style={styles.backupFileName} numberOfLines={1}>{item.fileName}</Text>
+                    )}
                     {item.userName && (
                       <Text style={styles.backupUser}>Usuário: {item.userName}</Text>
                     )}
@@ -812,6 +815,7 @@ const styles = StyleSheet.create({
   backupDate: { fontSize: 14, fontWeight: "500", color: colors.textPrimary },
   backupDetails: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   backupUser: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
+  backupFileName: { fontSize: 10, color: colors.textMuted, marginTop: 1 },
   backupActions: {
     flexDirection: "row",
     gap: spacing.sm,
