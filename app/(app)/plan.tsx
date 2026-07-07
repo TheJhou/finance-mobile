@@ -8,7 +8,7 @@ import { colors, radius, spacing } from "@/lib/theme";
 import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
