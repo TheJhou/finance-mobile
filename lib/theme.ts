@@ -1,4 +1,6 @@
-export const colors = {
+export type ThemeMode = "dark" | "light";
+
+const darkColors = {
   primary: "#a78bfa",
   primaryDark: "#7c3aed",
   primaryLight: "#c4b5fd",
@@ -32,7 +34,54 @@ export const colors = {
   chartBar2: "#f472b6",
   chartBar3: "#60a5fa",
   chartBar4: "#fbbf24",
-} as const;
+};
+
+const lightColors = {
+  primary: "#6366f1",
+  primaryDark: "#4f46e5",
+  primaryLight: "#a5b4fc",
+  success: "#059669",
+  danger: "#dc2626",
+  warning: "#d97706",
+  info: "#2563eb",
+
+  background: "#f3f4f6",
+  surface: "#ffffff",
+  surfaceElevated: "#f9fafb",
+  border: "#e5e7eb",
+  borderStrong: "#d1d5db",
+
+  textPrimary: "#111827",
+  textSecondary: "#6b7280",
+  textMuted: "#9ca3af",
+  textInverse: "#ffffff",
+
+  incomeBg: "#d1fae5",
+  incomeFg: "#059669",
+  expenseBg: "#fee2e2",
+  expenseFg: "#dc2626",
+
+  cardGreen: "#b8e648",
+  cardOrange: "#ff8c42",
+  cardPurple: "#6366f1",
+  chartLine: "#6366f1",
+  chartLineSecondary: "#059669",
+  chartBar1: "#6366f1",
+  chartBar2: "#f472b6",
+  chartBar3: "#2563eb",
+  chartBar4: "#d97706",
+};
+
+export type ColorPalette = typeof darkColors;
+
+export const colors: ColorPalette = { ...darkColors };
+
+export function applyTheme(mode: ThemeMode) {
+  const palette = mode === "light" ? lightColors : darkColors;
+  (Object.keys(palette) as (keyof ColorPalette)[]).forEach((key) => {
+    (colors as Record<string, string>)[key] = palette[key];
+  });
+}
 
 export const spacing = {
   xs: 4,

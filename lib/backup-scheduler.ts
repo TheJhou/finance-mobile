@@ -213,38 +213,41 @@ export class BackupScheduler {
     
     while (retryCount <= this.config.maxRetries) {
       try {
-        // Check preconditions
-        if (await this.checkPreconditions()) {
-          // S4: Use createAndUploadBackup to sync to cloud
-          const { localResult, cloudKey, cloudError } = await BackupSystem.createAndUploadBackup();
+        // Local backup doesn't need network — always create it
+        const localResult = await BackupSystem.createBackup();
 
-          if (localResult.success) {
-            // Mark as completed
-            await AsyncStorage.setItem(this.LAST_RUN_KEY, new Date().toDateString());
+        if (localResult.success) {
+          // Mark as completed
+          await AsyncStorage.setItem(this.LAST_RUN_KEY, new Date().toDateString());
 
-            // Show success notification
-            const cloudStatus = cloudKey
-              ? ` (nuvem OK)`
-              : cloudError
-                ? ` (nuvem falhou: ${cloudError})`
-                : '';
-            await this.showNotification(
-              'Backup Concluído',
-              `Seus dados foram backupados com sucesso (${this.formatFileSize(localResult.size || 0)})${cloudStatus}`,
-              'success'
-            );
-
-            // Save to database
-            await this.saveBackupRecord(localResult);
-
-            console.log('[BackupScheduler] Backup completed successfully', cloudKey ? '(cloud synced)' : '(cloud failed)');
-            return;
+          // Try cloud upload separately (best-effort, doesn't block local backup)
+          let cloudStatus = '';
+          if (await this.checkPreconditions() && localResult.filePath) {
+            try {
+              const cloudKey = await BackupSystem.uploadToCloud(localResult.filePath);
+              cloudStatus = cloudKey ? ' (nuvem OK)' : ' (nuvem falhou)';
+            } catch (cloudErr) {
+              cloudStatus = ' (nuvem falhou)';
+              console.warn('[BackupScheduler] Cloud upload failed:', cloudErr);
+            }
           } else {
-            throw new Error(localResult.error || 'Backup failed');
+            cloudStatus = ' (offline — nuvem pendente)';
           }
-        } else {
-          console.log('[BackupScheduler] Preconditions not met, skipping backup');
+
+          // Show success notification
+          await this.showNotification(
+            'Backup Concluído',
+            `Seus dados foram backupados com sucesso (${this.formatFileSize(localResult.size || 0)})${cloudStatus}`,
+            'success'
+          );
+
+          // Save to database
+          await this.saveBackupRecord(localResult);
+
+          console.log('[BackupScheduler] Backup completed successfully');
           return;
+        } else {
+          throw new Error(localResult.error || 'Backup failed');
         }
         
       } catch (error) {

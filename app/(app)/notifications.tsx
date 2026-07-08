@@ -655,7 +655,7 @@ export default function NotificationsScreen() {
             disabled
           >
             <LinearGradient
-              colors={["#a78bfa", "#7c3aed"]}
+              colors={[colors.primary, colors.primaryDark]}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.methodIconWrap}
@@ -786,7 +786,7 @@ export default function NotificationsScreen() {
                     <View
                       style={[
                         styles.pillDot,
-                        { backgroundColor: active ? "rgba(255,255,255,0.8)" : cat.color },
+                        { backgroundColor: active ? colors.textInverse : cat.color },
                       ]}
                     />
                     <Text

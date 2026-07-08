@@ -8,6 +8,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { isAuthenticated } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
+import { ThemeProvider, useTheme } from "@/lib/theme-context";
 
 function RootNavigator() {
   const [ready, setReady] = useState(false);
@@ -59,12 +60,19 @@ function RootNavigator() {
   );
 }
 
+function ThemedStatusBar() {
+  const { isDark } = useTheme();
+  return <StatusBar style={isDark ? "light" : "dark"} />;
+}
+
 export default function RootLayout() {
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
-      <RootNavigator />
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <ThemedStatusBar />
+        <RootNavigator />
+      </SafeAreaProvider>
+    </ThemeProvider>
   );
 }
 

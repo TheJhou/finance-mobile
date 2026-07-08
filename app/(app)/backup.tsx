@@ -106,21 +106,16 @@ export default function BackupScreen() {
   const handleCreateBackup = async () => {
     try {
       setCreatingBackup(true);
-      const { localResult, cloudKey, cloudError } = await BackupSystem.createAndUploadBackup();
+      const result = await BackupSystem.createBackup();
 
-      if (!localResult.success) {
-        Alert.alert("Erro", localResult.error || "Falha ao criar backup");
+      if (!result.success) {
+        Alert.alert("Erro", result.error || "Falha ao criar backup");
         return;
       }
       await loadData();
-      const cloudMsg = cloudKey
-        ? "\n\nNuvem: sincronizada com sucesso!"
-        : cloudError
-          ? `\n\nNuvem: falhou — ${cloudError}`
-          : "\n\nNuvem: não enviada (faça login)";
       Alert.alert(
         "Sucesso",
-        `Backup criado com sucesso!\n\nTamanho: ${formatFileSize(localResult.size || 0)}${cloudMsg}`
+        `Backup local criado com sucesso!\n\nTamanho: ${formatFileSize(result.size || 0)}`
       );
     } catch (error) {
       console.error("[Backup] Error creating backup:", error);

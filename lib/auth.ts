@@ -82,6 +82,12 @@ export async function isAuthenticated(): Promise<boolean> {
   return token !== null;
 }
 
+export async function hasStoredSession(): Promise<boolean> {
+  const accessToken = await getStoredValue("jwt_access_token");
+  const refreshToken = await getStoredValue("jwt_refresh_token");
+  return !!accessToken && !!refreshToken;
+}
+
 export async function register(name: string, email: string, password: string): Promise<void> {
   const response = await fetch(`${BACKEND_URL}/auth/register`, {
     method: "POST",
@@ -234,8 +240,7 @@ async function refreshAccessToken(): Promise<string | null> {
       }
       return data.accessToken;
     } catch (error) {
-      console.warn("[Auth] Token refresh failed — logging out:", error);
-      await logout();
+      console.warn("[Auth] Token refresh failed (network error, keeping session):", error);
       return null;
     }
   })();

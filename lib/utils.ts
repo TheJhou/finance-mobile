@@ -45,7 +45,25 @@ export function normalizePaymentMethod(
 }
 
 export function parseCurrencyInput(input: string): number {
-  const normalized = input.replace(/\./g, "").replace(",", ".").replace(/[^0-9.-]/g, "");
-  const num = parseFloat(normalized);
+  let cleaned = input.replace(/[^0-9.,-]/g, "");
+
+  if (cleaned.includes(",") && cleaned.includes(".")) {
+    // Formato BR com separador de milhar: "1.234,56" → remove pontos, vírgula vira ponto
+    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+  } else if (cleaned.includes(",")) {
+    // Formato BR sem separador de milhar: "39,90" → vírgula vira ponto
+    cleaned = cleaned.replace(",", ".");
+  }
+  // Se só tem ponto (formato US do toString() ou input direto), mantém como está
+
+  const num = parseFloat(cleaned);
   return Number.isFinite(num) ? num : 0;
+}
+
+export function formatCurrencyInput(value: number): string {
+  if (!Number.isFinite(value)) return "";
+  // Converte para formato BR com vírgula decimal, sem separador de milhar
+  // Ex: 39.9 → "39,90", 1234.56 → "1234,56"
+  const fixed = value.toFixed(2);
+  return fixed.replace(".", ",");
 }

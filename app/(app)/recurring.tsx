@@ -12,7 +12,7 @@ import {
 } from "@/lib/repositories/recurring";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, Frequency, RecurringTransaction, TransactionType } from "@/lib/types";
-import { formatCurrency, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
+import { formatCurrency, formatCurrencyInput, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
@@ -371,7 +371,7 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<Recu
   useEffect(() => {
     if (editingItem) {
       setDescription(editingItem.description);
-      setAmount(String(editingItem.amount));
+      setAmount(formatCurrencyInput(Number(editingItem.amount)));
       setType(editingItem.type);
       setFrequency(editingItem.frequency);
       setStartDate(editingItem.startDate);
@@ -626,7 +626,7 @@ const styles = StyleSheet.create({
     marginHorizontal: spacing.lg,
     fontSize: 13,
     color: colors.danger,
-    backgroundColor: "#fee2e2",
+    backgroundColor: colors.expenseBg,
     padding: spacing.md,
     borderRadius: radius.md,
   },

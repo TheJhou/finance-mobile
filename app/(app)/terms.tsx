@@ -3,12 +3,12 @@ import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-  Linking,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    Linking,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -277,7 +277,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: spacing.sm,
-    backgroundColor: "#f0f9ff",
+    backgroundColor: colors.info + "1a",
     padding: spacing.md,
     borderRadius: radius.md,
     marginTop: spacing.md,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   agreementCard: {
     flexDirection: "row",
     gap: spacing.md,
-    backgroundColor: "#f0fdf4",
+    backgroundColor: colors.success + "1a",
     padding: spacing.lg,
     borderRadius: radius.md,
     borderWidth: 1,

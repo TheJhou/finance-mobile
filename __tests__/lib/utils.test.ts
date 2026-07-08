@@ -1,10 +1,11 @@
 import {
-  formatCurrency,
-  formatDate,
-  toDateInputValue,
-  formatDateLocal,
-  normalizePaymentMethod,
-  parseCurrencyInput,
+    formatCurrency,
+    formatCurrencyInput,
+    formatDate,
+    formatDateLocal,
+    normalizePaymentMethod,
+    parseCurrencyInput,
+    toDateInputValue,
 } from "@/lib/utils";
 
 describe("formatCurrency", () => {
@@ -87,11 +88,35 @@ describe("parseCurrencyInput", () => {
     expect(parseCurrencyInput("0,50")).toBe(0.5);
   });
 
+  it("parses US format (dot as decimal separator from toString())", () => {
+    expect(parseCurrencyInput("39.9")).toBe(39.9);
+    expect(parseCurrencyInput("99.90")).toBe(99.90);
+    expect(parseCurrencyInput("1234.56")).toBe(1234.56);
+  });
+
+  it("parses Brazilian format without thousand separator", () => {
+    expect(parseCurrencyInput("39,90")).toBe(39.90);
+    expect(parseCurrencyInput("1234,56")).toBe(1234.56);
+  });
+
   it("ignores non-numeric characters", () => {
     expect(parseCurrencyInput("R$ 1.234,56")).toBe(1234.56);
   });
 
   it("returns 0 for invalid input", () => {
     expect(parseCurrencyInput("abc")).toBe(0);
+  });
+});
+
+describe("formatCurrencyInput", () => {
+  it("formats a number to BR input format (comma decimal, no thousand separator)", () => {
+    expect(formatCurrencyInput(39.9)).toBe("39,90");
+    expect(formatCurrencyInput(1234.56)).toBe("1234,56");
+    expect(formatCurrencyInput(0)).toBe("0,00");
+  });
+
+  it("returns empty string for invalid values", () => {
+    expect(formatCurrencyInput(NaN)).toBe("");
+    expect(formatCurrencyInput(Infinity)).toBe("");
   });
 });

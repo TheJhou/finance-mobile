@@ -1,9 +1,12 @@
 import { Button } from "@/components/ui/button";
+import { hasAcceptedTerms, hasStoredSession } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Redirect, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const features = [
@@ -14,6 +17,28 @@ const features = [
 
 export default function Index() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const [checking, setChecking] = useState(true);
+  const [authed, setAuthed] = useState(false);
+
+  useEffect(() => {
+    hasStoredSession().then((auth) => {
+      setAuthed(auth);
+      setChecking(false);
+    });
+  }, []);
+
+  if (checking) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  if (authed) {
+    return <Redirect href="/(app)/dashboard" />;
+  }
 
   const handleStart = async () => {
     const termsAccepted = await hasAcceptedTerms();
@@ -27,7 +52,7 @@ export default function Index() {
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <LinearGradient
-        colors={["#0a0712", colors.background, "#1a0f32"]}
+        colors={isDark ? ["#231f3d", colors.background, "#0f0d1b"] : ["#e0e7ff", colors.background, "#f3f4f6"]}
         style={StyleSheet.absoluteFill}
       />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -46,9 +71,9 @@ export default function Index() {
 
           <View style={styles.actions}>
             <Button title="Começar" onPress={handleStart} />
-            <Pressable style={styles.secondaryButton} onPress={() => router.replace("/(app)/plan" as any)}>
+            <Pressable style={styles.secondaryButton} onPress={handleStart}>
               <Ionicons name="diamond-outline" size={17} color={colors.primaryLight} />
-              <Text style={styles.secondaryButtonText}>Ver recursos Pro</Text>
+              <Text style={styles.secondaryButtonText}>Ver Planos</Text>
             </Pressable>
           </View>
         </View>
@@ -72,6 +97,12 @@ export default function Index() {
 }
 
 const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -137,7 +168,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.borderStrong,
-    backgroundColor: "rgba(35,31,61,0.72)",
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
@@ -156,7 +187,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.md,
     borderRadius: radius.lg,
-    backgroundColor: "rgba(26,23,48,0.78)",
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
   },
@@ -166,7 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(124,58,237,0.24)",
+    backgroundColor: colors.primary + "18",
   },
   featureTextWrap: {
     flex: 1,

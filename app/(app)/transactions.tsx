@@ -11,7 +11,7 @@ import {
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Category, DocumentType, PaymentMethod, Transaction, TransactionType } from "@/lib/types";
-import { formatCurrency, formatDate, normalizePaymentMethod, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
+import { formatCurrency, formatCurrencyInput, formatDate, normalizePaymentMethod, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
@@ -518,7 +518,7 @@ export default function TransactionsScreen() {
                             styles.catDot,
                             {
                               backgroundColor: selected
-                                ? "rgba(255,255,255,0.8)"
+                                ? colors.textInverse
                                 : cat.color,
                             },
                           ]}
@@ -722,7 +722,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
   useEffect(() => {
     if (editingItem) {
       setDescription(editingItem.description);
-      setAmount(editingItem.amount.toString());
+      setAmount(formatCurrencyInput(Number(editingItem.amount)));
       setType(editingItem.type);
       setPaymentMethod(editingItem.paymentMethod);
       setDocumentType(editingItem.documentType);
@@ -808,7 +808,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       );
       console.log("[Transactions] Dados extraídos:", JSON.stringify(extracted));
       setDescription(extracted.description);
-      setAmount(extracted.amount.toString());
+      setAmount(formatCurrencyInput(extracted.amount));
       setType(extracted.type);
       setPaymentMethod(normalizePaymentMethod(extracted.paymentMethod));
       setDocumentType(extracted.documentType ?? "NORMAL");
@@ -819,9 +819,9 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
       setDocumentNumber(extracted.documentNumber ?? "");
       setPixKey(extracted.pixKey ?? "");
       setBankName(extracted.institution ?? "");
-      setFineAmount(extracted.fineAmount?.toString() ?? "");
-      setInterestAmount(extracted.interestAmount?.toString() ?? "");
-      setDiscountAmount(extracted.discountAmount?.toString() ?? "");
+      setFineAmount(extracted.fineAmount != null ? formatCurrencyInput(extracted.fineAmount) : "");
+      setInterestAmount(extracted.interestAmount != null ? formatCurrencyInput(extracted.interestAmount) : "");
+      setDiscountAmount(extracted.discountAmount != null ? formatCurrencyInput(extracted.discountAmount) : "");
       setExtraNotes(extracted.notes ?? "");
       console.log("[Transactions] Campos preenchidos");
       if (extracted.categoryName) {

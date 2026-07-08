@@ -1,11 +1,21 @@
 import { useNotificationListener } from "@/hooks/use-notification-listener";
+import { isAuthenticated } from "@/lib/auth";
 import { BackupScheduler } from "@/lib/backup-scheduler";
 import { colors } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { Tabs } from "expo-router";
-import { useEffect } from "react";
+import { Redirect, Tabs, useSegments } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+
+const PUBLIC_SCREENS = new Set(["terms", "forgot-password", "privacy"]);
 
 export default function AppLayout() {
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authed, setAuthed] = useState(false);
+  const segments = useSegments();
+  useTheme(); // re-render on theme change
+
   useNotificationListener();
 
   // Initialize backup scheduler
@@ -14,6 +24,26 @@ export default function AppLayout() {
       console.error('[AppLayout] Failed to initialize backup scheduler:', error);
     });
   }, []);
+
+  useEffect(() => {
+    isAuthenticated().then((auth) => {
+      setAuthed(auth);
+      setAuthChecking(false);
+    });
+  }, []);
+
+  if (authChecking) {
+    return (
+      <View style={styles.loading}>
+        <ActivityIndicator color={colors.primary} size="large" />
+      </View>
+    );
+  }
+
+  const currentScreen = segments.at(-1) as string;
+  if (!authed && !PUBLIC_SCREENS.has(currentScreen)) {
+    return <Redirect href="/" />;
+  }
 
   return (
     <Tabs
@@ -109,3 +139,12 @@ export default function AppLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  loading: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+});

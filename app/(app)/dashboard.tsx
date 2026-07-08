@@ -3,9 +3,11 @@ import { getStoredUserName, isAuthenticated } from "@/lib/auth";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
+import { getProfilePhotoUri } from "@/lib/profile-photo";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { getTokenLimitStatus, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { DashboardData } from "@/lib/types";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
@@ -14,15 +16,16 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Dimensions,
+    Image,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -53,7 +56,7 @@ function CircularProgress({
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
       <Svg width={size} height={size} style={{ position: "absolute" }}>
-        <SvgCircle cx={size / 2} cy={size / 2} r={r} stroke={bgColor || "rgba(255,255,255,0.08)"} strokeWidth={strokeWidth} fill="none" />
+        <SvgCircle cx={size / 2} cy={size / 2} r={r} stroke={bgColor || colors.border} strokeWidth={strokeWidth} fill="none" />
         <SvgCircle cx={size / 2} cy={size / 2} r={r} stroke={progressColor} strokeWidth={strokeWidth} fill="none" strokeDasharray={`${circumference} ${circumference}`} strokeDashoffset={offset} strokeLinecap="round" rotation={-90} origin={`${size / 2}, ${size / 2}`} />
       </Svg>
       {children}
@@ -63,6 +66,7 @@ function CircularProgress({
 
 export default function DashboardScreen() {
   const router = useRouter();
+  const { isDark, toggleTheme } = useTheme();
   const [data, setData] = useState<DashboardData | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
   const [goals, setGoals] = useState<GoalData[]>([]);
@@ -78,6 +82,7 @@ export default function DashboardScreen() {
   const [notificationsScheduled, setNotificationsScheduled] = useState(false);
   const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
   const [drawerVisible, setDrawerVisible] = useState(false);
+  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
 
@@ -132,6 +137,10 @@ export default function DashboardScreen() {
       // Load cached name immediately
       const cachedName = await getStoredUserName();
       if (cachedName) setUserName(cachedName);
+
+      // Load profile photo
+      const photo = await getProfilePhotoUri();
+      setProfilePhoto(photo);
 
       const [dashRes, billsRes, overdueRes] = await Promise.all([
         getDashboard(),
@@ -232,7 +241,7 @@ export default function DashboardScreen() {
     );
   }
 
-  const pieColors = ["#a78bfa", "#f472b6", "#60a5fa", "#fbbf24", "#34d399", "#fb923c"];
+  const pieColors = [colors.primary, "#f472b6", colors.info, colors.warning, colors.success, "#fb923c"];
 
   const economia = data ? data.monthlyIncome - data.monthlyExpense : 0;
   const economiaPercent = data && data.monthlyIncome > 0 ? Math.round((economia / data.monthlyIncome) * 100) : 0;
@@ -287,11 +296,22 @@ export default function DashboardScreen() {
             <Text style={styles.subtitle}>Aqui está o resumo da sua vida financeira.</Text>
           </View>
           <View style={styles.headerRight}>
-            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}><Ionicons name="search" size={22} color={colors.textPrimary} /></TouchableOpacity>
+            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} onPress={toggleTheme}>
+              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
             <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ overflow: "visible" }} onPress={() => setNotificationModal(true)}>
               <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {data && data.pendingCount > 0 && (
                 <View style={styles.badge}><Text style={styles.badgeText}>{Math.min(data.pendingCount, 9)}</Text></View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} onPress={() => router.push("/(app)/account")}>
+              {profilePhoto ? (
+                <Image source={{ uri: profilePhoto }} style={styles.headerAvatar} />
+              ) : (
+                <View style={styles.headerAvatarPlaceholder}>
+                  <Ionicons name="person" size={18} color={colors.textSecondary} />
+                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -338,7 +358,7 @@ export default function DashboardScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -CARD_PADDING }} contentContainerStyle={{ paddingHorizontal: CARD_PADDING, gap: spacing.md }}>
               {/* Receitas */}
               <View style={styles.miniCard}>
-                <View style={[styles.miniCardIcon, { backgroundColor: "#064e3b" }]}>
+                <View style={[styles.miniCardIcon, { backgroundColor: colors.incomeBg }]}>
                   <Ionicons name="arrow-down" size={16} color={colors.success} />
                 </View>
                 <Text style={styles.miniCardLabel}>Receitas</Text>
@@ -353,7 +373,7 @@ export default function DashboardScreen() {
               </View>
               {/* Gastos */}
               <View style={styles.miniCard}>
-                <View style={[styles.miniCardIcon, { backgroundColor: "#7f1d1d" }]}>
+                <View style={[styles.miniCardIcon, { backgroundColor: colors.expenseBg }]}>
                   <Ionicons name="arrow-up" size={16} color={colors.danger} />
                 </View>
                 <Text style={styles.miniCardLabel}>Gastos</Text>
@@ -368,7 +388,7 @@ export default function DashboardScreen() {
               </View>
               {/* Economia */}
               <View style={styles.miniCard}>
-                <View style={[styles.miniCardIcon, { backgroundColor: "#1e3a5f" }]}>
+                <View style={[styles.miniCardIcon, { backgroundColor: colors.info + "1a" }]}>
                   <Ionicons name="trending-up" size={16} color={colors.info} />
                 </View>
                 <Text style={styles.miniCardLabel}>Economia</Text>
@@ -379,7 +399,7 @@ export default function DashboardScreen() {
               </View>
               {/* Saldo acumulado */}
               <View style={styles.miniCard}>
-                <View style={[styles.miniCardIcon, { backgroundColor: "#2d1b69" }]}>
+                <View style={[styles.miniCardIcon, { backgroundColor: colors.primary + "1a" }]}>
                   <Ionicons name="wallet" size={16} color={colors.primary} />
                 </View>
                 <Text style={styles.miniCardLabel}>Saldo acumulado</Text>
@@ -443,37 +463,37 @@ export default function DashboardScreen() {
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.lg }}>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="alert-circle" size={24} color="#f87171" />
-                    {data.overdueAmount > 0 && <View style={[styles.radarBadge, { backgroundColor: "#f87171" }]}><Text style={styles.radarBadgeText}>!</Text></View>}
+                    <Ionicons name="alert-circle" size={24} color={colors.danger} />
+                    {data.overdueAmount > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.danger }]}><Text style={styles.radarBadgeText}>!</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Contas{"\n"}vencidas</Text>
-                  {data.overdueAmount > 0 && <Text style={{ fontSize: 9, color: "#f87171", fontWeight: "700" }}>{formatCurrency(data.overdueAmount)}</Text>}
+                  {data.overdueAmount > 0 && <Text style={{ fontSize: 9, color: colors.danger, fontWeight: "700" }}>{formatCurrency(data.overdueAmount)}</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="card" size={24} color="#a78bfa" />
-                    {data.activeRecurring > 0 && <View style={[styles.radarBadge, { backgroundColor: "#a78bfa" }]}><Text style={styles.radarBadgeText}>{data.activeRecurring}</Text></View>}
+                    <Ionicons name="card" size={24} color={colors.primary} />
+                    {data.activeRecurring > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.primary }]}><Text style={styles.radarBadgeText}>{data.activeRecurring}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Assinaturas{"\n"}ativas</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="calendar" size={24} color="#fbbf24" />
-                    {bills.length > 0 && <View style={[styles.radarBadge, { backgroundColor: "#fbbf24" }]}><Text style={styles.radarBadgeText}>{bills.length}</Text></View>}
+                    <Ionicons name="calendar" size={24} color={colors.warning} />
+                    {bills.length > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.warning }]}><Text style={styles.radarBadgeText}>{bills.length}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Contas próximas{"\n"}do vencimento</Text>
-                  {bills.length > 0 && <Text style={{ fontSize: 9, color: "#fbbf24", fontWeight: "700" }}>{formatCurrency(bills.reduce((s: number, b: UpcomingBill) => s + b.amount, 0))}</Text>}
+                  {bills.length > 0 && <Text style={{ fontSize: 9, color: colors.warning, fontWeight: "700" }}>{formatCurrency(bills.reduce((s: number, b: UpcomingBill) => s + b.amount, 0))}</Text>}
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="time" size={24} color="#34d399" />
-                    {data.pendingCount > 0 && <View style={[styles.radarBadge, { backgroundColor: "#34d399" }]}><Text style={styles.radarBadgeText}>{data.pendingCount}</Text></View>}
+                    <Ionicons name="time" size={24} color={colors.success} />
+                    {data.pendingCount > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.success }]}><Text style={styles.radarBadgeText}>{data.pendingCount}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Transações{"\n"}pendentes</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => setChartModal("commitment")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="pie-chart" size={24} color="#60a5fa" />
+                    <Ionicons name="pie-chart" size={24} color={colors.info} />
                     <View style={[styles.radarBadge, { backgroundColor: comprometimento > 60 ? "#fb923c" : colors.success, width: "auto", minWidth: 18, paddingHorizontal: 3 }]}><Text style={styles.radarBadgeText}>{comprometimento}%</Text></View>
                   </View>
                   <Text style={styles.radarLabel}>Comprometimento{"\n"}da renda</Text>
@@ -886,6 +906,23 @@ const styles = StyleSheet.create({
   /* Header */
   header: { flexDirection: "row", alignItems: "center" },
   headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
+  headerAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: colors.primary,
+  },
+  headerAvatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   greeting: { fontSize: 22, fontWeight: "800", color: colors.textPrimary },
   subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   badge: { position: "absolute", top: -6, right: -8, backgroundColor: colors.danger, borderRadius: 10, width: 18, height: 18, alignItems: "center", justifyContent: "center" },
@@ -974,7 +1011,7 @@ const styles = StyleSheet.create({
   progressBarFill: { height: 6, borderRadius: 3 },
 
   /* Warning */
-  warningBanner: { backgroundColor: "rgba(251, 191, 36, 0.1)", borderRadius: radius.md, padding: spacing.sm },
+  warningBanner: { backgroundColor: colors.warning + "1a", borderRadius: radius.md, padding: spacing.sm },
   warningBannerTitle: { fontSize: 12, fontWeight: "700", color: colors.warning },
   warningBannerText: { fontSize: 11, color: colors.textSecondary },
   warningRow: { flexDirection: "row", gap: 8, alignItems: "flex-start" },

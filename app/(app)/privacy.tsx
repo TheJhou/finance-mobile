@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: spacing.sm,
-    backgroundColor: "#f0fdf4",
+    backgroundColor: colors.success + "1a",
     padding: spacing.md,
     borderRadius: radius.md,
     marginTop: spacing.md,
@@ -435,7 +435,7 @@ const styles = StyleSheet.create({
   authorityCard: {
     flexDirection: "row",
     gap: spacing.md,
-    backgroundColor: "#f0f9ff",
+    backgroundColor: colors.info + "1a",
     padding: spacing.lg,
     borderRadius: radius.md,
     borderWidth: 1,
