@@ -5,18 +5,23 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { isAuthenticated } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
 
 function RootNavigator() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAuth, setIsAuth] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    getDb()
-      .then(() => {
-        if (!cancelled) setReady(true);
+    Promise.all([getDb(), isAuthenticated()])
+      .then(([, authenticated]) => {
+        if (!cancelled) {
+          setReady(true);
+          setIsAuth(authenticated);
+        }
       })
       .catch((e: unknown) => {
         if (!cancelled) {
@@ -37,7 +42,7 @@ function RootNavigator() {
     );
   }
 
-  if (!ready) {
+  if (!ready || isAuth === null) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -47,8 +52,9 @@ function RootNavigator() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="(app)" />
+      <Stack.Screen name="index" options={{ href: isAuth ? null : "/" }} />
+      <Stack.Screen name="login" options={{ href: isAuth ? null : "/login" }} />
+      <Stack.Screen name="(app)" options={{ href: isAuth ? "/(app)" : null }} />
     </Stack>
   );
 }

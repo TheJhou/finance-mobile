@@ -194,6 +194,15 @@ export async function getStoredUserName(): Promise<string | null> {
   return getStoredValue("user_name");
 }
 
+export async function hasAcceptedTerms(): Promise<boolean> {
+  const accepted = await getStoredValue("terms_accepted");
+  return accepted === "true";
+}
+
+export async function setTermsAccepted(): Promise<void> {
+  await setStoredValue("terms_accepted", "true");
+}
+
 let pendingRefresh: Promise<string | null> | null = null;
 
 async function refreshAccessToken(): Promise<string | null> {

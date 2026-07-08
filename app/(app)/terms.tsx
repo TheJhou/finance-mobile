@@ -1,18 +1,30 @@
+import { setTermsAccepted } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import {
-    Linking,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function TermsScreen() {
   const router = useRouter();
+  const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
+  const isOnboarding = fromOnboarding === "true";
+
+  const handleAccept = async () => {
+    await setTermsAccepted();
+    if (isOnboarding) {
+      router.replace("/login" as any);
+    } else {
+      router.back();
+    }
+  };
 
   const handleEmailSupport = () => {
     Linking.openURL('mailto:jonathas.duarte78@gmail.com');
@@ -22,9 +34,12 @@ export default function TermsScreen() {
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
+        {!isOnboarding && (
+          <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+            <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+        )}
+        {isOnboarding && <View style={{ width: 24 }} />}
         <Text style={styles.headerTitle}>Termos de Uso</Text>
         <View style={{ width: 24 }} />
       </View>
@@ -189,6 +204,12 @@ export default function TermsScreen() {
         <Text style={styles.footerText}>
           Finance App © 2024 - Todos os direitos reservados
         </Text>
+
+        {isOnboarding && (
+          <TouchableOpacity style={styles.acceptButton} onPress={handleAccept}>
+            <Text style={styles.acceptButtonText}>Aceitar Termos</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -327,5 +348,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     marginTop: spacing.lg,
+  },
+  acceptButtonContainer: {
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+  },
+  acceptButton: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg,
+    alignItems: "center",
+    marginHorizontal: spacing.lg,
+  },
+  acceptButtonText: {
+    color: colors.textInverse,
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

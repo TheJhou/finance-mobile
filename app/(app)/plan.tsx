@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { authFetch, isAuthenticated, login, logout, register } from "@/lib/auth";
+import { authFetch, isAuthenticated, login, register } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
 import { clearProCache, getSubscriptionStatus } from "@/lib/subscription";
@@ -111,13 +111,6 @@ export default function PlanScreen() {
     } finally {
       setAuthLoading(false);
     }
-  };
-
-  const handleLogout = async () => {
-    await logout();
-    clearProCache();
-    setLoggedIn(false);
-    setStatus(null);
   };
 
   useEffect(() => {
@@ -286,9 +279,6 @@ export default function PlanScreen() {
                 </Text>
               </View>
             )}
-
-            {/* Logout */}
-            <Button title="Sair da conta" variant="ghost" onPress={handleLogout} />
           </>
         ) : (
           <AuthPromptCard

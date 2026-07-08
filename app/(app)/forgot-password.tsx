@@ -89,7 +89,7 @@ export default function ForgotPasswordScreen() {
       );
       setSuccess(result.message);
       setTimeout(() => {
-        router.replace("/");
+        router.replace("/login" as any);
       }, 1500);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao redefinir senha");

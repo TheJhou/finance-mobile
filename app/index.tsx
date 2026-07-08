@@ -15,6 +15,15 @@ const features = [
 export default function Index() {
   const router = useRouter();
 
+  const handleStart = async () => {
+    const termsAccepted = await hasAcceptedTerms();
+    if (termsAccepted) {
+      router.replace("/login" as any);
+    } else {
+      router.push("/(app)/terms?fromOnboarding=true" as any);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
       <LinearGradient
@@ -36,8 +45,8 @@ export default function Index() {
           </View>
 
           <View style={styles.actions}>
-            <Button title="Começar" onPress={() => router.replace("/dashboard")} />
-            <Pressable style={styles.secondaryButton} onPress={() => router.replace("/plan")}>
+            <Button title="Começar" onPress={handleStart} />
+            <Pressable style={styles.secondaryButton} onPress={() => router.replace("/(app)/plan" as any)}>
               <Ionicons name="diamond-outline" size={17} color={colors.primaryLight} />
               <Text style={styles.secondaryButtonText}>Ver recursos Pro</Text>
             </Pressable>
