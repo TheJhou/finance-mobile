@@ -5,7 +5,7 @@ import { colors } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs, useSegments } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 const PUBLIC_SCREENS = new Set(["terms", "forgot-password", "privacy"]);
@@ -14,7 +14,8 @@ export default function AppLayout() {
   const [authChecking, setAuthChecking] = useState(true);
   const [authed, setAuthed] = useState(false);
   const segments = useSegments();
-  useTheme(); // re-render on theme change
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
 
   useNotificationListener();
 
@@ -140,7 +141,8 @@ export default function AppLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   loading: {
     flex: 1,
     backgroundColor: colors.background,
@@ -148,3 +150,4 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 });
+}

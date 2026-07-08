@@ -5,7 +5,7 @@ import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Redirect, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -18,6 +18,7 @@ const features = [
 export default function Index() {
   const router = useRouter();
   const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [checking, setChecking] = useState(true);
   const [authed, setAuthed] = useState(false);
 
@@ -96,7 +97,8 @@ export default function Index() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   loading: {
     flex: 1,
     backgroundColor: colors.background,
@@ -214,3 +216,4 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
   },
 });
+}

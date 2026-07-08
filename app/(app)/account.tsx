@@ -21,7 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -46,6 +46,7 @@ type ModalType = "name" | "password" | "email" | null;
 export default function AccountScreen() {
   const router = useRouter();
   const { isDark, toggleTheme } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -771,7 +772,8 @@ export default function AccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -988,3 +990,4 @@ const styles = StyleSheet.create({
     lineHeight: 17,
   },
 });
+}
