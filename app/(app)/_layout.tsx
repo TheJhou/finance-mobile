@@ -21,6 +21,27 @@ export default function AppLayout() {
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
 
+  const tabBarStyle = useMemo(() => ({
+    backgroundColor: colors.surface,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+    elevation: 0,
+    shadowOpacity: 0,
+    height: 60,
+    paddingBottom: 6,
+  }), [isDark]);
+
+  const screenOptions = useMemo(() => ({
+    headerShown: false,
+    tabBarActiveTintColor: colors.primary,
+    tabBarInactiveTintColor: colors.textMuted,
+    tabBarStyle,
+    tabBarLabelStyle: {
+      fontSize: 10,
+      fontWeight: "600" as const,
+    },
+  }), [isDark, tabBarStyle]);
+
   useNotificationListener();
 
   // Initialize backup scheduler
@@ -85,24 +106,7 @@ export default function AppLayout() {
     <View style={styles.container}>
       <AppHeader />
       <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarActiveTintColor: colors.primary,
-          tabBarInactiveTintColor: colors.textMuted,
-          tabBarStyle: {
-            backgroundColor: colors.surface,
-            borderTopColor: colors.border,
-            borderTopWidth: 1,
-            elevation: 0,
-            shadowOpacity: 0,
-            height: 60,
-            paddingBottom: 6,
-          },
-          tabBarLabelStyle: {
-            fontSize: 10,
-            fontWeight: "600",
-          },
-        }}
+        screenOptions={screenOptions}
       >
       <Tabs.Screen
         name="dashboard"
