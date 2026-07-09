@@ -22,7 +22,7 @@ export default function AppLayout() {
   const styles = useMemo(() => createStyles(), [isDark]);
 
   const tabBarStyle = useMemo(() => ({
-    backgroundColor: colors.surface,
+    backgroundColor: isDark ? "#2a2740" : "#e5e7eb",
     borderTopColor: colors.border,
     borderTopWidth: 1,
     elevation: 0,
