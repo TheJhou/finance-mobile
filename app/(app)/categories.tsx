@@ -125,7 +125,7 @@ export default function CategoriesScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Categorias</Text>
         <Text style={styles.subtitle}>{items.length} categorias</Text>

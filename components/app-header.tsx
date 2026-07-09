@@ -1,7 +1,8 @@
 import DrawerMenu from "@/components/drawer-menu";
 import { getStoredUserName } from "@/lib/auth";
 import { getProfilePhotoUri } from "@/lib/profile-photo";
-import { colors, radius, spacing } from "@/lib/theme";
+import { getDashboard } from "@/lib/repositories/dashboard";
+import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useSegments } from "expo-router";
@@ -38,12 +39,13 @@ export function AppHeader({ title }: AppHeaderProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const segments = useSegments();
-  const { isDark } = useTheme();
+  const { isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const currentScreen = segments.at(-1) as string;
   const headerTitle = title ?? SCREEN_TITLES[currentScreen] ?? "Finance";
@@ -53,6 +55,12 @@ export function AppHeader({ title }: AppHeaderProps) {
     setUserName(name);
     const photo = await getProfilePhotoUri();
     setProfilePhoto(photo);
+    try {
+      const dash = await getDashboard();
+      setPendingCount(dash.pendingCount || 0);
+    } catch {
+      // offline
+    }
   }, []);
 
   useEffect(() => {
@@ -81,6 +89,24 @@ export function AppHeader({ title }: AppHeaderProps) {
         </TouchableOpacity>
 
         <Text style={styles.title} numberOfLines={1}>{headerTitle}</Text>
+
+        <TouchableOpacity
+          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+          onPress={toggleTheme}
+        >
+          <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+          style={{ overflow: "visible" }}
+          onPress={() => router.push("/(app)/notifications")}
+        >
+          <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
+          {pendingCount > 0 && (
+            <View style={styles.badge}><Text style={styles.badgeText}>{Math.min(pendingCount, 9)}</Text></View>
+          )}
+        </TouchableOpacity>
 
         <TouchableOpacity
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -127,6 +153,22 @@ function createStyles() {
       fontSize: 17,
       fontWeight: "700",
       color: colors.textPrimary,
+    },
+    badge: {
+      position: "absolute",
+      top: -6,
+      right: -8,
+      backgroundColor: colors.danger,
+      borderRadius: 10,
+      width: 18,
+      height: 18,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    badgeText: {
+      fontSize: 10,
+      fontWeight: "700",
+      color: "#fff",
     },
   });
 }

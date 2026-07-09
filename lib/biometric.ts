@@ -29,6 +29,21 @@ export async function setBiometricEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, enabled ? "true" : "false");
 }
 
+const BIOMETRIC_UNLOCKED_KEY = "biometric_unlocked";
+
+export async function isBiometricUnlocked(): Promise<boolean> {
+  try {
+    const value = await AsyncStorage.getItem(BIOMETRIC_UNLOCKED_KEY);
+    return value === "true";
+  } catch {
+    return false;
+  }
+}
+
+export async function setBiometricUnlocked(unlocked: boolean): Promise<void> {
+  await AsyncStorage.setItem(BIOMETRIC_UNLOCKED_KEY, unlocked ? "true" : "false");
+}
+
 export async function authenticateWithBiometrics(
   promptMessage = "Autentique-se para acessar o app"
 ): Promise<{ success: boolean; error?: string }> {
@@ -65,8 +80,8 @@ export async function authenticateWithBiometrics(
 }
 
 export function getBiometricTypeName(types: LocalAuthentication.AuthenticationType[]): string {
-  if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return "Face ID";
   if (types.includes(LocalAuthentication.AuthenticationType.FINGERPRINT)) return "Biometria";
+  if (types.includes(LocalAuthentication.AuthenticationType.FACIAL_RECOGNITION)) return "Reconhecimento Facial";
   if (types.includes(LocalAuthentication.AuthenticationType.IRIS)) return "Íris";
   return "Biometria";
 }

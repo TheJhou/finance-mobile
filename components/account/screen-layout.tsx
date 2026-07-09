@@ -1,4 +1,4 @@
-import { colors, radius, spacing } from "@/lib/theme";
+import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -17,7 +17,7 @@ export function ScreenLayout({ title, children }: ScreenLayoutProps) {
   const styles = useMemo(() => createStyles(), [isDark]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />

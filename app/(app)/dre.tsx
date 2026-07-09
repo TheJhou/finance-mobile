@@ -178,7 +178,7 @@ export default function DreScreen() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Header */}
       <View style={styles.header}>
         <View>

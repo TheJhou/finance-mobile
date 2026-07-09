@@ -153,7 +153,7 @@ export default function RecurringScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       <View style={styles.header}>
         <Text style={styles.title}>Recorrentes</Text>
         <Text style={styles.subtitle}>{items.length} registros</Text>

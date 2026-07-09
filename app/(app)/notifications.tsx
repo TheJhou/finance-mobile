@@ -536,7 +536,7 @@ export default function NotificationsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>

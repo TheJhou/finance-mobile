@@ -3,7 +3,7 @@ import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend"
 import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
-import { getDashboard, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { getTokenLimitStatus, resetTokenLimitStatus } from "@/lib/token-limit";
@@ -63,7 +63,7 @@ function CircularProgress({
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
   const [data, setData] = useState<DashboardData | null>(null);
   const [userName, setUserName] = useState<string | null>(null);
@@ -76,9 +76,7 @@ export default function DashboardScreen() {
   const [error, setError] = useState<string | null>(null);
   const [tokenLimitStatus, setTokenLimitStatus] = useState(getTokenLimitStatus());
   const [chartModal, setChartModal] = useState<"category" | "bar" | "line" | "commitment" | null>(null);
-  const [notificationModal, setNotificationModal] = useState(false);
   const [notificationsScheduled, setNotificationsScheduled] = useState(false);
-  const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
 
@@ -134,14 +132,12 @@ export default function DashboardScreen() {
       const cachedName = await getStoredUserName();
       if (cachedName) setUserName(cachedName);
 
-      const [dashRes, billsRes, overdueRes] = await Promise.all([
+      const [dashRes, billsRes] = await Promise.all([
         getDashboard(),
         getUpcomingBills(),
-        getOverdueTransactions(),
       ]);
       setData(dashRes);
       setBills(billsRes);
-      setOverdueTransactions(overdueRes);
 
       // AI Forecast (1x por dia, non-blocking)
       void loadAiForecast(dashRes);
@@ -275,25 +271,6 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Dashboard greeting ── */}
-        <View style={styles.dashHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>Olá, {userName || "Usuário"} 👋</Text>
-            <Text style={styles.subtitle}>Aqui está o resumo da sua vida financeira.</Text>
-          </View>
-          <View style={styles.headerRight}>
-            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} onPress={toggleTheme}>
-              <Ionicons name={isDark ? "sunny-outline" : "moon-outline"} size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} style={{ overflow: "visible" }} onPress={() => setNotificationModal(true)}>
-              <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
-              {data && data.pendingCount > 0 && (
-                <View style={styles.badge}><Text style={styles.badgeText}>{Math.min(data.pendingCount, 9)}</Text></View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {/* Token limit warning banner */}
@@ -822,54 +799,6 @@ export default function DashboardScreen() {
             </View>
           </View>
         </Modal>
-
-        {/* ── Notification Modal ── */}
-        <Modal visible={notificationModal} transparent animationType="slide" onRequestClose={() => setNotificationModal(false)}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: spacing.md }}>
-                <Text style={styles.sectionTitle}>Notificações</Text>
-                <TouchableOpacity onPress={() => setNotificationModal(false)}><Ionicons name="close" size={24} color={colors.textPrimary} /></TouchableOpacity>
-              </View>
-
-              <ScrollView style={{ maxHeight: 400 }}>
-                {overdueTransactions.length === 0 && data?.pendingCount === 0 ? (
-                  <View style={{ alignItems: "center", paddingVertical: spacing.xl }}>
-                    <Ionicons name="checkmark-circle" size={48} color={colors.success} />
-                    <Text style={{ fontSize: 14, color: colors.textSecondary, marginTop: spacing.sm }}>Nenhuma notificação pendente</Text>
-                  </View>
-                ) : (
-                  <>
-                    {overdueTransactions.length > 0 && (
-                      <View style={{ marginBottom: spacing.lg }}>
-                        <Text style={{ fontSize: 12, fontWeight: "600", color: colors.danger, marginBottom: spacing.sm }}>Atrasadas ({overdueTransactions.length})</Text>
-                        {overdueTransactions.map((t: { id: string; description: string; amount: number; date: string }) => (
-                          <View key={t.id} style={{ backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, marginBottom: spacing.sm, borderLeftWidth: 3, borderLeftColor: colors.danger }}>
-                            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.textPrimary }}>{t.description}</Text>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: 4 }}>
-                              <Text style={{ fontSize: 12, color: colors.textMuted }}>{t.date}</Text>
-                              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.danger }}>{formatCurrency(t.amount)}</Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
-                    )}
-
-                    {data && data.upcomingAmount > 0 && (
-                      <View>
-                        <Text style={{ fontSize: 12, fontWeight: "600", color: colors.warning, marginBottom: spacing.sm }}>Próximos 7 dias</Text>
-                        <View style={{ backgroundColor: colors.surface, padding: spacing.md, borderRadius: radius.md, borderLeftWidth: 3, borderLeftColor: colors.warning }}>
-                          <Text style={{ fontSize: 14, color: colors.textPrimary }}>Contas a vencer</Text>
-                          <Text style={{ fontSize: 16, fontWeight: "700", color: colors.warning, marginTop: 4 }}>{formatCurrency(data.upcomingAmount)}</Text>
-                        </View>
-                      </View>
-                    )}
-                  </>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
       </ScrollView>
     </SafeAreaView>
   );
@@ -883,11 +812,6 @@ function createStyles() {
 
   /* Header */
   dashHeader: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
-  greeting: { fontSize: 22, fontWeight: "800", color: colors.textPrimary },
-  subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
-  badge: { position: "absolute", top: -6, right: -8, backgroundColor: colors.danger, borderRadius: 10, width: 18, height: 18, alignItems: "center", justifyContent: "center" },
-  badgeText: { fontSize: 10, fontWeight: "700", color: "#fff" },
 
   /* Error */
   error: { fontSize: 13, color: colors.danger, backgroundColor: colors.expenseBg, padding: spacing.md, borderRadius: radius.md },

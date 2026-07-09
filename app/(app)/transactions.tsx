@@ -138,8 +138,9 @@ function getDateRange(preset: DatePreset): { from: string; to: string } | null {
       break;
     }
     case "month": {
-      // Correção: usar o primeiro dia do mês atual
-      const d = new Date(now.getFullYear(), now.getMonth(), 1);
+      // Últimos 30 dias
+      const d = new Date(now);
+      d.setDate(d.getDate() - 30);
       from = toDateInputValue(d);
       break;
     }
@@ -309,7 +310,7 @@ export default function TransactionsScreen() {
     : ` de ${items.length}`;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
@@ -437,8 +438,8 @@ export default function TransactionsScreen() {
               {(
                 [
                   { key: "ALL", label: "Todos" },
-                  { key: "EXPENSE", label: "Despesas" },
-                  { key: "INCOME", label: "Receitas" },
+                  { key: "EXPENSE", label: "Saída" },
+                  { key: "INCOME", label: "Entrada" },
                 ] as { key: TransactionType | "ALL"; label: string }[]
               ).map((t) => (
                 <Pressable

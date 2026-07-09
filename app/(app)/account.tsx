@@ -5,8 +5,8 @@ import { RowSeparator } from "@/components/account/row-separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-    changePassword,
-    updateProfile,
+  changePassword,
+  updateProfile,
 } from "@/lib/account-service";
 import { getStoredUserName, logout } from "@/lib/auth";
 import { getMe } from "@/lib/backend";
@@ -21,15 +21,15 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    Image,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -233,7 +233,7 @@ export default function AccountScreen() {
   const isPro = subscription?.plan.code === "PRO";
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={colors.textPrimary} />

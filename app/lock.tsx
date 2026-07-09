@@ -1,4 +1,4 @@
-import { authenticateWithBiometrics } from "@/lib/biometric";
+import { authenticateWithBiometrics, setBiometricUnlocked } from "@/lib/biometric";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -20,6 +20,7 @@ export default function LockScreen() {
     setError(null);
     const result = await authenticateWithBiometrics("Autentique-se para acessar o app");
     if (result.success) {
+      await setBiometricUnlocked(true);
       router.replace("/(app)/dashboard" as any);
     } else {
       setError(result.error ?? "Falha na autenticação");
