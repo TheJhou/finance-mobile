@@ -1,11 +1,10 @@
 import { colors, radius, spacing } from "@/lib/theme";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
     Animated,
     Dimensions,
-    Modal,
     Pressable,
     StyleSheet,
     Text,
@@ -39,11 +38,11 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
   const insets = useSafeAreaInsets();
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const [modalVisible, setModalVisible] = React.useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
     if (visible) {
-      setModalVisible(true);
+      setMounted(true);
       Animated.parallel([
         Animated.spring(translateX, {
           toValue: 0,
@@ -57,7 +56,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
+    } else if (mounted) {
       Animated.parallel([
         Animated.timing(translateX, {
           toValue: -DRAWER_WIDTH,
@@ -69,9 +68,9 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
           duration: 220,
           useNativeDriver: true,
         }),
-      ]).start(() => setModalVisible(false));
+      ]).start(() => setMounted(false));
     }
-  }, [visible, translateX, overlayOpacity]);
+  }, [visible, translateX, overlayOpacity, mounted]);
 
   const navigate = (route: string) => {
     onClose();
@@ -82,9 +81,30 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
     {
       icon: "person-circle-outline",
       label: "Minha Conta",
-      sublabel: "Perfil e configurações",
+      sublabel: "Perfil e assinatura",
       route: "/account",
       color: colors.primary,
+    },
+    {
+      icon: "shield-outline",
+      label: "Segurança",
+      sublabel: "Biometria, senha e sessões",
+      route: "/security",
+      color: colors.warning,
+    },
+    {
+      icon: "options-outline",
+      label: "Preferências",
+      sublabel: "Tema, idioma e notificações",
+      route: "/preferences",
+      color: colors.primary,
+    },
+    {
+      icon: "lock-closed-outline",
+      label: "Dados e Privacidade",
+      sublabel: "LGPD e exclusão de conta",
+      route: "/data-privacy",
+      color: colors.danger,
     },
     {
       icon: "share-outline",
@@ -114,16 +134,19 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
       route: "/billing",
       color: "#f472b6",
     },
+    {
+      icon: "headset-outline",
+      label: "Suporte e Sobre",
+      sublabel: "Ajuda, info do app e créditos",
+      route: "/support",
+      color: colors.info,
+    },
   ];
 
+  if (!mounted) return null;
+
   return (
-    <Modal
-      visible={modalVisible}
-      transparent
-      animationType="none"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
+    <View style={styles.root} pointerEvents={visible ? "auto" : "none"}>
       {/* Overlay */}
       <Animated.View style={[styles.overlay, { opacity: overlayOpacity }]}>
         <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
@@ -206,11 +229,16 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
           <Text style={styles.footerVersion}>v1.0.0</Text>
         </View>
       </Animated.View>
-    </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999,
+    elevation: 9999,
+  },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.55)",

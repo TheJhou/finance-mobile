@@ -6,10 +6,11 @@ import {
     listCategories,
 } from "@/lib/repositories/categories";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import type { Category } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -54,6 +55,8 @@ const PALETTE = [
 ];
 
 export default function CategoriesScreen() {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [items, setItems] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -178,6 +181,7 @@ export default function CategoriesScreen() {
           setShowForm(false);
           fetchItems();
         }}
+        styles={styles}
       />
     </SafeAreaView>
   );
@@ -187,9 +191,10 @@ interface FormProps {
   visible: boolean;
   onClose: () => void;
   onSaved: () => void;
+  styles: ReturnType<typeof createStyles>;
 }
 
-function CategoryForm({ visible, onClose, onSaved }: FormProps) {
+function CategoryForm({ visible, onClose, onSaved, styles }: FormProps) {
   const [name, setName] = useState("");
   const [color, setColor] = useState(PALETTE[0]);
   const [saving, setSaving] = useState(false);
@@ -282,7 +287,8 @@ function CategoryForm({ visible, onClose, onSaved }: FormProps) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { padding: spacing.lg, paddingBottom: spacing.sm },
@@ -363,3 +369,4 @@ const styles = StyleSheet.create({
     borderColor: colors.textPrimary,
   },
 });
+}

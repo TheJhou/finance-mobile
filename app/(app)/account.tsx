@@ -2,12 +2,10 @@ import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
 import { EditModal } from "@/components/account/edit-modal";
 import { RowSeparator } from "@/components/account/row-separator";
-import { ToggleRow } from "@/components/account/toggle-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
     changePassword,
-    deleteAccount,
     updateProfile,
 } from "@/lib/account-service";
 import { getStoredUserName, logout } from "@/lib/auth";
@@ -26,7 +24,6 @@ import {
     ActivityIndicator,
     Alert,
     Image,
-    Linking,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -45,7 +42,7 @@ type ModalType = "name" | "password" | "email" | null;
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { isDark, toggleTheme } = useTheme();
+  const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,11 +57,6 @@ export default function AccountScreen() {
   const [editNewPassword, setEditNewPassword] = useState("");
   const [editConfirmPassword, setEditConfirmPassword] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
-  const [prefs, setPrefs] = useState({
-    notifications: true,
-    emails: true,
-    biometric: false,
-  });
 
   useFocusEffect(
     useCallback(() => {
@@ -234,43 +226,6 @@ export default function AccountScreen() {
     }
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      "Excluir conta",
-      "Esta ação é irreversível. Todos os seus dados serão permanentemente excluídos. Deseja continuar?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Continuar",
-          style: "destructive",
-          onPress: () => {
-            Alert.alert(
-              "Confirmação final",
-              "Digite sua senha para confirmar a exclusão permanente da sua conta.",
-              [
-                { text: "Cancelar", style: "cancel" },
-                {
-                  text: "Excluir definitivamente",
-                  style: "destructive",
-                  onPress: async () => {
-                    try {
-                      await deleteAccount(editCurrentPassword || "confirm");
-                      await logout();
-                      Alert.alert("Conta excluída", "Sua conta foi excluída com sucesso.");
-                      router.replace("/" as any);
-                    } catch (err) {
-                      Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao excluir conta");
-                    }
-                  },
-                },
-              ]
-            );
-          },
-        },
-      ]
-    );
-  };
-
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
   const buildVersion = String(Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "1");
   const environment = __DEV__ ? "Homologação" : "Produção";
@@ -376,47 +331,6 @@ export default function AccountScreen() {
             />
           </AccountSection>
 
-          {/* ══════════ SEGURANÇA ══════════ */}
-          <AccountSection title="Segurança">
-            <AccountRow
-              icon="key-outline"
-              iconColor={colors.warning}
-              label="Alterar senha"
-              onPress={() => openModal("password")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="phone-portrait-outline"
-              iconColor={colors.primary}
-              label="Sessões ativas"
-              subtitle="Gerencie dispositivos conectados"
-              onPress={() => Alert.alert("Sessões", "Funcionalidade em desenvolvimento")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="close-circle-outline"
-              iconColor={colors.danger}
-              label="Encerrar todas as sessões"
-              onPress={() => Alert.alert("Encerrar sessões", "Funcionalidade em desenvolvimento")}
-            />
-            <RowSeparator />
-            <ToggleRow
-              icon="finger-print-outline"
-              iconColor={colors.primary}
-              label="Autenticação em duas etapas"
-              subtitle="Adicione uma camada extra de segurança"
-              value={prefs.biometric}
-              onToggle={() => setPrefs((p) => ({ ...p, biometric: !p.biometric }))}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="hardware-chip-outline"
-              iconColor={colors.info}
-              label="Dispositivos conectados"
-              onPress={() => Alert.alert("Dispositivos", "Funcionalidade em desenvolvimento")}
-            />
-          </AccountSection>
-
           {/* ══════════ ASSINATURA ══════════ */}
           <View style={styles.subscriptionCard}>
             <View style={styles.subscriptionHeader}>
@@ -477,239 +391,6 @@ export default function AccountScreen() {
               variant={isPro ? "secondary" : "primary"}
             />
           </View>
-
-          {/* ══════════ DADOS E PRIVACIDADE ══════════ */}
-          <AccountSection title="Dados e Privacidade">
-            <AccountRow
-              icon="download-outline"
-              iconColor={colors.info}
-              label="Exportar meus dados"
-              onPress={() => router.push("/export-data" as any)}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="document-text-outline"
-              iconColor={colors.info}
-              label="Baixar dados da conta (LGPD)"
-              subtitle="Solicite seus dados conforme a LGPD"
-              onPress={() => Alert.alert("LGPD", "Sua solicitação foi registrada. Você receberá um e-mail com seus dados em até 72h.")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="trash-outline"
-              iconColor={colors.danger}
-              label="Solicitar exclusão da conta"
-              subtitle="Exclusão permanente e irreversível"
-              danger
-              onPress={handleDeleteAccount}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="shield-outline"
-              iconColor={colors.primary}
-              label="Política de Privacidade"
-              onPress={() => router.push("/(app)/privacy" as any)}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="document-outline"
-              iconColor={colors.primary}
-              label="Termos de Uso"
-              onPress={() => router.push("/(app)/terms" as any)}
-            />
-          </AccountSection>
-
-          {/* ══════════ PREFERÊNCIAS ══════════ */}
-          <AccountSection title="Preferências">
-            <AccountRow
-              icon={isDark ? "sunny-outline" : "moon-outline"}
-              iconColor={colors.primary}
-              label="Tema"
-              value={isDark ? "Escuro" : "Claro"}
-              onPress={toggleTheme}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="language-outline"
-              iconColor={colors.info}
-              label="Idioma"
-              value="Português (BR)"
-              onPress={() => Alert.alert("Idioma", "Seletor de idioma em desenvolvimento")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="calendar-outline"
-              iconColor={colors.warning}
-              label="Formato de data"
-              value="DD/MM/AAAA"
-              onPress={() => Alert.alert("Formato de data", "Seletor em desenvolvimento")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="cash-outline"
-              iconColor={colors.success}
-              label="Formato de moeda"
-              value="R$ (BRL)"
-              onPress={() => Alert.alert("Moeda", "Seletor em desenvolvimento")}
-            />
-            <RowSeparator />
-            <ToggleRow
-              icon="notifications-outline"
-              iconColor={colors.primary}
-              label="Receber notificações"
-              value={prefs.notifications}
-              onToggle={() => setPrefs((p) => ({ ...p, notifications: !p.notifications }))}
-            />
-            <RowSeparator />
-            <ToggleRow
-              icon="mail-outline"
-              iconColor={colors.info}
-              label="Receber e-mails"
-              value={prefs.emails}
-              onToggle={() => setPrefs((p) => ({ ...p, emails: !p.emails }))}
-            />
-          </AccountSection>
-
-          {/* ══════════ BACKUP E SINCRONIZAÇÃO ══════════ */}
-          <AccountSection title="Backup e Sincronização">
-            <AccountRow
-              icon="cloud-done-outline"
-              iconColor={colors.success}
-              label="Última sincronização"
-              value="—"
-              chevron={false}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="wifi-outline"
-              iconColor={colors.info}
-              label="Status da conexão"
-              value="Online"
-              chevron={false}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="sync-outline"
-              iconColor={colors.warning}
-              label="Dados pendentes"
-              value="0 itens"
-              chevron={false}
-            />
-            <RowSeparator />
-            <TouchableOpacity
-              style={styles.syncButton}
-              onPress={() => Alert.alert("Sincronização", "Sincronização iniciada...")}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="sync" size={18} color={colors.primary} />
-              <Text style={styles.syncButtonText}>Sincronizar agora</Text>
-            </TouchableOpacity>
-          </AccountSection>
-
-          {/* ══════════ INFORMAÇÕES DO APP ══════════ */}
-          <AccountSection title="Informações do Aplicativo">
-            <AccountRow
-              icon="information-circle-outline"
-              iconColor={colors.info}
-              label="Versão"
-              value={appVersion}
-              chevron={false}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="build-outline"
-              iconColor={colors.textMuted}
-              label="Build"
-              value={buildVersion}
-              chevron={false}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="server-outline"
-              iconColor={colors.textMuted}
-              label="Ambiente"
-              value={environment}
-              chevron={false}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="time-outline"
-              iconColor={colors.textMuted}
-              label="Última sincronização"
-              value="—"
-              chevron={false}
-            />
-          </AccountSection>
-
-          {/* ══════════ SUPORTE ══════════ */}
-          <AccountSection title="Suporte">
-            <AccountRow
-              icon="help-circle-outline"
-              iconColor={colors.info}
-              label="Central de ajuda"
-              onPress={() => Linking.openURL("https://help.finance.app")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="chatbubble-outline"
-              iconColor={colors.primary}
-              label="Enviar feedback"
-              onPress={() => Linking.openURL("mailto:support@finance.app?subject=Feedback")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="warning-outline"
-              iconColor={colors.warning}
-              label="Reportar problema"
-              onPress={() => Linking.openURL("mailto:support@finance.app?subject=Reportar%20Problema")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="headset-outline"
-              iconColor={colors.success}
-              label="Falar com suporte"
-              onPress={() => Linking.openURL("mailto:support@finance.app")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="star-outline"
-              iconColor={colors.warning}
-              label="Avaliar aplicativo"
-              onPress={() => Linking.openURL("https://play.google.com/store/apps/details?id=com.finance.app")}
-            />
-          </AccountSection>
-
-          {/* ══════════ SOBRE ══════════ */}
-          <AccountSection title="Sobre">
-            <AccountRow
-              icon="apps-outline"
-              iconColor={colors.primary}
-              label="Versão"
-              value={appVersion}
-              chevron={false}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="code-slash-outline"
-              iconColor={colors.textMuted}
-              label="Licenças Open Source"
-              onPress={() => Alert.alert("Licenças", "Bibliotecas open source serão listadas aqui em breve.")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="people-outline"
-              iconColor={colors.textMuted}
-              label="Créditos"
-              onPress={() => Alert.alert("Créditos", "Finance Mobile © 2025")}
-            />
-            <RowSeparator />
-            <AccountRow
-              icon="globe-outline"
-              iconColor={colors.info}
-              label="Site oficial"
-              onPress={() => Linking.openURL("https://finance.app")}
-            />
-          </AccountSection>
 
           {/* ══════════ SAIR ══════════ */}
           <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>

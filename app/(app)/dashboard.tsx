@@ -1,9 +1,7 @@
-import DrawerMenu from "@/components/drawer-menu";
 import { getStoredUserName, isAuthenticated } from "@/lib/auth";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
-import { getProfilePhotoUri } from "@/lib/profile-photo";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -18,7 +16,6 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Dimensions,
-    Image,
     Modal,
     RefreshControl,
     ScrollView,
@@ -82,8 +79,6 @@ export default function DashboardScreen() {
   const [notificationModal, setNotificationModal] = useState(false);
   const [notificationsScheduled, setNotificationsScheduled] = useState(false);
   const [overdueTransactions, setOverdueTransactions] = useState<{ id: string; description: string; amount: number; date: string }[]>([]);
-  const [drawerVisible, setDrawerVisible] = useState(false);
-  const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
 
@@ -138,10 +133,6 @@ export default function DashboardScreen() {
       // Load cached name immediately
       const cachedName = await getStoredUserName();
       if (cachedName) setUserName(cachedName);
-
-      // Load profile photo
-      const photo = await getProfilePhotoUri();
-      setProfilePhoto(photo);
 
       const [dashRes, billsRes, overdueRes] = await Promise.all([
         getDashboard(),
@@ -278,21 +269,15 @@ export default function DashboardScreen() {
     : [{ value: 0, label: "-" }];
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-      <DrawerMenu
-        visible={drawerVisible}
-        onClose={() => setDrawerVisible(false)}
-        userName={userName}
-      />
+    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
       <ScrollView
         contentContainerStyle={styles.content}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Header ── */}
-        <View style={styles.header}>
-          <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} onPress={() => setDrawerVisible(true)}><Ionicons name="menu" size={24} color={colors.textPrimary} /></TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: spacing.md }}>
+        {/* ── Dashboard greeting ── */}
+        <View style={styles.dashHeader}>
+          <View style={{ flex: 1 }}>
             <Text style={styles.greeting}>Olá, {userName || "Usuário"} 👋</Text>
             <Text style={styles.subtitle}>Aqui está o resumo da sua vida financeira.</Text>
           </View>
@@ -304,15 +289,6 @@ export default function DashboardScreen() {
               <Ionicons name="notifications-outline" size={22} color={colors.textPrimary} />
               {data && data.pendingCount > 0 && (
                 <View style={styles.badge}><Text style={styles.badgeText}>{Math.min(data.pendingCount, 9)}</Text></View>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }} onPress={() => router.push("/(app)/account")}>
-              {profilePhoto ? (
-                <Image source={{ uri: profilePhoto }} style={styles.headerAvatar} />
-              ) : (
-                <View style={styles.headerAvatarPlaceholder}>
-                  <Ionicons name="person" size={18} color={colors.textSecondary} />
-                </View>
               )}
             </TouchableOpacity>
           </View>
@@ -906,25 +882,8 @@ function createStyles() {
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
 
   /* Header */
-  header: { flexDirection: "row", alignItems: "center" },
+  dashHeader: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm },
   headerRight: { flexDirection: "row", alignItems: "center", gap: spacing.lg },
-  headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 2,
-    borderColor: colors.primary,
-  },
-  headerAvatarPlaceholder: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    borderWidth: 2,
-    borderColor: colors.border,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   greeting: { fontSize: 22, fontWeight: "800", color: colors.textPrimary },
   subtitle: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
   badge: { position: "absolute", top: -6, right: -8, backgroundColor: colors.danger, borderRadius: 10, width: 18, height: 18, alignItems: "center", justifyContent: "center" },

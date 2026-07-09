@@ -1,12 +1,13 @@
 import { BackupMetadata, BackupSystem, CloudBackupEntry } from "@/lib/backup";
 import { BackupScheduler } from "@/lib/backup-scheduler";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
 import { File } from 'expo-file-system';
 import { useFocusEffect } from "expo-router";
 import * as Sharing from 'expo-sharing';
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -22,6 +23,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function BackupScreen() {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [loading, setLoading] = useState(true);
   const [backups, setBackups] = useState<BackupMetadata[]>([]);
   const [creatingBackup, setCreatingBackup] = useState(false);
@@ -697,7 +700,8 @@ export default function BackupScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   container: { flex: 1 },
@@ -885,3 +889,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 });
+}

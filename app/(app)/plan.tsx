@@ -5,11 +5,12 @@ import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from
 import { clearProCache, getSubscriptionStatus } from "@/lib/subscription";
 import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -26,6 +27,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PlanScreen() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [loggedIn, setLoggedIn] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -290,6 +293,7 @@ export default function PlanScreen() {
               setIsRegister(true);
               setShowAuthModal(true);
             }}
+            styles={styles}
           />
         )}
       </ScrollView>
@@ -380,9 +384,11 @@ function getUsageBarColor(usagePercent: number) {
 function AuthPromptCard({
   onLoginPress,
   onRegisterPress,
+  styles,
 }: Readonly<{
   onLoginPress: () => void;
   onRegisterPress: () => void;
+  styles: ReturnType<typeof createStyles>;
 }>) {
   return (
     <View style={styles.card}>
@@ -399,7 +405,8 @@ function AuthPromptCard({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing["3xl"] },
@@ -493,3 +500,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
 });
+}

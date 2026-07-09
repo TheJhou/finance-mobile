@@ -1,3 +1,4 @@
+import { AppHeader } from "@/components/app-header";
 import { useNotificationListener } from "@/hooks/use-notification-listener";
 import { isAuthenticated } from "@/lib/auth";
 import { BackupScheduler } from "@/lib/backup-scheduler";
@@ -47,26 +48,28 @@ export default function AppLayout() {
   }
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textMuted,
-        tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.border,
-          borderTopWidth: 1,
-          elevation: 0,
-          shadowOpacity: 0,
-          height: 60,
-          paddingBottom: 6,
-        },
-        tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: "600",
-        },
-      }}
-    >
+    <View style={styles.container}>
+      <AppHeader />
+      <Tabs
+        screenOptions={{
+          headerShown: false,
+          tabBarActiveTintColor: colors.primary,
+          tabBarInactiveTintColor: colors.textMuted,
+          tabBarStyle: {
+            backgroundColor: colors.surface,
+            borderTopColor: colors.border,
+            borderTopWidth: 1,
+            elevation: 0,
+            shadowOpacity: 0,
+            height: 60,
+            paddingBottom: 6,
+          },
+          tabBarLabelStyle: {
+            fontSize: 10,
+            fontWeight: "600",
+          },
+        }}
+      >
       <Tabs.Screen
         name="dashboard"
         options={{
@@ -131,6 +134,10 @@ export default function AppLayout() {
         }}
       />
       <Tabs.Screen name="account" options={{ href: null }} />
+      <Tabs.Screen name="security" options={{ href: null }} />
+      <Tabs.Screen name="preferences" options={{ href: null }} />
+      <Tabs.Screen name="data-privacy" options={{ href: null }} />
+      <Tabs.Screen name="support" options={{ href: null }} />
       <Tabs.Screen name="export-data" options={{ href: null }} />
       <Tabs.Screen name="billing" options={{ href: null }} />
       <Tabs.Screen name="backup" options={{ href: null }} />
@@ -138,11 +145,16 @@ export default function AppLayout() {
       <Tabs.Screen name="terms" options={{ href: null }} />
       <Tabs.Screen name="forgot-password" options={{ href: null }} />
     </Tabs>
+    </View>
   );
 }
 
 function createStyles() {
   return StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   loading: {
     flex: 1,
     backgroundColor: colors.background,

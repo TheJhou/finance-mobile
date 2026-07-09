@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { login, register } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Alert,
     Pressable,
@@ -17,6 +18,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function LoginScreen() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [isRegister, setIsRegister] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -136,7 +139,8 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -206,3 +210,4 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
 });
+}

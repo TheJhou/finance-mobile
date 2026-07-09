@@ -1,11 +1,12 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { isAuthenticated } from "@/lib/auth";
+import { isBiometricEnabled } from "@/lib/biometric";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
@@ -14,6 +15,8 @@ function RootNavigator() {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuth, setIsAuth] = useState<boolean | null>(null);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [locked, setLocked] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +37,28 @@ function RootNavigator() {
     };
   }, []);
 
+  useEffect(() => {
+    if (isAuth) {
+      isBiometricEnabled().then(setBiometricEnabled);
+    }
+  }, [isAuth]);
+
+  useEffect(() => {
+    if (isAuth && biometricEnabled) {
+      setLocked(true);
+    }
+  }, [isAuth, biometricEnabled]);
+
+  useEffect(() => {
+    const handler = (nextState: AppStateStatus) => {
+      if (nextState === "active" && isAuth && biometricEnabled) {
+        setLocked(true);
+      }
+    };
+    const sub = AppState.addEventListener("change", handler);
+    return () => sub.remove();
+  }, [isAuth, biometricEnabled]);
+
   if (error) {
     return (
       <View style={styles.center}>
@@ -48,6 +73,14 @@ function RootNavigator() {
       <View style={styles.center}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
+    );
+  }
+
+  if (locked) {
+    return (
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="lock" />
+      </Stack>
     );
   }
 
