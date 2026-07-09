@@ -1,5 +1,7 @@
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useMemo } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface AccountRowProps {
@@ -27,6 +29,8 @@ export function AccountRow({
   danger = false,
   rightElement,
 }: Readonly<AccountRowProps>) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const bg = iconBg ?? iconColor + "22";
   const content = (
     <View style={styles.row}>
@@ -55,7 +59,8 @@ export function AccountRow({
   return content;
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   touchable: {
     marginHorizontal: -spacing.lg,
     paddingHorizontal: spacing.lg,
@@ -94,4 +99,5 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontWeight: "500",
   },
-});
+  });
+}

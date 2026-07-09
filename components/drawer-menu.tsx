@@ -1,10 +1,12 @@
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
     Animated,
     Dimensions,
+    Image,
     Pressable,
     StyleSheet,
     Text,
@@ -31,11 +33,14 @@ interface DrawerMenuProps {
   onClose: () => void;
   userName?: string | null;
   userEmail?: string | null;
+  profilePhoto?: string | null;
 }
 
-export default function DrawerMenu({ visible, onClose, userName, userEmail }: DrawerMenuProps) {
+export default function DrawerMenu({ visible, onClose, userName, userEmail, profilePhoto }: DrawerMenuProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
@@ -166,11 +171,15 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
 
         {/* Avatar + nome */}
         <View style={styles.profile}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {userName ? userName.charAt(0).toUpperCase() : "U"}
-            </Text>
-          </View>
+          {profilePhoto ? (
+            <Image source={{ uri: profilePhoto }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {userName ? userName.charAt(0).toUpperCase() : "U"}
+              </Text>
+            </View>
+          )}
           <View style={{ flex: 1 }}>
             <Text style={styles.profileName} numberOfLines={1}>
               {userName || "Usuário"}
@@ -233,7 +242,8 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail }: Dr
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   root: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9999,
@@ -279,6 +289,13 @@ const styles = StyleSheet.create({
     borderColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
+  },
+  avatarImage: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: colors.primary,
   },
   avatarText: {
     fontSize: 22,
@@ -369,4 +386,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2,
   },
-});
+  });
+}

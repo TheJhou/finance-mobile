@@ -271,6 +271,7 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
+        <Text style={styles.dashTitle}>Início</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {/* Token limit warning banner */}
@@ -812,6 +813,7 @@ function createStyles() {
 
   /* Header */
   dashHeader: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm },
+  dashTitle: { fontSize: 24, fontWeight: "800", color: colors.textPrimary, marginBottom: spacing.xs },
 
   /* Error */
   error: { fontSize: 13, color: colors.danger, backgroundColor: colors.expenseBg, padding: spacing.md, borderRadius: radius.md },

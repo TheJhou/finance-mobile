@@ -1,4 +1,6 @@
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
+import { useMemo } from "react";
 import { StyleSheet, Text, View, type ViewStyle } from "react-native";
 
 interface AccountSectionProps {
@@ -8,6 +10,8 @@ interface AccountSectionProps {
 }
 
 export function AccountSection({ title, children, style }: Readonly<AccountSectionProps>) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   return (
     <View style={[styles.section, style]}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -16,7 +20,8 @@ export function AccountSection({ title, children, style }: Readonly<AccountSecti
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   section: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,
@@ -34,4 +39,5 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: spacing.xs,
   },
-});
+  });
+}

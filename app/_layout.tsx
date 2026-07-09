@@ -6,7 +6,7 @@ import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { isAuthenticated } from "@/lib/auth";
-import { isBiometricEnabled } from "@/lib/biometric";
+import { isBiometricEnabled, isBiometricUnlocked, setBiometricUnlocked } from "@/lib/biometric";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
@@ -17,6 +17,7 @@ function RootNavigator() {
   const [isAuth, setIsAuth] = useState<boolean | null>(null);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [locked, setLocked] = useState(false);
+  const [checkingLock, setCheckingLock] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -43,16 +44,26 @@ function RootNavigator() {
     }
   }, [isAuth]);
 
+  // Check lock state once on app open (cold start only)
   useEffect(() => {
-    if (isAuth && biometricEnabled) {
-      setLocked(true);
+    if (!ready || isAuth === null) return;
+    if (!isAuth || !biometricEnabled) {
+      setLocked(false);
+      setCheckingLock(false);
+      return;
     }
-  }, [isAuth, biometricEnabled]);
+    isBiometricUnlocked().then((unlocked) => {
+      setLocked(!unlocked);
+      setCheckingLock(false);
+    });
+  }, [ready, isAuth, biometricEnabled]);
 
+  // Clear unlocked flag when app goes to background so it re-prompts on next cold start
   useEffect(() => {
+    if (!isAuth || !biometricEnabled) return;
     const handler = (nextState: AppStateStatus) => {
-      if (nextState === "active" && isAuth && biometricEnabled) {
-        setLocked(true);
+      if (nextState === "background" || nextState === "inactive") {
+        void setBiometricUnlocked(false);
       }
     };
     const sub = AppState.addEventListener("change", handler);
@@ -68,7 +79,7 @@ function RootNavigator() {
     );
   }
 
-  if (!ready || isAuth === null) {
+  if (!ready || isAuth === null || checkingLock) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.primary} size="large" />

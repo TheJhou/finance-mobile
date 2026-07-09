@@ -2,9 +2,10 @@ import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
 import { checkProFeature } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -70,6 +71,8 @@ const PERIOD_OPTIONS: PeriodOption[] = [
 
 export default function ExportDataScreen() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("pdf");
   const [selectedPeriod, setSelectedPeriod] = useState<ExportPeriod>("month");
   const [exporting, setExporting] = useState(false);
@@ -218,7 +221,8 @@ export default function ExportDataScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -385,4 +389,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#fff",
   },
-});
+  });
+}

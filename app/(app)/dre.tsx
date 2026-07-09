@@ -2,10 +2,11 @@ import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import type { DreData, DrePeriod, DrePeriodRange } from "@/lib/repositories/dre";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -51,6 +52,8 @@ function CategoryRow({
   total: number;
   type: "income" | "expense";
 }) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
   return (
     <View style={styles.categoryRow}>
@@ -74,6 +77,8 @@ function CategoryRow({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function DreScreen() {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [selectedPeriod, setSelectedPeriod] = useState<DrePeriod>("month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -483,7 +488,8 @@ export default function DreScreen() {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -874,4 +880,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
-});
+  });
+}

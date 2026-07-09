@@ -1,6 +1,8 @@
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { useMemo } from "react";
 import {
     Linking,
     ScrollView,
@@ -13,13 +15,15 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PrivacyScreen() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
 
   const handleEmailSupport = () => {
-    Linking.openURL('mailto:support@finance-app.com');
+    Linking.openURL('mailto:jonathas.duarte78@gmail.com');
   };
 
   const handleExerciseRights = () => {
-    Linking.openURL('mailto:support@finance-app.com?subject=Exercício de Direitos LGPD');
+    Linking.openURL('mailto:jonathas.duarte78@gmail.com?subject=Exercício de Direitos LGPD');
   };
 
   return (
@@ -37,14 +41,14 @@ export default function PrivacyScreen() {
         {/* Last Updated */}
         <View style={styles.updateCard}>
           <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.updateText}>Última atualização: Junho de 2025</Text>
+          <Text style={styles.updateText}>Última atualização: 08 de julho de 2026</Text>
         </View>
 
         {/* Introduction */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Compromisso com sua Privacidade</Text>
           <Text style={styles.sectionText}>
-            No Finance App, levamos sua privacidade muito a sério. Esta política explica como coletamos, usamos, armazenamos e protegemos suas informações pessoais, em conformidade com a Lei Geral de Proteção de Dados (LGPD) e outras regulamentações aplicáveis.
+            No Finance App, levamos sua privacidade muito a sério. Esta política explica como coletamos, usamos, armazenamos e protegemos suas informações pessoais, em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018) e outras regulamentações aplicáveis.
           </Text>
         </View>
 
@@ -85,9 +89,35 @@ export default function PrivacyScreen() {
           </View>
         </View>
 
+        {/* Legal Basis */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>3. Base Legal para o Tratamento</Text>
+          <Text style={styles.sectionText}>
+            Tratamos seus dados pessoais com base nas seguintes hipóteses legais previstas pela LGPD:
+          </Text>
+          <View style={styles.featureList}>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={styles.featureText}>Execução de contrato (Art. 7º, V): para fornecer os serviços contratados</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={styles.featureText}>Consentimento (Art. 7º, I): para processamento de notificações bancárias</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={styles.featureText}>Legítimo interesse (Art. 7º, IX): para melhorar o app e prevenir fraudes</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={styles.featureText}>Cumprimento de obrigação legal (Art. 7º, II): quando exigido por lei</Text>
+            </View>
+          </View>
+        </View>
+
         {/* Data Usage */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>3. Como Usamos Suas Informações</Text>
+          <Text style={styles.sectionTitle}>4. Como Usamos Suas Informações</Text>
           <View style={styles.featureList}>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.success} />
@@ -114,7 +144,7 @@ export default function PrivacyScreen() {
 
         {/* Data Storage */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>4. Armazenamento e Segurança</Text>
+          <Text style={styles.sectionTitle}>5. Armazenamento e Segurança</Text>
           <Text style={styles.sectionText}>
             • Seus dados são armazenados em servidores seguros com criptografia{'\n'}
             • Backup automático diário para proteção contra perdas{'\n'}
@@ -132,7 +162,7 @@ export default function PrivacyScreen() {
 
         {/* Data Sharing */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>5. Compartilhamento de Dados</Text>
+          <Text style={styles.sectionTitle}>6. Compartilhamento de Dados</Text>
           <Text style={styles.sectionText}>
             <Text style={styles.boldText}>NUNCA vendemos suas informações pessoais.</Text>
           </Text>
@@ -157,9 +187,9 @@ export default function PrivacyScreen() {
 
         {/* LGPD Rights */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>6. Seus Direitos (LGPD)</Text>
+          <Text style={styles.sectionTitle}>7. Seus Direitos (LGPD)</Text>
           <Text style={styles.sectionText}>
-            Você tem direito a:
+            Conforme o Art. 18 da LGPD, você tem direito a:
           </Text>
           <View style={styles.rightsList}>
             <View style={styles.rightItem}>
@@ -173,14 +203,14 @@ export default function PrivacyScreen() {
               <Ionicons name="create-outline" size={16} color={colors.primary} />
               <View style={styles.rightContent}>
                 <Text style={styles.rightTitle}>Correção</Text>
-                <Text style={styles.rightDescription}>Atualizar dados incorretos</Text>
+                <Text style={styles.rightDescription}>Atualizar dados incorretos ou desatualizados</Text>
               </View>
             </View>
             <View style={styles.rightItem}>
               <Ionicons name="trash-outline" size={16} color={colors.primary} />
               <View style={styles.rightContent}>
                 <Text style={styles.rightTitle}>Eliminação</Text>
-                <Text style={styles.rightDescription}>Solicitar exclusão de seus dados</Text>
+                <Text style={styles.rightDescription}>Solicitar exclusão de seus dados (direito ao esquecimento)</Text>
               </View>
             </View>
             <View style={styles.rightItem}>
@@ -190,7 +220,24 @@ export default function PrivacyScreen() {
                 <Text style={styles.rightDescription}>Transferir seus dados para outro serviço</Text>
               </View>
             </View>
+            <View style={styles.rightItem}>
+              <Ionicons name="ban-outline" size={16} color={colors.primary} />
+              <View style={styles.rightContent}>
+                <Text style={styles.rightTitle}>Oposição</Text>
+                <Text style={styles.rightDescription}>Opôr-se ao tratamento de seus dados</Text>
+              </View>
+            </View>
+            <View style={styles.rightItem}>
+              <Ionicons name="information-circle-outline" size={16} color={colors.primary} />
+              <View style={styles.rightContent}>
+                <Text style={styles.rightTitle}>Informação</Text>
+                <Text style={styles.rightDescription}>Saber sobre o compartilhamento de seus dados</Text>
+              </View>
+            </View>
           </View>
+          <Text style={styles.sectionText}>
+            Os pedidos serão respondidos em até 15 dias úteis, conforme previsto pela LGPD.
+          </Text>
           <TouchableOpacity style={styles.rightsButton} onPress={handleExerciseRights}>
             <Ionicons name="mail-outline" size={16} color="#fff" />
             <Text style={styles.rightsButtonText}>Exercer meus direitos</Text>
@@ -199,7 +246,7 @@ export default function PrivacyScreen() {
 
         {/* Cookies and Tracking */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>7. Cookies e Rastreamento</Text>
+          <Text style={styles.sectionTitle}>8. Cookies e Rastreamento</Text>
           <Text style={styles.sectionText}>
             • Não utilizamos cookies para rastreamento cruzado{'\n'}
             • Usamos analytics anônimos para melhorar o app{'\n'}
@@ -210,7 +257,7 @@ export default function PrivacyScreen() {
 
         {/* Data Retention */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>8. Retenção de Dados</Text>
+          <Text style={styles.sectionTitle}>9. Retenção de Dados</Text>
           <Text style={styles.sectionText}>
             • Mantemos seus dados enquanto você usar o app{'\n'}
             • Dados de transações são mantidos para histórico financeiro{'\n'}
@@ -221,7 +268,7 @@ export default function PrivacyScreen() {
 
         {/* International Transfers */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>9. Transferência Internacional</Text>
+          <Text style={styles.sectionTitle}>10. Transferência Internacional</Text>
           <Text style={styles.sectionText}>
             Alguns dados podem ser processados fora do Brasil (serviços de IA). Garantimos que os provedores cumpram padrões de segurança equivalentes ou superiores aos exigidos pela LGPD.
           </Text>
@@ -229,7 +276,7 @@ export default function PrivacyScreen() {
 
         {/* Children */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>10. Proteção de Crianças</Text>
+          <Text style={styles.sectionTitle}>11. Proteção de Crianças</Text>
           <Text style={styles.sectionText}>
             Nosso serviço não é direcionado a menores de 18 anos. Não coletamos intencionalmente informações de crianças. Se descobrirmos que coletamos dados de uma criança, os deletaremos imediatamente.
           </Text>
@@ -237,7 +284,7 @@ export default function PrivacyScreen() {
 
         {/* Changes */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>11. Alterações nesta Política</Text>
+          <Text style={styles.sectionTitle}>12. Alterações nesta Política</Text>
           <Text style={styles.sectionText}>
             Podemos atualizar esta política periodicamente. Notificaremos sobre mudanças significativas através do aplicativo. A data da última atualização está sempre no topo deste documento.
           </Text>
@@ -245,16 +292,16 @@ export default function PrivacyScreen() {
 
         {/* Contact */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>12. Contato para Privacidade</Text>
+          <Text style={styles.sectionTitle}>13. Encarregado de Dados (DPO)</Text>
           <Text style={styles.sectionText}>
-            Para exercer seus direitos, tirar dúvidas ou reportar problemas:
+            Para exercer seus direitos, tirar dúvidas ou reportar problemas relacionados à privacidade, entre em contato com nosso Encarregado de Dados (DPO):
           </Text>
           <TouchableOpacity style={styles.contactButton} onPress={handleEmailSupport}>
             <Ionicons name="mail-outline" size={20} color={colors.primary} />
-            <Text style={styles.contactButtonText}>support@finance-app.com</Text>
+            <Text style={styles.contactButtonText}>jonathas.duarte78@gmail.com</Text>
           </TouchableOpacity>
           <Text style={styles.contactInfo}>
-            Assunto: &ldquo;Privacidade e Proteção de Dados&rdquo;
+            Assunto: &ldquo;Privacidade e Proteção de Dados - LGPD&rdquo;
           </Text>
         </View>
 
@@ -270,14 +317,15 @@ export default function PrivacyScreen() {
         </View>
 
         <Text style={styles.footerText}>
-          Finance App © 2024 - Privacidade e Segurança em Primeiro Lugar
+          Finance App © 2026 - Privacidade e Segurança em Primeiro Lugar
         </Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: "row",
@@ -461,4 +509,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: spacing.lg,
   },
-});
+  });
+}

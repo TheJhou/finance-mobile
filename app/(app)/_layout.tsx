@@ -2,21 +2,18 @@ import { AppHeader } from "@/components/app-header";
 import { useNotificationListener } from "@/hooks/use-notification-listener";
 import { isAuthenticated } from "@/lib/auth";
 import { BackupScheduler } from "@/lib/backup-scheduler";
-import { isBiometricEnabled, isBiometricUnlocked } from "@/lib/biometric";
 import { colors } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs, useSegments } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, View } from "react-native";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
 
 const PUBLIC_SCREENS = new Set(["terms", "forgot-password", "privacy"]);
 
 export default function AppLayout() {
   const [authChecking, setAuthChecking] = useState(true);
   const [authed, setAuthed] = useState(false);
-  const [biometricRequired, setBiometricRequired] = useState(false);
-  const [biometricUnlocked, setBiometricUnlocked] = useState(false);
   const segments = useSegments();
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
@@ -54,36 +51,9 @@ export default function AppLayout() {
   useEffect(() => {
     isAuthenticated().then((auth) => {
       setAuthed(auth);
-      if (auth) {
-        isBiometricEnabled().then((enabled) => {
-          setBiometricRequired(enabled);
-          if (enabled) {
-            isBiometricUnlocked().then((unlocked) => {
-              setBiometricUnlocked(unlocked);
-              setAuthChecking(false);
-            });
-          } else {
-            setAuthChecking(false);
-          }
-        });
-      } else {
-        setAuthChecking(false);
-      }
+      setAuthChecking(false);
     });
   }, []);
-
-  // Re-lock when app goes to background
-  useEffect(() => {
-    if (!biometricRequired) return;
-    const handler = (nextState: AppStateStatus) => {
-      if (nextState === "background" || nextState === "inactive") {
-        setBiometricUnlocked(false);
-        void setBiometricUnlocked(false);
-      }
-    };
-    const sub = AppState.addEventListener("change", handler);
-    return () => sub.remove();
-  }, [biometricRequired]);
 
   if (authChecking) {
     return (
@@ -96,10 +66,6 @@ export default function AppLayout() {
   const currentScreen = segments.at(-1) as string;
   if (!authed && !PUBLIC_SCREENS.has(currentScreen)) {
     return <Redirect href="/" />;
-  }
-
-  if (biometricRequired && !biometricUnlocked) {
-    return <Redirect href="/lock" />;
   }
 
   return (

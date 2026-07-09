@@ -50,7 +50,7 @@ export async function authenticateWithBiometrics(
   try {
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage,
-      fallbackLabel: "Usar senha",
+      fallbackLabel: "Usar senha do dispositivo",
       cancelLabel: "Cancelar",
       disableDeviceFallback: false,
     });

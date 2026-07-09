@@ -1,9 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { forgotPassword, resetPassword } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
     Pressable,
     ScrollView,
@@ -18,6 +19,8 @@ type Step = "email" | "reset";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -234,7 +237,8 @@ export default function ForgotPasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -332,4 +336,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: colors.primary,
   },
-});
+  });
+}

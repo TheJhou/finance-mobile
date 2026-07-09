@@ -5,40 +5,14 @@ import { getDashboard } from "@/lib/repositories/dashboard";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter, useSegments } from "expo-router";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const SCREEN_TITLES: Record<string, string> = {
-  dashboard: "Início",
-  transactions: "Transações",
-  categories: "Categorias",
-  recurring: "Recorrentes",
-  notifications: "Importar",
-  dre: "Relatório",
-  plan: "Plano",
-  account: "Minha Conta",
-  security: "Segurança",
-  preferences: "Preferências",
-  "data-privacy": "Dados e Privacidade",
-  support: "Suporte e Sobre",
-  "export-data": "Exportar Dados",
-  billing: "Assinatura",
-  backup: "Backup",
-  privacy: "Política de Privacidade",
-  terms: "Termos de Uso",
-  "forgot-password": "Recuperar Senha",
-};
-
-interface AppHeaderProps {
-  title?: string;
-}
-
-export function AppHeader({ title }: AppHeaderProps) {
+export function AppHeader() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const segments = useSegments();
   const { isDark, toggleTheme } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
 
@@ -46,9 +20,6 @@ export function AppHeader({ title }: AppHeaderProps) {
   const [userName, setUserName] = useState<string | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
-
-  const currentScreen = segments.at(-1) as string;
-  const headerTitle = title ?? SCREEN_TITLES[currentScreen] ?? "Finance";
 
   const loadUserData = useCallback(async () => {
     const name = await getStoredUserName();
@@ -73,6 +44,7 @@ export function AppHeader({ title }: AppHeaderProps) {
         visible={drawerVisible}
         onClose={() => setDrawerVisible(false)}
         userName={userName}
+        profilePhoto={profilePhoto}
       />
       <View style={[styles.header, { paddingTop: insets.top }]}>
         <TouchableOpacity
@@ -88,7 +60,7 @@ export function AppHeader({ title }: AppHeaderProps) {
           )}
         </TouchableOpacity>
 
-        <Text style={styles.title} numberOfLines={1}>{headerTitle}</Text>
+        <View style={{ flex: 1 }} />
 
         <TouchableOpacity
           hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}

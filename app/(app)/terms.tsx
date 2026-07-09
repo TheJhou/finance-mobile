@@ -1,7 +1,9 @@
 import { setTermsAccepted } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useMemo } from "react";
 import {
     Linking,
     ScrollView,
@@ -14,6 +16,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function TermsScreen() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
   const isOnboarding = fromOnboarding === "true";
 
@@ -48,7 +52,7 @@ export default function TermsScreen() {
         {/* Last Updated */}
         <View style={styles.updateCard}>
           <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.updateText}>Última atualização: 22 de junho de 2026</Text>
+          <Text style={styles.updateText}>Última atualização: 08 de julho de 2026</Text>
         </View>
 
         {/* Introduction */}
@@ -142,9 +146,9 @@ export default function TermsScreen() {
 
         {/* Privacy */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>6. Privacidade</Text>
+          <Text style={styles.sectionTitle}>6. Privacidade e Proteção de Dados (LGPD)</Text>
           <Text style={styles.sectionText}>
-            Sua privacidade é importante para nós. Nossa Política de Privacidade explica como coletamos, usamos e protegemos seus dados. Ao usar o app, você concorda com as práticas descritas.
+            Sua privacidade é importante para nós. Tratamos seus dados pessoais em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018). Nossa Política de Privacidade explica detalhadamente como coletamos, usamos, armazenamos e protegemos seus dados, bem como seus direitos como titular.
           </Text>
           <TouchableOpacity style={styles.linkButton} onPress={() => router.push('/privacy')}>
             <Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />
@@ -202,7 +206,7 @@ export default function TermsScreen() {
         </View>
 
         <Text style={styles.footerText}>
-          Finance App © 2024 - Todos os direitos reservados
+          Finance App © 2026 - Todos os direitos reservados
         </Text>
 
         {isOnboarding && (
@@ -215,7 +219,8 @@ export default function TermsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: "row",
@@ -365,4 +370,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-});
+  });
+}

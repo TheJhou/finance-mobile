@@ -1,5 +1,7 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 import { colors, radius } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
+import { useMemo } from "react";
+import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -18,6 +20,8 @@ export function Button({
   disabled,
   variant = "primary",
 }: Props) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const bg: Record<Variant, string> = {
     primary: colors.primary,
     secondary: colors.surface,
@@ -54,7 +58,8 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   button: {
     paddingVertical: 14,
     paddingHorizontal: 20,
@@ -68,4 +73,5 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "600",
   },
-});
+  });
+}

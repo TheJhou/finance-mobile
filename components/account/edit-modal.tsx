@@ -1,5 +1,7 @@
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useMemo } from "react";
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface EditModalProps {
@@ -11,6 +13,8 @@ interface EditModalProps {
 }
 
 export function EditModal({ visible, title, onClose, children, footer }: Readonly<EditModalProps>) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>
@@ -31,7 +35,8 @@ export function EditModal({ visible, title, onClose, children, footer }: Readonl
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -63,4 +68,5 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     gap: spacing.sm,
   },
-});
+  });
+}

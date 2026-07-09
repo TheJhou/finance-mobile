@@ -1,5 +1,7 @@
-import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 import { colors, radius } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
+import { useMemo } from "react";
+import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 
 interface Props extends TextInputProps {
   label?: string;
@@ -7,6 +9,8 @@ interface Props extends TextInputProps {
 }
 
 export function Input({ label, error, style, ...rest }: Props) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   return (
     <View style={styles.wrapper}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
@@ -20,7 +24,8 @@ export function Input({ label, error, style, ...rest }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   wrapper: { gap: 6 },
   label: { fontSize: 13, fontWeight: "500", color: colors.textSecondary },
   input: {
@@ -36,4 +41,5 @@ const styles = StyleSheet.create({
   },
   inputError: { borderColor: colors.danger },
   error: { fontSize: 12, color: colors.danger },
-});
+  });
+}

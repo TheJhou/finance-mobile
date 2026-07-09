@@ -10,6 +10,7 @@ import {
     updateTransaction,
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import type { Category, DocumentType, PaymentMethod, Transaction, TransactionType } from "@/lib/types";
 import { formatCurrency, formatCurrencyInput, formatDate, normalizePaymentMethod, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
@@ -175,6 +176,8 @@ function activeFilterCount(f: Filters): number {
 }
 
 export default function TransactionsScreen() {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [items, setItems] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
@@ -687,6 +690,8 @@ interface FormProps {
 }
 
 function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -1222,7 +1227,8 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   center: {
     flex: 1,
@@ -1544,5 +1550,6 @@ const styles = StyleSheet.create({
     padding: 6,
     borderRadius: 4,
   },
-});
+  });
+}
 

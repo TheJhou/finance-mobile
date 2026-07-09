@@ -11,6 +11,7 @@ import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { checkProFeature } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import type { Category, DocumentType, TransactionStatus } from "@/lib/types";
 import { formatCurrency, normalizePaymentMethod, toDateInputValue } from "@/lib/utils";
 import BankNotifications from "@/modules/bank-notifications";
@@ -19,7 +20,7 @@ import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } fr
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     AppState,
@@ -51,6 +52,8 @@ function normalizeStatus(value: unknown, fallback: TransactionStatus): Transacti
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [granted, setGranted] = useState(false);
   const [connected, setConnected] = useState(false);
   const [pendingNotifications, setPendingNotifications] = useState<NotificationQueueItem[]>([]);
@@ -1054,7 +1057,8 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
 
   header: {
@@ -1367,4 +1371,5 @@ const styles = StyleSheet.create({
     color: "#fff",
     lineHeight: 18,
   },
-});
+  });
+}

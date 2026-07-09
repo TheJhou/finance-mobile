@@ -3,8 +3,8 @@ import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { AppState, type AppStateStatus, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function LockScreen() {
@@ -13,12 +13,14 @@ export default function LockScreen() {
   const styles = useMemo(() => createStyles(), [isDark]);
   const [error, setError] = useState<string | null>(null);
   const [authenticating, setAuthenticating] = useState(false);
+  const mountedRef = useRef(true);
 
   const tryAuthenticate = useCallback(async () => {
     if (authenticating) return;
     setAuthenticating(true);
     setError(null);
     const result = await authenticateWithBiometrics("Autentique-se para acessar o app");
+    if (!mountedRef.current) return;
     if (result.success) {
       await setBiometricUnlocked(true);
       router.replace("/(app)/dashboard" as any);
@@ -29,17 +31,9 @@ export default function LockScreen() {
   }, [authenticating, router]);
 
   useEffect(() => {
+    mountedRef.current = true;
     tryAuthenticate();
-  }, [tryAuthenticate]);
-
-  useEffect(() => {
-    const handler = (nextState: AppStateStatus) => {
-      if (nextState === "active") {
-        tryAuthenticate();
-      }
-    };
-    const sub = AppState.addEventListener("change", handler);
-    return () => sub.remove();
+    return () => { mountedRef.current = false; };
   }, [tryAuthenticate]);
 
   return (

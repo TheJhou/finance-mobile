@@ -85,7 +85,7 @@ export const SUBSCRIPTION_CONFIG = {
   purchaseUrl: 'https://backend-final-production-659a.up.railway.app/purchase',
   termsUrl: 'https://finance-app.com/terms',
   privacyUrl: 'https://finance-app.com/privacy',
-  supportUrl: 'mailto:support@finance-app.com',
+  supportUrl: 'mailto:jonathas.duarte78@gmail.com',
 };
 
 // Textos para conformidade com Google Play Store

@@ -11,11 +11,12 @@ import {
     updateRecurring
 } from "@/lib/repositories/recurring";
 import { colors, radius, spacing } from "@/lib/theme";
+import { useTheme } from "@/lib/theme-context";
 import type { Category, Frequency, RecurringTransaction, TransactionType } from "@/lib/types";
 import { formatCurrency, formatCurrencyInput, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -45,6 +46,8 @@ function ListSeparator() {
 }
 
 export default function RecurringScreen() {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [items, setItems] = useState<RecurringTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -347,6 +350,8 @@ interface RecurringFormProps {
 }
 
 function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<RecurringFormProps>) {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -616,7 +621,8 @@ const formStyles = StyleSheet.create({
   pillText: { fontSize: 13, color: colors.textPrimary, fontWeight: "500" },
 });
 
-const styles = StyleSheet.create({
+function createStyles() {
+  return StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { padding: spacing.lg, paddingBottom: spacing.sm },
@@ -751,4 +757,5 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     fontSize: 15,
   },
-});
+  });
+}
