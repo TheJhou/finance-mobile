@@ -35,6 +35,15 @@ export default function LoginScreen() {
       Alert.alert("Erro", "Preencha seu nome");
       return;
     }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email.trim())) {
+      Alert.alert("Erro", "E-mail inválido");
+      return;
+    }
+    if (isRegister && password.trim().length < 6) {
+      Alert.alert("Erro", "A senha deve ter no mínimo 6 caracteres");
+      return;
+    }
     setLoading(true);
     try {
       if (isRegister) {

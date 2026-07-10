@@ -15,27 +15,28 @@ export async function getProfilePhotoUri(): Promise<string | null> {
   }
 }
 
-export async function saveProfilePhoto(sourceUri: string): Promise<string> {
+export async function saveProfilePhoto(sourceUri: string, base64Data?: string): Promise<string> {
   const dir = getProfileDir();
   if (!dir.exists) {
     dir.create({ intermediates: true });
   }
 
-  const ext = sourceUri.split(".").pop()?.toLowerCase() || "jpg";
-  const fileName = `profile_photo.${ext}`;
+  const fileName = "profile_photo.jpg";
   const destFile = new File(dir, fileName);
 
-  // Handle content:// URIs (Android image picker) — File.copy doesn't support them
-  if (sourceUri.startsWith("content://")) {
-    // Read the content URI via fetch and write base64 to the destination file
+  if (base64Data) {
+    // If base64 data is provided directly (from ImagePicker), write it
+    destFile.write(base64Data, { encoding: "base64" } as any);
+  } else if (sourceUri.startsWith("content://")) {
+    // Fallback: try fetch → blob → base64 for content:// URIs
     const response = await fetch(sourceUri);
     const blob = await response.blob();
     const reader = new FileReader();
     const base64 = await new Promise<string>((resolve, reject) => {
       reader.onloadend = () => {
         const result = reader.result as string;
-        const base64Data = result.split(",")[1] || "";
-        resolve(base64Data);
+        const data = result.split(",")[1] || "";
+        resolve(data);
       };
       reader.onerror = reject;
       reader.readAsDataURL(blob);
@@ -46,6 +47,8 @@ export async function saveProfilePhoto(sourceUri: string): Promise<string> {
     const sourceFile = new File(sourceUri);
     if (sourceFile.exists) {
       sourceFile.copy(destFile);
+    } else {
+      throw new Error("Arquivo de origem não encontrado");
     }
   }
 

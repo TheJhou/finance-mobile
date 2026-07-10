@@ -14,14 +14,14 @@
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb } from "@/lib/db";
 import {
-  createRecurring,
-  deleteRecurring,
-  getRecurring,
-  listRecurring,
-  postRecurringTransaction,
-  processRecurringDue,
-  toggleRecurringActive,
-  updateRecurring,
+    createRecurring,
+    deleteRecurring,
+    getRecurring,
+    listRecurring,
+    postRecurringTransaction,
+    processRecurringDue,
+    toggleRecurringActive,
+    updateRecurring,
 } from "@/lib/repositories/recurring";
 
 beforeEach(async () => {
@@ -166,7 +166,7 @@ describe("recurring — processRecurringDue", () => {
 
     const updated = await getRecurring(rec.id);
     // Should have advanced past today
-    expect(updated!.nextDueDate).toBeGreaterThan("2020-01-01");
+    expect(updated!.nextDueDate).toBeGreaterThan("2020-01-01" as any);
   });
 });
 

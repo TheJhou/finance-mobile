@@ -3,6 +3,8 @@
  * Garante consistência entre todas as telas de assinatura
  */
 
+import { BACKEND_URL } from "@/lib/config";
+
 export interface PlanFeature {
   label: string;
   free: boolean | string;
@@ -82,7 +84,7 @@ export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
 
 // URLs e links para Google Play Store
 export const SUBSCRIPTION_CONFIG = {
-  purchaseUrl: 'https://backend-final-production-659a.up.railway.app/purchase',
+  purchaseUrl: `${BACKEND_URL}/purchase`,
   termsUrl: 'https://finance-app.com/terms',
   privacyUrl: 'https://finance-app.com/privacy',
   supportUrl: 'mailto:jonathas.duarte78@gmail.com',

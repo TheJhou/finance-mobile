@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { processRecurringDue } from "@/lib/repositories/recurring";
+import { getCachedMonthStartDay } from "@/lib/settings";
 import type { DashboardData } from "@/lib/types";
 import { formatDateLocal } from "@/lib/utils";
 
@@ -11,22 +12,34 @@ export interface UpcomingBill {
   color: string;
 }
 
-function monthRange(year?: number, month?: number): { first: string; last: string } {
+function monthRange(year?: number, month?: number, monthStartDay?: number): { first: string; last: string } {
   const now = new Date();
   const y = year ?? now.getFullYear();
   const m = month ?? now.getMonth();
-  const first = new Date(y, m, 1);
-  const last = new Date(y, m + 1, 0, 23, 59, 59);
+  const startDay = monthStartDay ?? getCachedMonthStartDay();
+
+  if (startDay === 1) {
+    const first = new Date(y, m, 1);
+    const last = new Date(y, m + 1, 0, 23, 59, 59);
+    return {
+      first: formatDateLocal(first),
+      last: formatDateLocal(last),
+    };
+  }
+
+  // Custom start day: month "m" runs from day `startDay` of month m to day `startDay-1` of month m+1
+  const first = new Date(y, m, startDay);
+  const last = new Date(y, m + 1, startDay - 1, 23, 59, 59);
   return {
     first: formatDateLocal(first),
     last: formatDateLocal(last),
   };
 }
 
-export async function getDashboard(opts?: { year?: number; month?: number }): Promise<DashboardData> {
+export async function getDashboard(opts?: { year?: number; month?: number; monthStartDay?: number }): Promise<DashboardData> {
   void processRecurringDue().catch((err) => console.warn("[Dashboard] processRecurringDue failed:", err));
   const db = await getDb();
-  const { first, last } = monthRange(opts?.year, opts?.month);
+  const { first, last } = monthRange(opts?.year, opts?.month, opts?.monthStartDay);
   const today = formatDateLocal(new Date());
   const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
@@ -54,7 +67,8 @@ export async function getDashboard(opts?: { year?: number; month?: number }): Pr
   ] = await Promise.all([
     db.getFirstAsync<{ balance: number | null }>(
       `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
-       FROM transactions WHERE status = 'PAID'`
+       FROM transactions WHERE status = 'PAID' AND date <= ?`,
+      [last]
     ),
     db.getFirstAsync<{ total: number | null }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
@@ -138,7 +152,7 @@ export async function getDashboard(opts?: { year?: number; month?: number }): Pr
   };
 }
 
-export async function getUpcomingBills(opts?: { year?: number; month?: number }): Promise<UpcomingBill[]> {
+export async function getUpcomingBills(opts?: { year?: number; month?: number; monthStartDay?: number }): Promise<UpcomingBill[]> {
   const db = await getDb();
   const today = formatDateLocal(new Date());
   const in30Days = formatDateLocal(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
@@ -147,7 +161,7 @@ export async function getUpcomingBills(opts?: { year?: number; month?: number })
     ? true
     : (opts.year === new Date().getFullYear() && opts.month === new Date().getMonth());
 
-  const { first, last } = monthRange(opts?.year, opts?.month);
+  const { first, last } = monthRange(opts?.year, opts?.month, opts?.monthStartDay);
   const startDate = isCurrentMonth ? today : first;
   const endDate = isCurrentMonth ? in30Days : last;
 

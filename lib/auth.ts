@@ -200,6 +200,10 @@ export async function getStoredUserName(): Promise<string | null> {
   return getStoredValue("user_name");
 }
 
+export async function setStoredUserName(name: string): Promise<void> {
+  await setStoredValue("user_name", name);
+}
+
 export async function hasAcceptedTerms(): Promise<boolean> {
   const accepted = await getStoredValue("terms_accepted");
   return accepted === "true";

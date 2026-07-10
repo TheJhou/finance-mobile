@@ -1,4 +1,4 @@
-export type ThemeMode = "dark" | "light";
+export type ThemeMode = "dark" | "light" | "system";
 
 const darkColors = {
   primary: "#a78bfa",

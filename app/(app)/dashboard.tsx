@@ -4,6 +4,7 @@ import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getSt
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { getTokenLimitStatus, resetTokenLimitStatus } from "@/lib/token-limit";
@@ -14,15 +15,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
-  Dimensions,
-  Modal,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Dimensions,
+    Modal,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -83,6 +84,7 @@ export default function DashboardScreen() {
   const [forecastLoading, setForecastLoading] = useState(false);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  const [monthStartDay, setMonthStartDay] = useState(1);
 
   const fetchingRef = useRef(false);
   const lastFetchRef = useRef(0);
@@ -139,9 +141,13 @@ export default function DashboardScreen() {
       const cachedName = await getStoredUserName();
       if (cachedName) setUserName(cachedName);
 
+      // Load month start day setting
+      const startDay = await loadMonthStartDay();
+      setMonthStartDay(startDay);
+
       const [dashRes, billsRes] = await Promise.all([
-        getDashboard({ year: selectedYear, month: selectedMonth }),
-        getUpcomingBills({ year: selectedYear, month: selectedMonth }),
+        getDashboard({ year: selectedYear, month: selectedMonth, monthStartDay: startDay }),
+        getUpcomingBills({ year: selectedYear, month: selectedMonth, monthStartDay: startDay }),
       ]);
       setData(dashRes);
       setBills(billsRes);

@@ -2,13 +2,15 @@ import { Platform } from "react-native";
 import {
     type EventSubscription,
     type Purchase,
+    acknowledgePurchaseAndroid,
     endConnection,
     fetchProducts,
+    finishTransaction,
     getAvailablePurchases,
     initConnection,
     purchaseErrorListener,
     purchaseUpdatedListener,
-    requestPurchase,
+    requestPurchase
 } from "react-native-iap";
 
 const PRO_PRODUCT_ID = "finance_pro_monthly";
@@ -44,7 +46,6 @@ export function startPurchaseListener(
   onError: (error: string) => void
 ): EventSubscription {
   const sub = purchaseUpdatedListener((purchase: Purchase) => {
-    console.log("[IAP] Purchase updated:", purchase.productId);
     onSuccess(purchase);
   });
 
@@ -94,5 +95,18 @@ export async function getActivePurchases(): Promise<Purchase[]> {
     return await getAvailablePurchases();
   } catch {
     return [];
+  }
+}
+
+export async function acknowledgePurchaseTransaction(purchase: Purchase): Promise<void> {
+  try {
+    const token = purchase.purchaseToken ?? "";
+    if (token) {
+      await acknowledgePurchaseAndroid(token);
+    }
+    await finishTransaction({ purchase, isConsumable: false });
+    console.log("[IAP] Purchase acknowledged and transaction finished");
+  } catch (err) {
+    console.warn("[IAP] Failed to acknowledge purchase:", err);
   }
 }

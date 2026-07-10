@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { authFetch, isAuthenticated, login, register } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
-import { closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
+import { acknowledgePurchaseTransaction, closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
 import { clearProCache, getSubscriptionStatus } from "@/lib/subscription";
 import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -138,6 +138,7 @@ export default function PlanScreen() {
             Alert.alert("Erro", err.error || err.message || "Falha ao ativar assinatura");
             return;
           }
+          await acknowledgePurchaseTransaction(purchase);
           Alert.alert("Sucesso!", "Assinatura PRO ativada com sucesso!");
           clearProCache();
           fetchStatus();

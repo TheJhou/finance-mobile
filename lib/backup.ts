@@ -19,6 +19,8 @@ export interface BackupMetadata {
   encrypted: boolean;
   fileName?: string;
   filePath?: string;
+  deviceId?: string;
+  appVersion?: string;
   deviceInfo: {
     platform: string;
     osVersion: string;
@@ -155,6 +157,8 @@ export class BackupSystem {
           encrypted: false,
           deviceId,
           appVersion: '1.0.0',
+          fileName: '',
+          filePath: '',
           deviceInfo: {
             platform: 'mobile',
             osVersion: 'unknown',
@@ -182,7 +186,6 @@ export class BackupSystem {
       backupPackage.metadata.filePath = filePath;
       
       file.write(JSON.stringify(backupPackage, null, 2));
-      console.log('[Backup] File written:', filePath);
       
       // Clean old backups
       await this.cleanOldBackups(userId);
@@ -238,10 +241,7 @@ export class BackupSystem {
       
       // Security check: only restore from same user or explicit override
       if (backupPackage.metadata.userId !== currentUserId) {
-        console.warn('[Backup] Restoring from different user:', {
-          from: backupPackage.metadata.userId,
-          to: currentUserId
-        });
+        console.warn('[Backup] Restoring from different user');
       }
 
       let totalRestored = 0;
@@ -321,7 +321,6 @@ export class BackupSystem {
       const userId = await this.getUserId();
       
       const items = this.BACKUP_DIR.list();
-      console.log('[Backup] All items in dir:', items, 'filtering by userId:', userId);
       const backupFiles = items
         .filter((item): item is File => item instanceof File)
         .map(item => item.name)
@@ -451,7 +450,6 @@ export class BackupSystem {
     
     if (result.success) {
       await AsyncStorage.setItem(this.BACKUP_KEY, today);
-      console.log('[Backup] Daily backup completed:', result.backupId);
     } else {
       console.error('[Backup] Daily backup failed:', result.error);
     }
@@ -540,13 +538,12 @@ export class BackupSystem {
     const tmpFile = new File(this.BACKUP_DIR, 'cloud_restore_tmp.json');
     tmpFile.write(JSON.stringify(backupPackage));
 
-    const result = await this.restoreBackup(tmpFile.uri);
-
     try {
-      tmpFile.delete();
-    } catch {}
-
-    return result;
+      const result = await this.restoreBackup(tmpFile.uri);
+      return result;
+    } finally {
+      try { tmpFile.delete(); } catch {}
+    }
   }
 
   /**
@@ -565,13 +562,12 @@ export class BackupSystem {
     const tmpFile = new File(this.BACKUP_DIR, 'cloud_restore_tmp.json');
     tmpFile.write(JSON.stringify(backupPackage));
 
-    const result = await this.restoreBackup(tmpFile.uri);
-
     try {
-      tmpFile.delete();
-    } catch {}
-
-    return result;
+      const result = await this.restoreBackup(tmpFile.uri);
+      return result;
+    } finally {
+      try { tmpFile.delete(); } catch {}
+    }
   }
 
   // ── Get backup statistics

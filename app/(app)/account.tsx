@@ -5,10 +5,10 @@ import { RowSeparator } from "@/components/account/row-separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  changePassword,
-  updateProfile,
+    changePassword,
+    updateProfile,
 } from "@/lib/account-service";
-import { getStoredUserName, logout } from "@/lib/auth";
+import { getStoredUserName, logout, setStoredUserName } from "@/lib/auth";
 import { getMe } from "@/lib/backend";
 import { deleteProfilePhoto, getProfilePhotoUri, saveProfilePhoto } from "@/lib/profile-photo";
 import { getSubscriptionStatus } from "@/lib/subscription";
@@ -21,15 +21,15 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Image,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -103,9 +103,11 @@ export default function AccountScreen() {
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
+        base64: true,
       });
       if (result.canceled || !result.assets[0]) return;
-      const uri = await saveProfilePhoto(result.assets[0].uri);
+      const asset = result.assets[0];
+      const uri = await saveProfilePhoto(asset.uri, asset.base64 ?? undefined);
       setPhotoUri(uri);
     } catch {
       Alert.alert("Erro", "Não foi possível salvar a foto");
@@ -162,8 +164,14 @@ export default function AccountScreen() {
     if (!editName.trim()) return;
     try {
       setModalLoading(true);
-      const updated = await updateProfile({ name: editName.trim() });
-      setUser((prev) => prev ? { ...prev, name: updated.name } : null);
+      try {
+        const updated = await updateProfile({ name: editName.trim() });
+        setUser((prev) => prev ? { ...prev, name: updated.name } : null);
+      } catch {
+        // Backend failed — save locally as fallback
+        await setStoredUserName(editName.trim());
+        setUser((prev) => prev ? { ...prev, name: editName.trim() } : null);
+      }
       closeModal();
       Alert.alert("Sucesso", "Nome atualizado com sucesso");
     } catch (err) {
