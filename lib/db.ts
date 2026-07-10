@@ -338,23 +338,49 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   }
 
   if (currentVersion < 1) {
-    await db.execAsync(`
-      ALTER TABLE transactions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'NORMAL';
-      ALTER TABLE transactions ADD COLUMN boleto_number TEXT;
-      ALTER TABLE transactions ADD COLUMN cnpj TEXT;
-      ALTER TABLE transactions ADD COLUMN recipient_name TEXT;
-    `);
+    const tableInfo = await db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(transactions)`
+    );
+    const existingCols = new Set(tableInfo.map((c) => c.name));
+
+    const colsToAdd: string[] = [];
+    if (!existingCols.has("document_type"))
+      colsToAdd.push(`ALTER TABLE transactions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'NORMAL'`);
+    if (!existingCols.has("boleto_number"))
+      colsToAdd.push(`ALTER TABLE transactions ADD COLUMN boleto_number TEXT`);
+    if (!existingCols.has("cnpj"))
+      colsToAdd.push(`ALTER TABLE transactions ADD COLUMN cnpj TEXT`);
+    if (!existingCols.has("recipient_name"))
+      colsToAdd.push(`ALTER TABLE transactions ADD COLUMN recipient_name TEXT`);
+
+    if (colsToAdd.length > 0) {
+      await db.execAsync(colsToAdd.join("; "));
+    }
   }
 
   if (currentVersion < 2) {
-    await db.execAsync(`
-      ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL';
-      ALTER TABLE transactions ADD COLUMN bank_origin TEXT;
-      CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
-      CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
-      CREATE INDEX IF NOT EXISTS idx_transactions_source ON transactions(source);
-      CREATE INDEX IF NOT EXISTS idx_transactions_payment_method ON transactions(payment_method);
-    `);
+    const tableInfoV2 = await db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(transactions)`
+    );
+    const existingColsV2 = new Set(tableInfoV2.map((c) => c.name));
+
+    const colsToAddV2: string[] = [];
+    if (!existingColsV2.has("source"))
+      colsToAddV2.push(`ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL'`);
+    if (!existingColsV2.has("bank_origin"))
+      colsToAddV2.push(`ALTER TABLE transactions ADD COLUMN bank_origin TEXT`);
+
+    const indexesToCreate = [
+      `CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)`,
+      `CREATE INDEX IF NOT EXISTS idx_transactions_source ON transactions(source)`,
+      `CREATE INDEX IF NOT EXISTS idx_transactions_payment_method ON transactions(payment_method)`,
+    ];
+
+    const stmts = [...colsToAddV2, ...indexesToCreate];
+    if (stmts.length > 0) {
+      await db.execAsync(stmts.join("; "));
+    }
   }
 
   if (currentVersion < 3) {
