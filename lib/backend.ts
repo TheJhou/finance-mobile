@@ -165,7 +165,7 @@ export async function getAiForecast(payload: {
 
 // ── User Profile ────────────────────────────────────────────────────
 
-export async function getMe(): Promise<{ id: string; name: string | null; email: string }> {
+export async function getMe(): Promise<{ id: string; name: string | null; email: string; emailVerified?: boolean }> {
   const response = await authFetch(`${BACKEND_URL}/auth/me`);
   if (!response.ok) await handleError(response, "Erro ao buscar perfil");
   return response.json();

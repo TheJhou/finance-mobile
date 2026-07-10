@@ -70,7 +70,7 @@ export default function AccountScreen() {
           const me = await getMe();
           if (active) {
             setUser({ name: me.name, email: me.email });
-            setEmailVerified(false);
+            setEmailVerified(me.emailVerified ?? false);
           }
           const photo = await getProfilePhotoUri();
           if (active) setPhotoUri(photo);
@@ -93,6 +93,11 @@ export default function AccountScreen() {
   const handlePickPhoto = async () => {
     try {
       setPhotoLoading(true);
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permissão necessária", "Permita o acesso à galeria para alterar sua foto de perfil.");
+        return;
+      }
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,

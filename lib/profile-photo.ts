@@ -25,10 +25,28 @@ export async function saveProfilePhoto(sourceUri: string): Promise<string> {
   const fileName = `profile_photo.${ext}`;
   const destFile = new File(dir, fileName);
 
-  // Copy from source to destination
-  const sourceFile = new File(sourceUri);
-  if (sourceFile.exists) {
-    sourceFile.copy(destFile);
+  // Handle content:// URIs (Android image picker) — File.copy doesn't support them
+  if (sourceUri.startsWith("content://")) {
+    // Read the content URI via fetch and write base64 to the destination file
+    const response = await fetch(sourceUri);
+    const blob = await response.blob();
+    const reader = new FileReader();
+    const base64 = await new Promise<string>((resolve, reject) => {
+      reader.onloadend = () => {
+        const result = reader.result as string;
+        const base64Data = result.split(",")[1] || "";
+        resolve(base64Data);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    destFile.write(base64, { encoding: "base64" } as any);
+  } else {
+    // file:// URIs can be copied directly
+    const sourceFile = new File(sourceUri);
+    if (sourceFile.exists) {
+      sourceFile.copy(destFile);
+    }
   }
 
   await AsyncStorage.setItem(PROFILE_PHOTO_KEY, destFile.uri);
