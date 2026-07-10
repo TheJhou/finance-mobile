@@ -80,7 +80,21 @@ const BASE_SELECT = `
 export async function listTransactions(): Promise<Transaction[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<TransactionRow>(
-    `${BASE_SELECT} ORDER BY t.date DESC, t.created_at DESC`
+    `${BASE_SELECT} ORDER BY t.date DESC, t.created_at DESC LIMIT 500`
+  );
+  return rows.map(mapTransaction);
+}
+
+export async function listTransactionsPaginated(opts?: {
+  limit?: number;
+  offset?: number;
+}): Promise<Transaction[]> {
+  const db = await getDb();
+  const limit = opts?.limit ?? 50;
+  const offset = opts?.offset ?? 0;
+  const rows = await db.getAllAsync<TransactionRow>(
+    `${BASE_SELECT} ORDER BY t.date DESC, t.created_at DESC LIMIT ? OFFSET ?`,
+    [limit, offset]
   );
   return rows.map(mapTransaction);
 }

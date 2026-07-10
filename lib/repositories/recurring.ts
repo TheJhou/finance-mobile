@@ -1,10 +1,10 @@
 import { generateId, getDb } from "@/lib/db";
 import type {
-    Category,
-    Frequency,
-    PaymentMethod,
-    RecurringTransaction,
-    TransactionType,
+  Category,
+  Frequency,
+  PaymentMethod,
+  RecurringTransaction,
+  TransactionType,
 } from "@/lib/types";
 import { formatDateLocal } from "@/lib/utils";
 
@@ -224,35 +224,37 @@ export async function postRecurringTransaction(
   const txDate = date ?? formatDateLocal(new Date());
   const txId = generateId();
 
-  await db.runAsync(
-    `INSERT INTO transactions
-      (id, description, amount, type, status, payment_method, date, notes, category_id)
-     VALUES (?, ?, ?, ?, 'PAID', ?, ?, ?, ?)`,
-    [
-      txId,
-      row.description,
-      row.amount,
-      row.type,
-      row.payment_method,
-      txDate,
-      `Lançada manualmente (recorrente)`,
-      row.category_id,
-    ]
-  );
-
-  const nextDue = advanceDate(txDate, row.frequency as Frequency);
-
-  if (row.end_date && nextDue > row.end_date) {
+  await db.withTransactionAsync(async () => {
     await db.runAsync(
-      "UPDATE recurring_transactions SET is_active = 0, next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
-      [nextDue, id]
+      `INSERT INTO transactions
+        (id, description, amount, type, status, payment_method, date, notes, category_id, source)
+       VALUES (?, ?, ?, ?, 'PAID', ?, ?, ?, ?, 'MANUAL')`,
+      [
+        txId,
+        row.description,
+        row.amount,
+        row.type,
+        row.payment_method,
+        txDate,
+        `Lançada manualmente (recorrente)`,
+        row.category_id,
+      ]
     );
-  } else {
-    await db.runAsync(
-      "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
-      [nextDue, id]
-    );
-  }
+
+    const nextDue = advanceDate(txDate, row.frequency as Frequency);
+
+    if (row.end_date && nextDue > row.end_date) {
+      await db.runAsync(
+        "UPDATE recurring_transactions SET is_active = 0, next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
+        [nextDue, id]
+      );
+    } else {
+      await db.runAsync(
+        "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
+        [nextDue, id]
+      );
+    }
+  });
 }
 
 export async function processRecurringDue(): Promise<number> {
@@ -260,52 +262,54 @@ export async function processRecurringDue(): Promise<number> {
   const today = formatDateLocal(new Date());
 
   const dueRows = await db.getAllAsync<RecurringRow>(
-    `${BASE_SELECT} WHERE r.is_active = 1 AND r.next_due_date <= ?`,
+    `${BASE_SELECT} WHERE r.is_active = 1 AND r.next_due_date <= ? LIMIT 100`,
     [today]
   );
 
   let created = 0;
 
-  for (const row of dueRows) {
-    let dueDate = row.next_due_date;
+  await db.withTransactionAsync(async () => {
+    for (const row of dueRows) {
+      let dueDate = row.next_due_date;
 
-    while (dueDate <= today) {
-      const txId = generateId();
-      await db.runAsync(
-        `INSERT INTO transactions
-          (id, description, amount, type, status, payment_method, date, notes, category_id)
-         VALUES (?, ?, ?, ?, 'PAID', ?, ?, ?, ?)`,
-        [
-          txId,
-          row.description,
-          row.amount,
-          row.type,
-          row.payment_method,
-          dueDate,
-          `Gerada automaticamente (recorrente)`,
-          row.category_id,
-        ]
-      );
-      created++;
-
-      dueDate = advanceDate(dueDate, row.frequency as Frequency);
-
-      if (row.end_date && dueDate > row.end_date) {
+      while (dueDate <= today) {
+        const txId = generateId();
         await db.runAsync(
-          "UPDATE recurring_transactions SET is_active = 0, next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
+          `INSERT INTO transactions
+            (id, description, amount, type, status, payment_method, date, notes, category_id, source)
+           VALUES (?, ?, ?, ?, 'PAID', ?, ?, ?, ?, 'MANUAL')`,
+          [
+            txId,
+            row.description,
+            row.amount,
+            row.type,
+            row.payment_method,
+            dueDate,
+            `Gerada automaticamente (recorrente)`,
+            row.category_id,
+          ]
+        );
+        created++;
+
+        dueDate = advanceDate(dueDate, row.frequency as Frequency);
+
+        if (row.end_date && dueDate > row.end_date) {
+          await db.runAsync(
+            "UPDATE recurring_transactions SET is_active = 0, next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
+            [dueDate, row.id]
+          );
+          break;
+        }
+      }
+
+      if (!row.end_date || dueDate <= row.end_date) {
+        await db.runAsync(
+          "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
           [dueDate, row.id]
         );
-        break;
       }
     }
-
-    if (!row.end_date || dueDate <= row.end_date) {
-      await db.runAsync(
-        "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
-        [dueDate, row.id]
-      );
-    }
-  }
+  });
 
   return created;
 }

@@ -309,16 +309,28 @@ class InMemoryDatabase {
       return [row] as T[];
     }
 
-    // LIMIT
-    const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
-    if (limitMatch) {
-      results = results.slice(0, parseInt(limitMatch[1]));
+    // LIMIT with optional OFFSET (LIMIT ? OFFSET ? or LIMIT n)
+    const limitOffsetMatch = sql.match(/LIMIT\s+\?\s+OFFSET\s+\?/i);
+    if (limitOffsetMatch) {
+      const limit = params ? Number(params[0]) : 0;
+      const offset = params ? Number(params[1]) : 0;
+      results = results.slice(offset, offset + limit);
+    } else {
+      const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
+      if (limitMatch) {
+        results = results.slice(0, parseInt(limitMatch[1]));
+      }
     }
 
     return results as T[];
   }
 
   async getFirstAsync<T>(sql: string, params?: unknown[]): Promise<T | null> {
+    // Handle PRAGMA user_version
+    const pragmaMatch = sql.match(/PRAGMA\s+user_version/i);
+    if (pragmaMatch) {
+      return { version: this.userVersion } as T;
+    }
     const results = await this.getAllAsync<T>(sql, params);
     return results[0] || null;
   }
@@ -377,25 +389,48 @@ class InMemoryDatabase {
     }
   }
 
+  async withTransactionAsync<T>(task: () => Promise<T>): Promise<T> {
+    return await task();
+  }
+
   async closeAsync(): Promise<void> {
     // no-op for in-memory mock
   }
 
   async execAsync(sql: string): Promise<void> {
-    const createMatch = sql.match(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)/i);
-    if (createMatch) this.getTable(createMatch[1]);
-    const indexMatch = sql.match(/CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)\s+ON\s+(\w+)/i);
-    if (indexMatch) this.indexes.set(indexMatch[1], new Set());
-    const deleteMatch = sql.match(/DELETE\s+FROM\s+(\w+)/i);
-    if (deleteMatch && !sql.includes("WHERE")) this.tables.set(deleteMatch[1], []);
-    const alterMatch = sql.match(/ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)/i);
-    if (alterMatch) {
-      const [, tname, colName] = alterMatch;
-      for (const row of this.getTable(tname)) {
-        if (!(colName in row)) row[colName] = null;
+    // Split multi-statement SQL by semicolons
+    const statements = sql.split(';').map(s => s.trim()).filter(s => s.length > 0);
+    for (const stmt of statements) {
+      const createMatch = stmt.match(/CREATE\s+TABLE\s+IF\s+NOT\s+EXISTS\s+(\w+)/i);
+      if (createMatch) this.getTable(createMatch[1]);
+      const indexMatch = stmt.match(/CREATE\s+INDEX\s+IF\s+NOT\s+EXISTS\s+(\w+)\s+ON\s+(\w+)/i);
+      if (indexMatch) this.indexes.set(indexMatch[1], new Set());
+      const deleteMatch = stmt.match(/DELETE\s+FROM\s+(\w+)/i);
+      if (deleteMatch) {
+        const tableName = deleteMatch[1];
+        if (stmt.includes("WHERE")) {
+          const where = this.parseWhere(stmt, []);
+          const filtered = this.getTable(tableName).filter((row) => !(where ? where(row) : false));
+          this.tables.set(tableName, filtered);
+        } else {
+          this.tables.set(tableName, []);
+        }
+      }
+      const alterMatch = stmt.match(/ALTER\s+TABLE\s+(\w+)\s+ADD\s+COLUMN\s+(\w+)/i);
+      if (alterMatch) {
+        const [, tname, colName] = alterMatch;
+        for (const row of this.getTable(tname)) {
+          if (!(colName in row)) row[colName] = null;
+        }
+      }
+      const setVersionMatch = stmt.match(/PRAGMA\s+user_version\s*=\s*(\d+)/i);
+      if (setVersionMatch) {
+        this.userVersion = parseInt(setVersionMatch[1]);
       }
     }
   }
+
+  private userVersion = 0;
 }
 
 let mockDb: InMemoryDatabase | null = null;

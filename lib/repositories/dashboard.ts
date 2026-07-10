@@ -24,93 +24,75 @@ function monthRange(year?: number, month?: number): { first: string; last: strin
 }
 
 export async function getDashboard(opts?: { year?: number; month?: number }): Promise<DashboardData> {
-  await processRecurringDue();
+  void processRecurringDue().catch((err) => console.warn("[Dashboard] processRecurringDue failed:", err));
   const db = await getDb();
   const { first, last } = monthRange(opts?.year, opts?.month);
   const today = formatDateLocal(new Date());
   const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
-  const balanceRow = await db.getFirstAsync<{ balance: number | null }>(
-    `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
-     FROM transactions WHERE status = 'PAID'`
-  );
-
-  const incomeRow = await db.getFirstAsync<{ total: number | null }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-     WHERE type = 'INCOME' AND status = 'PAID' AND date BETWEEN ? AND ?`,
-    [first, last]
-  );
-
-  const expenseRow = await db.getFirstAsync<{ total: number | null }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-     WHERE type = 'EXPENSE' AND status = 'PAID' AND date BETWEEN ? AND ?`,
-    [first, last]
-  );
-
-  const pendingRow = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM transactions WHERE status = 'PENDING'`
-  );
-
-  const overdueRow = await db.getFirstAsync<{ total: number | null }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-     WHERE status = 'PENDING' AND date < ?`,
-    [today]
-  );
-
-  const upcomingRow = await db.getFirstAsync<{ total: number | null }>(
-    `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-     WHERE status = 'PENDING' AND date >= ? AND date <= ?`,
-    [today, in7Days]
-  );
-
-  const recurringRow = await db.getFirstAsync<{ count: number }>(
-    `SELECT COUNT(*) as count FROM recurring_transactions WHERE is_active = 1`
-  );
-
-  const byCategory = await db.getAllAsync<{
-    name: string;
-    color: string;
-    total: number;
-  }>(
-    `SELECT c.name, c.color, SUM(t.amount) as total
-     FROM transactions t
-     JOIN categories c ON c.id = t.category_id
-     WHERE t.type = 'EXPENSE' AND t.status = 'PAID' AND t.date BETWEEN ? AND ?
-     GROUP BY c.id, c.name, c.color
-     ORDER BY total DESC`,
-    [first, last]
-  );
-
-  const expenseTrendRows = await db.getAllAsync<{
-    day: string;
-    total: number;
-  }>(
-    `SELECT substr(date, 9, 2) as day, COALESCE(SUM(amount), 0) as total
-     FROM transactions
-     WHERE type = 'EXPENSE' AND status = 'PAID' AND date BETWEEN ? AND ?
-     GROUP BY date
-     ORDER BY date ASC`,
-    [first, last]
-  );
-
-  // Monthly trend: last 6 months
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5);
-  sixMonthsAgo.setDate(1);
-  const trendRows = await db.getAllAsync<{
-    month: string;
-    income: number;
-    expense: number;
-  }>(
-    `SELECT strftime('%Y-%m', date) as month,
-       SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
-       SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
-     FROM transactions
-     WHERE status = 'PAID' AND date >= ?
-     GROUP BY strftime('%Y-%m', date)
-     ORDER BY month ASC`,
-    [formatDateLocal(sixMonthsAgo)]
-  );
+  const [
+    balanceRow, incomeRow, expenseRow, pendingRow,
+    overdueRow, upcomingRow, recurringRow, byCategory,
+    expenseTrendRows, trendRows
+  ] = await Promise.all([
+    db.getFirstAsync<{ balance: number | null }>(
+      `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
+       FROM transactions WHERE status = 'PAID'`
+    ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE type = 'INCOME' AND status = 'PAID' AND date BETWEEN ? AND ?`,
+      [first, last]
+    ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE type = 'EXPENSE' AND status = 'PAID' AND date BETWEEN ? AND ?`,
+      [first, last]
+    ),
+    db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM transactions WHERE status = 'PENDING'`
+    ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE status = 'PENDING' AND date < ?`,
+      [today]
+    ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE status = 'PENDING' AND date >= ? AND date <= ?`,
+      [today, in7Days]
+    ),
+    db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM recurring_transactions WHERE is_active = 1`
+    ),
+    db.getAllAsync<{ name: string; color: string; total: number }>(
+      `SELECT c.name, c.color, SUM(t.amount) as total
+       FROM transactions t
+       JOIN categories c ON c.id = t.category_id
+       WHERE t.type = 'EXPENSE' AND t.status = 'PAID' AND t.date BETWEEN ? AND ?
+       GROUP BY c.id, c.name, c.color
+       ORDER BY total DESC`,
+      [first, last]
+    ),
+    db.getAllAsync<{ day: string; total: number }>(
+      `SELECT substr(date, 9, 2) as day, COALESCE(SUM(amount), 0) as total
+       FROM transactions
+       WHERE type = 'EXPENSE' AND status = 'PAID' AND date BETWEEN ? AND ?
+       GROUP BY date
+       ORDER BY date ASC`,
+      [first, last]
+    ),
+    db.getAllAsync<{ month: string; income: number; expense: number }>(
+      `SELECT strftime('%Y-%m', date) as month,
+         SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
+         SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
+       FROM transactions
+       WHERE status = 'PAID' AND date >= ?
+       GROUP BY strftime('%Y-%m', date)
+       ORDER BY month ASC`,
+      [formatDateLocal(new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1))]
+    ),
+  ]);
 
   return {
     balance: balanceRow?.balance ?? 0,

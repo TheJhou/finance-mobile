@@ -1,7 +1,7 @@
 import DrawerMenu from "@/components/drawer-menu";
 import { getStoredUserName } from "@/lib/auth";
+import { getDb } from "@/lib/db";
 import { getProfilePhotoUri } from "@/lib/profile-photo";
-import { getDashboard } from "@/lib/repositories/dashboard";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
@@ -36,9 +36,18 @@ export function AppHeader() {
     const photo = await getProfilePhotoUri();
     setProfilePhoto(photo);
     try {
-      const dash = await getDashboard();
-      setPendingCount(dash.pendingCount || 0);
-      setBalance(dash.balance);
+      const db = await getDb();
+      const [balanceRow, pendingRow] = await Promise.all([
+        db.getFirstAsync<{ balance: number | null }>(
+          `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
+           FROM transactions WHERE status = 'PAID'`
+        ),
+        db.getFirstAsync<{ count: number }>(
+          `SELECT COUNT(*) as count FROM transactions WHERE status = 'PENDING'`
+        ),
+      ]);
+      setBalance(balanceRow?.balance ?? 0);
+      setPendingCount(pendingRow?.count ?? 0);
     } catch {
       // offline
     }

@@ -158,188 +158,221 @@ export function resetDbCache(): void {
   dbPromise = null;
 }
 
+const CURRENT_DB_VERSION = 3;
+
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
     PRAGMA foreign_keys = ON;
     PRAGMA journal_mode = WAL;
-
-    CREATE TABLE IF NOT EXISTS categories (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL UNIQUE,
-      color TEXT NOT NULL DEFAULT '#6366f1',
-      icon TEXT NOT NULL DEFAULT 'tag',
-      is_default INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS transactions (
-      id TEXT PRIMARY KEY,
-      description TEXT NOT NULL,
-      amount REAL NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('INCOME','EXPENSE')),
-      status TEXT NOT NULL DEFAULT 'PAID' CHECK(status IN ('PAID','PENDING','OVERDUE')),
-      payment_method TEXT NOT NULL DEFAULT 'CASH',
-      date TEXT NOT NULL,
-      notes TEXT,
-      category_id TEXT NOT NULL,
-      boleto_number TEXT,
-      cnpj TEXT,
-      recipient_name TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
-    );
-
-    CREATE TABLE IF NOT EXISTS recurring_transactions (
-      id TEXT PRIMARY KEY,
-      description TEXT NOT NULL,
-      amount REAL NOT NULL,
-      type TEXT NOT NULL CHECK(type IN ('INCOME','EXPENSE')),
-      frequency TEXT NOT NULL CHECK(frequency IN ('WEEKLY','MONTHLY','YEARLY')),
-      payment_method TEXT NOT NULL DEFAULT 'CASH',
-      is_active INTEGER NOT NULL DEFAULT 1,
-      start_date TEXT NOT NULL,
-      end_date TEXT,
-      next_due_date TEXT NOT NULL,
-      category_id TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
-    CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
-    CREATE INDEX IF NOT EXISTS idx_recurring_next_due ON recurring_transactions(next_due_date);
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS processed_notifications (
-      id TEXT PRIMARY KEY,
-      package_name TEXT NOT NULL,
-      title TEXT NOT NULL,
-      text TEXT NOT NULL,
-      amount REAL NOT NULL,
-      post_time INTEGER NOT NULL,
-      processed_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_processed_notifications_hash ON processed_notifications(package_name, title, text, amount, post_time);
-
-    -- Notification processing queue (persistent, survives app kill)
-    CREATE TABLE IF NOT EXISTS notification_queue (
-      id TEXT PRIMARY KEY,
-      package_name TEXT NOT NULL,
-      title TEXT NOT NULL,
-      text TEXT NOT NULL,
-      big_text TEXT,
-      sub_text TEXT,
-      post_time INTEGER NOT NULL,
-      raw_text TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      status TEXT NOT NULL DEFAULT 'PENDING_AI' CHECK(status IN ('PENDING_AI','AI_PROCESSED','APPROVED','REJECTED')),
-      ai_enriched INTEGER NOT NULL DEFAULT 0,
-      amount REAL,
-      description TEXT,
-      type TEXT,
-      payment_method TEXT,
-      bank TEXT,
-      category_id TEXT,
-      category_name TEXT
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_notif_queue_status ON notification_queue(status);
-    CREATE INDEX IF NOT EXISTS idx_notif_queue_dedup ON notification_queue(package_name, title, text, amount, post_time);
-
-    -- Backup system tables
-    CREATE TABLE IF NOT EXISTS backup_metadata (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      user_name TEXT,
-      version TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      size INTEGER NOT NULL,
-      checksum TEXT NOT NULL,
-      tables TEXT NOT NULL, -- JSON array
-      encrypted INTEGER NOT NULL DEFAULT 0,
-      device_info TEXT, -- JSON object
-      restored_at TEXT,
-      restore_user_id TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS backup_schedule (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      last_backup TEXT NOT NULL,
-      next_backup TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      backup_time TEXT NOT NULL DEFAULT '02:00', -- HH:MM format
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    -- Multi-user support tables
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      email TEXT UNIQUE NOT NULL,
-      name TEXT,
-      avatar_url TEXT,
-      preferences TEXT, -- JSON object
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      last_login TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS user_sessions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      device_id TEXT NOT NULL,
-      device_info TEXT, -- JSON object
-      token_hash TEXT NOT NULL,
-      expires_at TEXT NOT NULL,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    -- OpenFinance preparation tables
-    CREATE TABLE IF NOT EXISTS financial_institutions (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      code TEXT UNIQUE NOT NULL, -- Bank code for OpenFinance
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
-    );
-
-    CREATE TABLE IF NOT EXISTS user_accounts (
-      id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
-      institution_id TEXT NOT NULL,
-      account_type TEXT NOT NULL CHECK(account_type IN ('CHECKING','SAVINGS','CREDIT','INVESTMENT')),
-      account_number TEXT,
-      branch_number TEXT,
-      nickname TEXT,
-      balance REAL DEFAULT 0,
-      is_active INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      FOREIGN KEY (institution_id) REFERENCES financial_institutions(id)
-    );
-
-    -- Add user_id to existing tables for multi-user support
-    -- This will be added in a migration function
   `);
+
+  const versionRow = await db.getFirstAsync<{ version: number }>("PRAGMA user_version");
+  const currentVersion = versionRow?.version ?? 0;
+
+  if (currentVersion === 0) {
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        color TEXT NOT NULL DEFAULT '#6366f1',
+        icon TEXT NOT NULL DEFAULT 'tag',
+        is_default INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS transactions (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('INCOME','EXPENSE')),
+        status TEXT NOT NULL DEFAULT 'PAID' CHECK(status IN ('PAID','PENDING','OVERDUE')),
+        payment_method TEXT NOT NULL DEFAULT 'CASH',
+        date TEXT NOT NULL,
+        notes TEXT,
+        category_id TEXT NOT NULL,
+        boleto_number TEXT,
+        cnpj TEXT,
+        recipient_name TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+      );
+
+      CREATE TABLE IF NOT EXISTS recurring_transactions (
+        id TEXT PRIMARY KEY,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        type TEXT NOT NULL CHECK(type IN ('INCOME','EXPENSE')),
+        frequency TEXT NOT NULL CHECK(frequency IN ('WEEKLY','MONTHLY','YEARLY')),
+        payment_method TEXT NOT NULL DEFAULT 'CASH',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        start_date TEXT NOT NULL,
+        end_date TEXT,
+        next_due_date TEXT NOT NULL,
+        category_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
+      CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category_id);
+      CREATE INDEX IF NOT EXISTS idx_recurring_next_due ON recurring_transactions(next_due_date);
+
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS processed_notifications (
+        id TEXT PRIMARY KEY,
+        package_name TEXT NOT NULL,
+        title TEXT NOT NULL,
+        text TEXT NOT NULL,
+        amount REAL NOT NULL,
+        post_time INTEGER NOT NULL,
+        processed_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_processed_notifications_hash ON processed_notifications(package_name, title, text, amount, post_time);
+
+      CREATE TABLE IF NOT EXISTS notification_queue (
+        id TEXT PRIMARY KEY,
+        package_name TEXT NOT NULL,
+        title TEXT NOT NULL,
+        text TEXT NOT NULL,
+        big_text TEXT,
+        sub_text TEXT,
+        post_time INTEGER NOT NULL,
+        raw_text TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        status TEXT NOT NULL DEFAULT 'PENDING_AI' CHECK(status IN ('PENDING_AI','AI_PROCESSED','APPROVED','REJECTED')),
+        ai_enriched INTEGER NOT NULL DEFAULT 0,
+        amount REAL,
+        description TEXT,
+        type TEXT,
+        payment_method TEXT,
+        bank TEXT,
+        category_id TEXT,
+        category_name TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notif_queue_status ON notification_queue(status);
+      CREATE INDEX IF NOT EXISTS idx_notif_queue_dedup ON notification_queue(package_name, title, text, amount, post_time);
+
+      CREATE TABLE IF NOT EXISTS backup_metadata (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        user_name TEXT,
+        version TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        checksum TEXT NOT NULL,
+        tables TEXT NOT NULL,
+        encrypted INTEGER NOT NULL DEFAULT 0,
+        device_info TEXT,
+        restored_at TEXT,
+        restore_user_id TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS backup_schedule (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        last_backup TEXT NOT NULL,
+        next_backup TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        backup_time TEXT NOT NULL DEFAULT '02:00',
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT,
+        avatar_url TEXT,
+        preferences TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        last_login TEXT
+      );
+
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        device_info TEXT,
+        token_hash TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+
+      CREATE TABLE IF NOT EXISTS financial_institutions (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        code TEXT UNIQUE NOT NULL,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS user_accounts (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        institution_id TEXT NOT NULL,
+        account_type TEXT NOT NULL CHECK(account_type IN ('CHECKING','SAVINGS','CREDIT','INVESTMENT')),
+        account_number TEXT,
+        branch_number TEXT,
+        nickname TEXT,
+        balance REAL DEFAULT 0,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (institution_id) REFERENCES financial_institutions(id)
+      );
+    `);
+  }
+
+  if (currentVersion < 1) {
+    await db.execAsync(`
+      ALTER TABLE transactions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'NORMAL';
+      ALTER TABLE transactions ADD COLUMN boleto_number TEXT;
+      ALTER TABLE transactions ADD COLUMN cnpj TEXT;
+      ALTER TABLE transactions ADD COLUMN recipient_name TEXT;
+    `);
+  }
+
+  if (currentVersion < 2) {
+    await db.execAsync(`
+      ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL';
+      ALTER TABLE transactions ADD COLUMN bank_origin TEXT;
+      CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status);
+      CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type);
+      CREATE INDEX IF NOT EXISTS idx_transactions_source ON transactions(source);
+      CREATE INDEX IF NOT EXISTS idx_transactions_payment_method ON transactions(payment_method);
+    `);
+  }
+
+  if (currentVersion < 3) {
+    await addMultiUserSupport(db);
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_categories_user ON categories(user_id);
+      CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_recurring_transactions_user ON recurring_transactions(user_id);
+      CREATE INDEX IF NOT EXISTS idx_settings_user ON settings(user_id);
+    `);
+  }
+
+  await db.execAsync(`PRAGMA user_version = ${CURRENT_DB_VERSION}`);
 
   await seedDefaultCategories(db);
   await cleanupOldProcessedNotifications(db);
-  await addNewTransactionFields(db);
-  await addMultiUserSupport(db);
   await seedFinancialInstitutions(db);
+  await cleanupOldNotificationQueue(db);
 }
 
 async function cleanupOldProcessedNotifications(db: SQLite.SQLiteDatabase): Promise<void> {
@@ -350,61 +383,26 @@ async function cleanupOldProcessedNotifications(db: SQLite.SQLiteDatabase): Prom
   `);
 }
 
-async function addNewTransactionFields(db: SQLite.SQLiteDatabase): Promise<void> {
-  // Adiciona novos campos para boleto, CNPJ, nome do destinatário e tipo de documento
-  // Usa ALTER TABLE IF NOT EXISTS pattern para evitar erros em migrações futuras
-  const columns = await db.getAllAsync<{ name: string }>(
-    "PRAGMA table_info(transactions)"
-  );
-  const columnNames = new Set(columns.map((c) => c.name));
-
-  if (!columnNames.has("boleto_number")) {
-    await db.execAsync("ALTER TABLE transactions ADD COLUMN boleto_number TEXT");
-  }
-  if (!columnNames.has("cnpj")) {
-    await db.execAsync("ALTER TABLE transactions ADD COLUMN cnpj TEXT");
-  }
-  if (!columnNames.has("recipient_name")) {
-    await db.execAsync("ALTER TABLE transactions ADD COLUMN recipient_name TEXT");
-  }
-  if (!columnNames.has("document_type")) {
-    await db.execAsync("ALTER TABLE transactions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'NORMAL'");
-  }
-  if (!columnNames.has("source")) {
-    await db.execAsync("ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL'");
-  }
-  if (!columnNames.has("bank_origin")) {
-    await db.execAsync("ALTER TABLE transactions ADD COLUMN bank_origin TEXT");
-  }
-}
-
 async function addMultiUserSupport(db: SQLite.SQLiteDatabase): Promise<void> {
-  // Add user_id columns to existing tables for multi-user support
   const tables = ['categories', 'transactions', 'recurring_transactions', 'settings'];
-  
   for (const tableName of tables) {
     const columns = await db.getAllAsync<{ name: string }>(
       `PRAGMA table_info(${tableName})`
     );
     const columnNames = new Set(columns.map((c) => c.name));
-
     if (!columnNames.has("user_id")) {
       await db.execAsync(`ALTER TABLE ${tableName} ADD COLUMN user_id TEXT`);
-      
-      // For existing data, assign to a default user
       const defaultUserId = 'user_default_' + Date.now();
       await db.runAsync(`UPDATE ${tableName} SET user_id = ? WHERE user_id IS NULL`, [defaultUserId]);
-      
       console.log(`[DB] Added user_id to ${tableName} and migrated existing data`);
     }
   }
+}
 
-  // Create indexes for user_id columns
+async function cleanupOldNotificationQueue(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
-    CREATE INDEX IF NOT EXISTS idx_categories_user ON categories(user_id);
-    CREATE INDEX IF NOT EXISTS idx_transactions_user ON transactions(user_id);
-    CREATE INDEX IF NOT EXISTS idx_recurring_transactions_user ON recurring_transactions(user_id);
-    CREATE INDEX IF NOT EXISTS idx_settings_user ON settings(user_id);
+    DELETE FROM notification_queue
+    WHERE status = 'REJECTED' AND created_at < datetime('now', '-30 days')
   `);
 }
 
@@ -428,12 +426,10 @@ async function seedFinancialInstitutions(db: SQLite.SQLiteDatabase): Promise<voi
     { name: "Banco Original", code: "212" },
   ];
 
-  for (const inst of institutions) {
-    await db.runAsync(
-      "INSERT INTO financial_institutions (id, name, code) VALUES (?, ?, ?)",
-      [generateId(), inst.name, inst.code]
-    );
-  }
+  const values = institutions.map(i => `('${generateId()}', '${i.name}', '${i.code}')`).join(', ');
+  await db.execAsync(
+    `INSERT INTO financial_institutions (id, name, code) VALUES ${values}`
+  );
 
   console.log("[DB] Seeded financial institutions for OpenFinance");
 }

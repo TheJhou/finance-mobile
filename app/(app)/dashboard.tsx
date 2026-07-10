@@ -151,40 +151,17 @@ export default function DashboardScreen() {
       setTokenLimitStatus(currentTokenStatus);
 
       if (!currentTokenStatus.exceeded) {
-        const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
-        try {
-          const u = await getMe();
-          if (u.name) setUserName(u.name);
-        } catch (err) {
-          console.warn("[Dashboard] Falha ao buscar perfil:", err);
-        }
-        await delay(300);
-        try {
-          const g = await getGoals();
-          setGoals(g);
-        } catch (err) {
-          console.warn("[Dashboard] Falha ao buscar metas:", err);
-        }
-        await delay(300);
-        try {
-          const s = await getStreak();
-          setStreak(s);
-        } catch (err) {
-          console.warn("[Dashboard] Falha ao buscar streak:", err);
-        }
-        await delay(300);
-        try {
-          const sc = await getDashboardScore();
-          setScore(sc);
-        } catch (err) {
-          console.warn("[Dashboard] Falha ao buscar score:", err);
-        }
-        await delay(300);
-        try {
-          await checkinStreak();
-        } catch (err) {
-          console.warn("[Dashboard] Falha ao registrar streak:", err);
-        }
+        const [meRes, goalsRes, streakRes, scoreRes] = await Promise.allSettled([
+          getMe(),
+          getGoals(),
+          getStreak(),
+          getDashboardScore(),
+        ]);
+        if (meRes.status === "fulfilled" && meRes.value.name) setUserName(meRes.value.name);
+        if (goalsRes.status === "fulfilled") setGoals(goalsRes.value);
+        if (streakRes.status === "fulfilled") setStreak(streakRes.value);
+        if (scoreRes.status === "fulfilled") setScore(scoreRes.value);
+        try { await checkinStreak(); } catch (err) { console.warn("[Dashboard] Falha ao registrar streak:", err); }
       } else {
         console.warn("[Dashboard] Pulando chamadas backend: limite de tokens atingido");
       }
