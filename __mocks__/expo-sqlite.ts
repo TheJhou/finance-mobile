@@ -232,13 +232,30 @@ class InMemoryDatabase {
     if (groupMatch) {
       const groupColRaw = groupMatch[1].trim();
       const groupCol = groupColRaw.includes(".") ? groupColRaw.split(".")[1] : groupColRaw;
+      // Check if GROUP BY is a strftime expression (e.g., strftime('%Y-%m', date))
+      const strftimeGroupMatch = groupColRaw.match(/strftime\s*\(\s*['"]([^'"]+)['"]\s*,\s*(\w+)\s*\)/i);
       const grouped: Record<string, Row> = {};
       const selectCols = this.parseSelect(sql);
       for (const row of results) {
-        const key = String(row[groupCol]);
+        let key: string;
+        if (strftimeGroupMatch) {
+          const fmt = strftimeGroupMatch[1];
+          const dateCol = strftimeGroupMatch[2];
+          const dateVal = String(row[dateCol] || "");
+          key = fmt === "%Y-%m" ? dateVal.slice(0, 7) : dateVal;
+        } else {
+          key = String(row[groupCol]);
+        }
         if (!grouped[key]) {
           // Start with base row, will overwrite aggregated columns
           grouped[key] = { ...row };
+          // Set the strftime alias if present in SELECT
+          if (strftimeGroupMatch) {
+            const strftimeAliasMatch = sql.match(/strftime\s*\(\s*['"][^'"]+['"]\s*,\s*\w+\s*\)\s+as\s+(\w+)/i);
+            if (strftimeAliasMatch) {
+              grouped[key][strftimeAliasMatch[1]] = key;
+            }
+          }
         }
         // SUM aggregation
         for (const sc of selectCols) {
@@ -252,6 +269,14 @@ class InMemoryDatabase {
           if (countMatch) {
             const existing = Number(grouped[key][sc.alias || "count"] || 0);
             grouped[key][sc.alias || "count"] = existing + 1;
+          }
+          // Handle SUM(CASE WHEN ... THEN ... ELSE 0 END) as alias
+          const sumCaseMatch = sc.raw.match(/SUM\s*\(\s*CASE\s+WHEN\s+(\w+)\s*=\s*['"]([^'"]+)['"]\s+THEN\s+(\w+)\s+ELSE\s+(\d+)\s+END\s*\)/i);
+          if (sumCaseMatch) {
+            const [, condCol, condVal, thenCol, elseVal] = sumCaseMatch;
+            const existing = Number(grouped[key][sc.alias || "value"] || 0);
+            const add = row[condCol] === condVal ? Number(row[thenCol] || 0) : Number(elseVal);
+            grouped[key][sc.alias || "value"] = existing + add;
           }
         }
       }

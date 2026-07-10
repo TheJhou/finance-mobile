@@ -86,6 +86,8 @@ export default function DashboardScreen() {
 
   const fetchingRef = useRef(false);
   const lastFetchRef = useRef(0);
+  const lastFetchedMonthRef = useRef(-1);
+  const lastFetchedYearRef = useRef(-1);
 
   const AI_FORECAST_KEY = "ai_forecast_cache";
 
@@ -127,7 +129,8 @@ export default function DashboardScreen() {
 
   const fetchData = useCallback(async () => {
     if (fetchingRef.current) return;
-    if (Date.now() - lastFetchRef.current < 5000 && !refreshing) return;
+    const monthChanged = lastFetchedMonthRef.current !== selectedMonth || lastFetchedYearRef.current !== selectedYear;
+    if (Date.now() - lastFetchRef.current < 5000 && !refreshing && !monthChanged) return;
     fetchingRef.current = true;
     lastFetchRef.current = Date.now();
 
@@ -138,10 +141,12 @@ export default function DashboardScreen() {
 
       const [dashRes, billsRes] = await Promise.all([
         getDashboard({ year: selectedYear, month: selectedMonth }),
-        getUpcomingBills(),
+        getUpcomingBills({ year: selectedYear, month: selectedMonth }),
       ]);
       setData(dashRes);
       setBills(billsRes);
+      lastFetchedMonthRef.current = selectedMonth;
+      lastFetchedYearRef.current = selectedYear;
 
       // AI Forecast (1x por dia, non-blocking)
       void loadAiForecast(dashRes);
@@ -222,18 +227,14 @@ export default function DashboardScreen() {
   const healthScore = data
     ? Math.min(100, Math.max(0, Math.round((subOrganizacao + subEstabilidade + subControle + subPlanejamento) / 4)))
     : 0;
-  // Encontrar o mês imediatamente anterior (não qualquer mês anterior no trend)
-  const currentMonth = data ? toDateInputValue(new Date()).slice(0, 7) : null;
-  const prevMonthStr = data ? (() => { 
-    const d = new Date(); 
-    d.setMonth(d.getMonth() - 1); 
-    // setMonth lida automaticamente com mudança de ano (ex: jan -> dez do ano anterior)
-    return toDateInputValue(d).slice(0, 7); 
-  })() : null;
+  // Use selected month for comparison, not always the real current month
+  const selectedMonthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
+  const prevMonthDate = new Date(selectedYear, selectedMonth - 1, 1);
+  const prevMonthStr = toDateInputValue(prevMonthDate).slice(0, 7);
   const prevMonth = data ? data.monthlyTrend.find((m: { month: string; income: number; expense: number }) => m.month === prevMonthStr) ?? null : null;
   const incomeChange = prevMonth && prevMonth.income > 0 ? Math.round(((data!.monthlyIncome - prevMonth.income) / prevMonth.income) * 100) : null;
   const expenseChange = prevMonth && prevMonth.expense > 0 ? Math.round(((data!.monthlyExpense - prevMonth.expense) / prevMonth.expense) * 100) : null;
-  const currentMonthTrend = data ? data.monthlyTrend.find((m: { month: string; income: number; expense: number }) => m.month === currentMonth) : null;
+  const currentMonthTrend = data ? data.monthlyTrend.find((m: { month: string; income: number; expense: number }) => m.month === selectedMonthStr) : null;
   const balanceChange = currentMonthTrend && prevMonth
     ? (() => { const recentNet = currentMonthTrend.income - currentMonthTrend.expense; const prevNet = prevMonth.income - prevMonth.expense; return prevNet !== 0 ? Math.round(((recentNet - prevNet) / Math.abs(prevNet)) * 100) : null; })()
     : null;
@@ -252,8 +253,6 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.dashTitle}>Início</Text>
-
         {/* ── Month selector ── */}
         <View style={styles.monthSelector}>
           <TouchableOpacity

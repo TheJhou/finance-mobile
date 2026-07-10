@@ -30,6 +30,23 @@ export async function getDashboard(opts?: { year?: number; month?: number }): Pr
   const today = formatDateLocal(new Date());
   const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
+  // For filtered month, overdue = pending transactions with date < first day of selected month
+  // and upcoming = pending transactions within the selected month
+  const isCurrentMonth = !opts?.year || !opts?.month
+    ? true
+    : (opts.year === new Date().getFullYear() && opts.month === new Date().getMonth());
+
+  const overdueDate = isCurrentMonth ? today : first;
+  const upcomingStart = isCurrentMonth ? today : first;
+  const upcomingEnd = isCurrentMonth ? in7Days : last;
+
+  // Monthly trend: 6 months ending at the selected month (not always from today)
+  const trendStart = formatDateLocal(new Date(
+    (opts?.year ?? new Date().getFullYear()),
+    (opts?.month ?? new Date().getMonth()) - 5,
+    1
+  ));
+
   const [
     balanceRow, incomeRow, expenseRow, pendingRow,
     overdueRow, upcomingRow, recurringRow, byCategory,
@@ -50,17 +67,18 @@ export async function getDashboard(opts?: { year?: number; month?: number }): Pr
       [first, last]
     ),
     db.getFirstAsync<{ count: number }>(
-      `SELECT COUNT(*) as count FROM transactions WHERE status = 'PENDING'`
+      `SELECT COUNT(*) as count FROM transactions WHERE status = 'PENDING' AND date BETWEEN ? AND ?`,
+      [first, last]
     ),
     db.getFirstAsync<{ total: number | null }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
        WHERE status = 'PENDING' AND date < ?`,
-      [today]
+      [overdueDate]
     ),
     db.getFirstAsync<{ total: number | null }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
        WHERE status = 'PENDING' AND date >= ? AND date <= ?`,
-      [today, in7Days]
+      [upcomingStart, upcomingEnd]
     ),
     db.getFirstAsync<{ count: number }>(
       `SELECT COUNT(*) as count FROM recurring_transactions WHERE is_active = 1`
@@ -90,7 +108,7 @@ export async function getDashboard(opts?: { year?: number; month?: number }): Pr
        WHERE status = 'PAID' AND date >= ?
        GROUP BY strftime('%Y-%m', date)
        ORDER BY month ASC`,
-      [formatDateLocal(new Date(new Date().getFullYear(), new Date().getMonth() - 5, 1))]
+      [trendStart]
     ),
   ]);
 
@@ -120,10 +138,18 @@ export async function getDashboard(opts?: { year?: number; month?: number }): Pr
   };
 }
 
-export async function getUpcomingBills(): Promise<UpcomingBill[]> {
+export async function getUpcomingBills(opts?: { year?: number; month?: number }): Promise<UpcomingBill[]> {
   const db = await getDb();
   const today = formatDateLocal(new Date());
   const in30Days = formatDateLocal(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+
+  const isCurrentMonth = !opts?.year || !opts?.month
+    ? true
+    : (opts.year === new Date().getFullYear() && opts.month === new Date().getMonth());
+
+  const { first, last } = monthRange(opts?.year, opts?.month);
+  const startDate = isCurrentMonth ? today : first;
+  const endDate = isCurrentMonth ? in30Days : last;
 
   const rows = await db.getAllAsync<{
     id: string;
@@ -138,7 +164,7 @@ export async function getUpcomingBills(): Promise<UpcomingBill[]> {
      WHERE r.is_active = 1 AND r.next_due_date >= ? AND r.next_due_date <= ?
      ORDER BY r.next_due_date ASC
      LIMIT 6`,
-    [today, in30Days]
+    [startDate, endDate]
   );
 
   return rows.map((r) => {

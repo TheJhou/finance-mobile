@@ -1,10 +1,10 @@
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb } from "@/lib/db";
 import {
-  getDashboard,
-  getOverdueTransactions,
-  getUpcomingBills,
-  type UpcomingBill,
+    getDashboard,
+    getOverdueTransactions,
+    getUpcomingBills,
+    type UpcomingBill,
 } from "@/lib/repositories/dashboard";
 import { formatDateLocal } from "@/lib/utils";
 
@@ -125,7 +125,7 @@ describe("dashboard repository", () => {
       expect(data.monthlyExpense).toBe(500);
     });
 
-    it("counts pending transactions", async () => {
+    it("counts pending transactions within the selected month", async () => {
       await seedCategory("cat-1", "Contas");
       const today = formatDateLocal(new Date());
 
@@ -133,7 +133,7 @@ describe("dashboard repository", () => {
       await seedTransaction({ description: "Conta vencida", amount: 300, type: "EXPENSE", status: "PENDING", date: "2020-01-01", categoryId: "cat-1" });
 
       const data = await getDashboard();
-      expect(data.pendingCount).toBe(2);
+      expect(data.pendingCount).toBe(1);
       expect(data.overdueAmount).toBe(300);
     });
   });
