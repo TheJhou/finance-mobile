@@ -26,7 +26,8 @@
         "android.permission.SCHEDULE_EXACT_ALARM",
         "android.permission.USE_EXACT_ALARM",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_EXTERNAL_STORAGE"
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ]
     },
     "platforms": [
@@ -74,9 +75,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "4ca5dd76-1bc7-4779-9eb2-cef3b5b90c6d"
+        "projectId": "1d5433bf-6079-4962-90f6-70af5bb4c5ac"
       }
     },
-    "owner": "thejhou"
+    "owner": "jhoutest"
   }
 }
