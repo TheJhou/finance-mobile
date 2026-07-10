@@ -97,9 +97,9 @@ function RootNavigator() {
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" options={{ href: isAuth ? null : "/" }} />
-      <Stack.Screen name="login" options={{ href: isAuth ? null : "/login" }} />
-      <Stack.Screen name="(app)" options={{ href: isAuth ? "/(app)" : null }} />
+      <Stack.Screen name="index" />
+      <Stack.Screen name="login" />
+      <Stack.Screen name="(app)" />
     </Stack>
   );
 }

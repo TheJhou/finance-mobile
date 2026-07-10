@@ -1,3 +1,4 @@
+import { DatePicker } from "@/components/date-picker";
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import type { DreData, DrePeriod, DrePeriodRange } from "@/lib/repositories/dre";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
@@ -17,9 +18,8 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
-    View,
+    View
 } from "react-native";
 import { BarChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -411,23 +411,17 @@ export default function DreScreen() {
         <Pressable style={styles.modalOverlay} onPress={() => setShowCustomModal(false)}>
           <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
             <Text style={styles.modalTitle}>Período Personalizado</Text>
-            <Text style={styles.inputLabel}>Data inicial (AAAA-MM-DD)</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="2025-01-01"
-              placeholderTextColor={colors.textMuted}
+            <DatePicker
+              label="Data inicial"
               value={customFrom}
-              onChangeText={setCustomFrom}
-              keyboardType="numeric"
+              onChange={setCustomFrom}
+              maxDate={customTo || undefined}
             />
-            <Text style={styles.inputLabel}>Data final (AAAA-MM-DD)</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="2025-12-31"
-              placeholderTextColor={colors.textMuted}
+            <DatePicker
+              label="Data final"
               value={customTo}
-              onChangeText={setCustomTo}
-              keyboardType="numeric"
+              onChange={setCustomTo}
+              minDate={customFrom || undefined}
             />
             <TouchableOpacity style={styles.applyBtn} onPress={applyCustomPeriod}>
               <Text style={styles.applyBtnText}>Aplicar</Text>

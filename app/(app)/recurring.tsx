@@ -1,3 +1,4 @@
+import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { listCategories } from "@/lib/repositories/categories";
@@ -29,7 +30,6 @@ import {
     ScrollView,
     StyleSheet,
     Text,
-    TextInput,
     View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -355,14 +355,10 @@ export default function RecurringScreen() {
                 {postingItem.description} · {formatCurrency(postingItem.amount)}
               </Text>
             )}
-            <Text style={styles.inputLabel}>Data do lançamento (AAAA-MM-DD)</Text>
-            <TextInput
-              style={styles.textInput}
-              placeholder="2025-06-24"
-              placeholderTextColor={colors.textMuted}
+            <DatePicker
+              label="Data do lançamento"
               value={postDate}
-              onChangeText={setPostDate}
-              keyboardType="numeric"
+              onChange={setPostDate}
             />
             <View style={styles.modalActions}>
               <Pressable
@@ -583,18 +579,27 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<Recu
             </View>
 
             <View>
-              <Text style={formStyles.label}>Data de início</Text>
-              <Input value={startDate} onChangeText={setStartDate} placeholder="AAAA-MM-DD" />
+              <DatePicker
+                label="Data de início"
+                value={startDate}
+                onChange={setStartDate}
+              />
             </View>
 
             <View>
-              <Text style={formStyles.label}>Próximo vencimento</Text>
-              <Input value={nextDueDate} onChangeText={setNextDueDate} placeholder="AAAA-MM-DD" />
+              <DatePicker
+                label="Próximo vencimento"
+                value={nextDueDate}
+                onChange={setNextDueDate}
+              />
             </View>
 
             <View>
-              <Text style={formStyles.label}>Data de fim (opcional)</Text>
-              <Input value={endDate} onChangeText={setEndDate} placeholder="AAAA-MM-DD" />
+              <DatePicker
+                label="Data de fim (opcional)"
+                value={endDate}
+                onChange={setEndDate}
+              />
             </View>
 
             {err ? <Text style={styles.error}>{err}</Text> : null}

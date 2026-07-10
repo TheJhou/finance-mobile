@@ -352,7 +352,7 @@ export default function PlanScreen() {
                 style={{ alignItems: "center", paddingVertical: spacing.xs }}
                 onPress={() => {
                   setShowAuthModal(false);
-                  router.push("/forgot-password");
+                  router.push("/forgot-password" as any);
                 }}
               >
                 <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "600" }}>

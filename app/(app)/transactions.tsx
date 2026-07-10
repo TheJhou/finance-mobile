@@ -1,13 +1,14 @@
+import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { extractTransactionFromPhoto } from "@/lib/ai";
 import { isAuthenticated } from "@/lib/auth";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-    createTransaction,
-    deleteTransaction,
-    listTransactions,
-    updateTransaction,
+  createTransaction,
+  deleteTransaction,
+  listTransactions,
+  updateTransaction,
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -18,21 +19,21 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    Alert,
-    FlatList,
-    KeyboardAvoidingView,
-    LayoutAnimation,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    UIManager,
-    View,
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  UIManager,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -436,39 +437,31 @@ export default function TransactionsScreen() {
             {/* Custom date range */}
             <View style={styles.dateRangeRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.filterLabelSm}>De</Text>
-                <TextInput
-                  style={styles.filterInput}
+                <DatePicker
+                  label="De"
                   value={filters.dateFrom}
-                  onChangeText={(v) =>
+                  onChange={(v: string) =>
                     setFilters((prev) => ({
                       ...prev,
                       dateFrom: v,
                       datePreset: "all",
                     }))
                   }
-                  placeholder="AAAA-MM-DD"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={10}
+                  maxDate={filters.dateTo || undefined}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.filterLabelSm}>Até</Text>
-                <TextInput
-                  style={styles.filterInput}
+                <DatePicker
+                  label="Até"
                   value={filters.dateTo}
-                  onChangeText={(v) =>
+                  onChange={(v: string) =>
                     setFilters((prev) => ({
                       ...prev,
                       dateTo: v,
                       datePreset: "all",
                     }))
                   }
-                  placeholder="AAAA-MM-DD"
-                  placeholderTextColor={colors.textMuted}
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={10}
+                  minDate={filters.dateFrom || undefined}
                 />
               </View>
             </View>
@@ -1252,12 +1245,10 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
               placeholder="0,00"
               keyboardType="decimal-pad"
             />
-            <Input
+            <DatePicker
               label="Data"
               value={date}
-              onChangeText={setDate}
-              placeholder="AAAA-MM-DD"
-              autoCapitalize="none"
+              onChange={setDate}
             />
 
             <View style={{ gap: 6 }}>
