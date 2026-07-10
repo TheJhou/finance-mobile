@@ -12,7 +12,7 @@ import {
 } from "@/lib/repositories/recurring";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { Category, Frequency, RecurringTransaction, TransactionType } from "@/lib/types";
+import type { Category, Frequency, PaymentMethod, RecurringTransaction, TransactionType } from "@/lib/types";
 import { formatCurrency, formatCurrencyInput, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
@@ -38,6 +38,31 @@ const frequencyLabel: Record<Frequency, string> = {
   WEEKLY: "Semanal",
   MONTHLY: "Mensal",
   YEARLY: "Anual",
+};
+const frequencyIcons: Record<Frequency, keyof typeof Ionicons.glyphMap> = {
+  WEEKLY: "calendar-outline",
+  MONTHLY: "calendar-number-outline",
+  YEARLY: "calendar-clear-outline",
+};
+const paymentMethodLabels: Record<PaymentMethod, string> = {
+  CASH: "Dinheiro",
+  CREDIT_CARD: "Crédito",
+  DEBIT_CARD: "Débito",
+  PIX: "Pix",
+  BANK_TRANSFER: "Transf.",
+  BOLETO: "Boleto",
+  MERCADO_PAGO: "MP",
+  OTHER: "Outro",
+};
+const paymentMethodIcons: Record<PaymentMethod, keyof typeof Ionicons.glyphMap> = {
+  CASH: "cash-outline",
+  CREDIT_CARD: "card-outline",
+  DEBIT_CARD: "card-outline",
+  PIX: "flash-outline",
+  BANK_TRANSFER: "business-outline",
+  BOLETO: "barcode-outline",
+  MERCADO_PAGO: "wallet-outline",
+  OTHER: "ellipsis-horizontal-circle-outline",
 };
 const frequencyOptions: Frequency[] = ["WEEKLY", "MONTHLY", "YEARLY"];
 
@@ -187,6 +212,9 @@ export default function RecurringScreen() {
         }
         renderItem={({ item }) => {
           const isIncome = item.type === "INCOME";
+          const today = new Date().toISOString().slice(0, 10);
+          const isOverdue = item.isActive && item.nextDueDate < today;
+          const daysUntilDue = Math.ceil((new Date(item.nextDueDate + "T00:00:00").getTime() - Date.now()) / (1000 * 60 * 60 * 24));
           return (
             <View
               style={[styles.card, { opacity: item.isActive ? 1 : 0.55 }]}
@@ -208,13 +236,33 @@ export default function RecurringScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.desc} numberOfLines={1}>
-                  {item.description}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                  <Text style={styles.desc} numberOfLines={1}>
+                    {item.description}
+                  </Text>
+                  {isOverdue && (
+                    <View style={[styles.statusBadge, { backgroundColor: colors.danger + "22" }]}>
+                      <Text style={[styles.statusBadgeText, { color: colors.danger }]}>Atrasada</Text>
+                    </View>
+                  )}
+                </View>
                 <Text style={styles.meta}>
-                  {frequencyLabel[item.frequency]} · Próx.{" "}
+                  {item.category?.name ?? "Sem categoria"} ·{" "}
                   {formatDate(item.nextDueDate)}
                 </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                    <Ionicons name={frequencyIcons[item.frequency]} size={12} color={colors.textMuted} />
+                    <Text style={styles.metaSmall}>{frequencyLabel[item.frequency]}</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                    <Ionicons name={paymentMethodIcons[item.paymentMethod]} size={12} color={colors.textMuted} />
+                    <Text style={styles.metaSmall}>{paymentMethodLabels[item.paymentMethod]}</Text>
+                  </View>
+                  {item.isActive && !isOverdue && daysUntilDue <= 7 && (
+                    <Text style={[styles.metaSmall, { color: colors.warning }]}>em {daysUntilDue}d</Text>
+                  )}
+                </View>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text
@@ -674,6 +722,19 @@ function createStyles() {
   },
   actionButtons: { flexDirection: "row", gap: 4 },
   actionButton: { padding: 6, borderRadius: 4 },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  metaSmall: {
+    fontSize: 11,
+    color: colors.textMuted,
+  },
   fab: {
     position: "absolute",
     right: spacing.lg,

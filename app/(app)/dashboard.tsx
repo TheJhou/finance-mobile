@@ -14,15 +14,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
-    ActivityIndicator,
-    Dimensions,
-    Modal,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Dimensions,
+  Modal,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -31,6 +31,8 @@ import Svg, { Circle as SvgCircle } from "react-native-svg";
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_PADDING = spacing.lg;
 const HALF_WIDTH = (SCREEN_WIDTH - CARD_PADDING * 2 - spacing.md) / 2;
+
+const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 function CircularProgress({
   size,
@@ -79,6 +81,8 @@ export default function DashboardScreen() {
   const [notificationsScheduled, setNotificationsScheduled] = useState(false);
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 
   const fetchingRef = useRef(false);
   const lastFetchRef = useRef(0);
@@ -133,7 +137,7 @@ export default function DashboardScreen() {
       if (cachedName) setUserName(cachedName);
 
       const [dashRes, billsRes] = await Promise.all([
-        getDashboard(),
+        getDashboard({ year: selectedYear, month: selectedMonth }),
         getUpcomingBills(),
       ]);
       setData(dashRes);
@@ -203,7 +207,7 @@ export default function DashboardScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [refreshing, notificationsScheduled]);
+  }, [refreshing, notificationsScheduled, selectedYear, selectedMonth]);
 
   useFocusEffect(
     useCallback(() => {
@@ -272,6 +276,42 @@ export default function DashboardScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.dashTitle}>Início</Text>
+
+        {/* ── Month selector ── */}
+        <View style={styles.monthSelector}>
+          <TouchableOpacity
+            onPress={() => {
+              const prev = new Date(selectedYear, selectedMonth - 1, 1);
+              setSelectedMonth(prev.getMonth());
+              setSelectedYear(prev.getFullYear());
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.monthSelectorText}>
+            {MONTH_NAMES[selectedMonth]} {selectedYear}
+          </Text>
+          <TouchableOpacity
+            onPress={() => {
+              const next = new Date(selectedYear, selectedMonth + 1, 1);
+              setSelectedMonth(next.getMonth());
+              setSelectedYear(next.getFullYear());
+            }}
+            hitSlop={8}
+          >
+            <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+          </TouchableOpacity>
+          {!(selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth()) && (
+            <TouchableOpacity style={styles.todayBtn} onPress={() => {
+              const now = new Date();
+              setSelectedMonth(now.getMonth());
+              setSelectedYear(now.getFullYear());
+            }}>
+              <Text style={styles.todayBtnText}>Hoje</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
         {/* Token limit warning banner */}
@@ -814,6 +854,12 @@ function createStyles() {
   /* Header */
   dashHeader: { flexDirection: "row", alignItems: "center", paddingVertical: spacing.sm },
   dashTitle: { fontSize: 24, fontWeight: "800", color: colors.textPrimary, marginBottom: spacing.xs },
+
+  /* Month selector */
+  monthSelector: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.md, paddingVertical: spacing.sm, backgroundColor: colors.surface, borderRadius: radius.md, marginBottom: spacing.sm },
+  monthSelectorText: { fontSize: 16, fontWeight: "700", color: colors.textPrimary, minWidth: 140, textAlign: "center" },
+  todayBtn: { backgroundColor: colors.primary + "22", paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.full, marginLeft: spacing.sm },
+  todayBtnText: { fontSize: 12, fontWeight: "600", color: colors.primary },
 
   /* Error */
   error: { fontSize: 13, color: colors.danger, backgroundColor: colors.expenseBg, padding: spacing.md, borderRadius: radius.md },

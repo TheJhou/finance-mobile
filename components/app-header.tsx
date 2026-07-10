@@ -4,11 +4,19 @@ import { getProfilePhotoUri } from "@/lib/profile-photo";
 import { getDashboard } from "@/lib/repositories/dashboard";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
+import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return "Bom dia";
+  if (hour < 18) return "Boa tarde";
+  return "Boa noite";
+}
 
 export function AppHeader() {
   const router = useRouter();
@@ -20,6 +28,7 @@ export function AppHeader() {
   const [userName, setUserName] = useState<string | null>(null);
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [balance, setBalance] = useState<number | null>(null);
 
   const loadUserData = useCallback(async () => {
     const name = await getStoredUserName();
@@ -29,6 +38,7 @@ export function AppHeader() {
     try {
       const dash = await getDashboard();
       setPendingCount(dash.pendingCount || 0);
+      setBalance(dash.balance);
     } catch {
       // offline
     }
@@ -60,7 +70,16 @@ export function AppHeader() {
           )}
         </TouchableOpacity>
 
-        <View style={{ flex: 1 }} />
+        <View style={{ flex: 1, marginLeft: spacing.sm }}>
+          <Text style={styles.greeting} numberOfLines={1}>
+            {getGreeting()}, {userName ?? "..."}
+          </Text>
+          {balance !== null && (
+            <Text style={styles.balanceText} numberOfLines={1}>
+              {formatCurrency(balance)}
+            </Text>
+          )}
+        </View>
 
         <TouchableOpacity
           hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
@@ -125,6 +144,16 @@ function createStyles() {
       fontSize: 17,
       fontWeight: "700",
       color: colors.textPrimary,
+    },
+    greeting: {
+      fontSize: 14,
+      fontWeight: "700",
+      color: colors.textPrimary,
+    },
+    balanceText: {
+      fontSize: 12,
+      color: colors.textMuted,
+      marginTop: 1,
     },
     badge: {
       position: "absolute",

@@ -370,6 +370,12 @@ async function addNewTransactionFields(db: SQLite.SQLiteDatabase): Promise<void>
   if (!columnNames.has("document_type")) {
     await db.execAsync("ALTER TABLE transactions ADD COLUMN document_type TEXT NOT NULL DEFAULT 'NORMAL'");
   }
+  if (!columnNames.has("source")) {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL'");
+  }
+  if (!columnNames.has("bank_origin")) {
+    await db.execAsync("ALTER TABLE transactions ADD COLUMN bank_origin TEXT");
+  }
 }
 
 async function addMultiUserSupport(db: SQLite.SQLiteDatabase): Promise<void> {

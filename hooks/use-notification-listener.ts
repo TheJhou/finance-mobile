@@ -1,26 +1,26 @@
 import { analyzeText } from "@/lib/backend";
 import {
-    enqueueNotification,
-    getPendingAiNotifications,
-    isNotificationInQueue,
-    updateWithAiResult,
+  enqueueNotification,
+  getPendingAiNotifications,
+  isNotificationInQueue,
+  updateWithAiResult,
 } from "@/lib/notification-queue";
 import {
-    BANK_APPS,
-    inferCategoryFromText,
-    parseNotification,
+  BANK_APPS,
+  inferCategoryFromText,
+  parseNotification,
 } from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
 import type { PaymentMethod, TransactionType } from "@/lib/types";
 import BankNotifications, {
-    type BankNotificationEvent,
+  type BankNotificationEvent,
 } from "@/modules/bank-notifications";
 import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef } from "react";
 
-const HEALTH_CHECK_INTERVAL_MS = 30_000;
+const HEALTH_CHECK_INTERVAL_MS = 15_000;
 const AI_RETRY_INTERVAL_MS = 30_000;
-const REBIND_BACKOFF_MS = 10_000;
+const REBIND_BACKOFF_MS = 5_000;
 
 export function useNotificationListener() {
   const isOnlineRef = useRef(true);
@@ -333,6 +333,9 @@ export function useNotificationListener() {
               console.warn("[AutoImport] requestRebind falhou:", e);
             }
           }
+        } else {
+          // Listener is connected — drain any pending AI enrichments
+          void retryPendingAiEnrichment();
         }
       }
     }, HEALTH_CHECK_INTERVAL_MS);

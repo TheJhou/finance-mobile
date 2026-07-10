@@ -2,6 +2,7 @@ package expo.modules.banknotifications
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -12,6 +13,19 @@ class BankNotificationListenerService : NotificationListenerService() {
     Log.i(TAG, "Notification listener connected")
     isConnected = true
     connectionCallback?.invoke(true)
+
+    // Replay any notifications that arrived while we were disconnected
+    try {
+      val active = getActiveNotifications()
+      if (active.isNotEmpty()) {
+        Log.i(TAG, "Replaying ${active.size} active notifications on reconnect")
+        for (sbn in active) {
+          onNotificationPosted(sbn)
+        }
+      }
+    } catch (e: Throwable) {
+      Log.w(TAG, "getActiveNotifications failed on connect", e)
+    }
   }
 
   override fun onListenerDisconnected() {
@@ -26,7 +40,10 @@ class BankNotificationListenerService : NotificationListenerService() {
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {
-    val cb = listener ?: return
+    val cb = listener ?: run {
+      Log.w(TAG, "Notification received but JS listener is null — buffering skipped (pkg=${sbn.packageName})")
+      return
+    }
     if (sbn.packageName !in BANK_PACKAGES) return
     val extras = sbn.notification.extras
     val title = extras.getCharSequence("android.title")?.toString() ?: ""
@@ -88,11 +105,14 @@ class BankNotificationListenerService : NotificationListenerService() {
         val pm = context.packageManager
         val component = ComponentName(context, BankNotificationListenerService::class.java)
 
+        // Disable then re-enable the component to force Android to rebind
         pm.setComponentEnabledSetting(
           component,
           android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
           android.content.pm.PackageManager.DONT_KILL_APP
         )
+        // Small delay between disable and enable to ensure Android processes the state change
+        Thread.sleep(200)
         pm.setComponentEnabledSetting(
           component,
           android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,

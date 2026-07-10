@@ -151,6 +151,8 @@ export default function NotificationsScreen() {
         categoryId: item.categoryId || "",
         notes: `Auto-importado de ${item.bank || "Banco"}`,
         status: 'PAID',
+        source: "BANK_NOTIFICATION",
+        bankOrigin: item.bank || null,
       });
       await markApproved(item.id);
       await loadPending();
@@ -364,6 +366,7 @@ export default function NotificationsScreen() {
         recipientName: draft.recipientName || null,
         notes: isPending ? "Importado via texto (pendente de confirmação)" : "Importado via texto livre",
         status: normalizeStatus(draft.status, "PAID"),
+        source: "IMPORT",
       });
 
       setFreeText("");
@@ -441,6 +444,7 @@ export default function NotificationsScreen() {
         recipientName: (draft.recipientName as string) || null,
         notes: `Importado via documento: ${asset.name}`,
         status: normalizeStatus(draft.status, "PENDING"),
+        source: "IMPORT",
       });
 
       showToast("success", "Transação criada automaticamente!");
@@ -524,6 +528,7 @@ export default function NotificationsScreen() {
         recipientName: draft.recipientName || null,
         notes: "Importado via áudio",
         status: normalizeStatus(draft.status, "PAID"),
+        source: "IMPORT",
       });
 
       showToast("success", "Transação criada automaticamente!");

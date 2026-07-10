@@ -46,6 +46,7 @@ export type PaymentMethod =
   | "MERCADO_PAGO"
   | "OTHER";
 export type DocumentType = "NORMAL" | "BOLETO" | "NOTA_FISCAL" | "COMPROVANTE_PIX" | "COMPROVANTE_BANCARIO" | "OUTRO";
+export type TransactionSource = "MANUAL" | "IMPORT" | "BANK_NOTIFICATION";
 export type Frequency = "WEEKLY" | "MONTHLY" | "YEARLY";
 
 export interface Transaction {
@@ -66,6 +67,9 @@ export interface Transaction {
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
+  // Source tracking
+  source: TransactionSource;
+  bankOrigin?: string | null;
 }
 
 export interface RecurringTransaction {

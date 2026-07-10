@@ -11,20 +11,22 @@ export interface UpcomingBill {
   color: string;
 }
 
-function monthRange(): { first: string; last: string } {
+function monthRange(year?: number, month?: number): { first: string; last: string } {
   const now = new Date();
-  const first = new Date(now.getFullYear(), now.getMonth(), 1);
-  const last = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const y = year ?? now.getFullYear();
+  const m = month ?? now.getMonth();
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m + 1, 0, 23, 59, 59);
   return {
     first: formatDateLocal(first),
     last: formatDateLocal(last),
   };
 }
 
-export async function getDashboard(): Promise<DashboardData> {
+export async function getDashboard(opts?: { year?: number; month?: number }): Promise<DashboardData> {
   await processRecurringDue();
   const db = await getDb();
-  const { first, last } = monthRange();
+  const { first, last } = monthRange(opts?.year, opts?.month);
   const today = formatDateLocal(new Date());
   const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 

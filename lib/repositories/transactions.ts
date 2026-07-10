@@ -4,6 +4,7 @@ import type {
     DocumentType,
     PaymentMethod,
     Transaction,
+    TransactionSource,
     TransactionStatus,
     TransactionType,
 } from "@/lib/types";
@@ -22,6 +23,8 @@ interface TransactionRow {
   cnpj: string | null;
   recipient_name: string | null;
   document_type: DocumentType;
+  source: TransactionSource;
+  bank_origin: string | null;
   created_at: string;
   updated_at: string;
   category_name: string | null;
@@ -57,6 +60,8 @@ function mapTransaction(row: TransactionRow): Transaction {
     boletoNumber: row.boleto_number,
     cnpj: row.cnpj,
     recipientName: row.recipient_name,
+    source: row.source ?? "MANUAL",
+    bankOrigin: row.bank_origin,
   };
 }
 
@@ -64,6 +69,7 @@ const BASE_SELECT = `
   SELECT
     t.id, t.description, t.amount, t.type, t.status, t.payment_method,
     t.date, t.notes, t.category_id, t.boleto_number, t.cnpj, t.recipient_name, t.document_type,
+    t.source, t.bank_origin,
     t.created_at, t.updated_at,
     c.name as category_name, c.color as category_color,
     c.icon as category_icon, c.is_default as category_is_default
@@ -104,13 +110,15 @@ export async function createTransaction(data: {
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
+  source?: TransactionSource;
+  bankOrigin?: string | null;
 }): Promise<Transaction> {
   const db = await getDb();
   const id = generateId();
   await db.runAsync(
     `INSERT INTO transactions
-      (id, description, amount, type, status, payment_method, date, notes, category_id, document_type, boleto_number, cnpj, recipient_name)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, description, amount, type, status, payment_method, date, notes, category_id, document_type, boleto_number, cnpj, recipient_name, source, bank_origin)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       data.description,
@@ -125,6 +133,8 @@ export async function createTransaction(data: {
       data.boletoNumber ?? null,
       data.cnpj ?? null,
       data.recipientName ?? null,
+      data.source ?? "MANUAL",
+      data.bankOrigin ?? null,
     ]
   );
   const created = await getTransaction(id);
@@ -163,6 +173,8 @@ export async function updateTransaction(
     boletoNumber: "boleto_number",
     cnpj: "cnpj",
     recipientName: "recipient_name",
+    source: "source",
+    bankOrigin: "bank_origin",
   };
   const sets: string[] = [];
   const params: unknown[] = [];

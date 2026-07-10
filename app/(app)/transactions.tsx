@@ -11,7 +11,7 @@ import {
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
-import type { Category, DocumentType, PaymentMethod, Transaction, TransactionType } from "@/lib/types";
+import type { Category, DocumentType, PaymentMethod, Transaction, TransactionSource, TransactionStatus, TransactionType } from "@/lib/types";
 import { formatCurrency, formatCurrencyInput, formatDate, normalizePaymentMethod, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
@@ -53,6 +53,10 @@ interface Filters {
   categoryIds: string[];
   amountMin: string;
   amountMax: string;
+  status: TransactionStatus | "ALL";
+  paymentMethod: PaymentMethod | "ALL";
+  source: TransactionSource | "ALL";
+  searchText: string;
 }
 
 const INITIAL_FILTERS: Filters = {
@@ -63,6 +67,10 @@ const INITIAL_FILTERS: Filters = {
   categoryIds: [],
   amountMin: "",
   amountMax: "",
+  status: "ALL",
+  paymentMethod: "ALL",
+  source: "ALL",
+  searchText: "",
 };
 
 function ListSeparator() {
@@ -162,7 +170,11 @@ function isFiltersActive(f: Filters): boolean {
     f.type !== "ALL" ||
     f.categoryIds.length > 0 ||
     f.amountMin !== "" ||
-    f.amountMax !== ""
+    f.amountMax !== "" ||
+    f.status !== "ALL" ||
+    f.paymentMethod !== "ALL" ||
+    f.source !== "ALL" ||
+    f.searchText.trim() !== ""
   );
 }
 
@@ -172,6 +184,10 @@ function activeFilterCount(f: Filters): number {
   if (f.type !== "ALL") c++;
   if (f.categoryIds.length > 0) c++;
   if (f.amountMin || f.amountMax) c++;
+  if (f.status !== "ALL") c++;
+  if (f.paymentMethod !== "ALL") c++;
+  if (f.source !== "ALL") c++;
+  if (f.searchText.trim()) c++;
   return c;
 }
 
@@ -247,6 +263,28 @@ export default function TransactionsScreen() {
     }
     if (Number.isFinite(max) && max > 0) {
       result = result.filter((t) => Number(t.amount) <= max);
+    }
+    // Status
+    if (filters.status !== "ALL") {
+      result = result.filter((t) => t.status === filters.status);
+    }
+    // Payment method
+    if (filters.paymentMethod !== "ALL") {
+      result = result.filter((t) => t.paymentMethod === filters.paymentMethod);
+    }
+    // Source
+    if (filters.source !== "ALL") {
+      result = result.filter((t) => (t.source ?? "MANUAL") === filters.source);
+    }
+    // Search text
+    const search = filters.searchText.trim().toLowerCase();
+    if (search) {
+      result = result.filter(
+        (t) =>
+          t.description.toLowerCase().includes(search) ||
+          (t.notes?.toLowerCase().includes(search) ?? false) ||
+          (t.category?.name.toLowerCase().includes(search) ?? false)
+      );
     }
 
     return result;
@@ -543,6 +581,122 @@ export default function TransactionsScreen() {
               </>
             )}
 
+            {/* Status */}
+            <Text style={styles.filterLabel}>Status</Text>
+            <View style={styles.chipRow}>
+              {([
+                { key: "ALL", label: "Todos" },
+                { key: "PAID", label: "Pago" },
+                { key: "PENDING", label: "Pendente" },
+                { key: "OVERDUE", label: "Atrasado" },
+              ] as { key: TransactionStatus | "ALL"; label: string }[]).map((s) => (
+                <Pressable
+                  key={s.key}
+                  style={[
+                    styles.chip,
+                    filters.status === s.key && styles.chipActive,
+                  ]}
+                  onPress={() =>
+                    setFilters((prev) => ({ ...prev, status: s.key }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      filters.status === s.key && styles.chipTextActive,
+                    ]}
+                  >
+                    {s.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Payment Method */}
+            <Text style={styles.filterLabel}>Pagamento</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.chipRow}
+            >
+              {([
+                { key: "ALL", label: "Todos" },
+                { key: "CASH", label: "Dinheiro" },
+                { key: "PIX", label: "Pix" },
+                { key: "CREDIT_CARD", label: "Crédito" },
+                { key: "DEBIT_CARD", label: "Débito" },
+                { key: "BANK_TRANSFER", label: "Transferência" },
+                { key: "BOLETO", label: "Boleto" },
+                { key: "MERCADO_PAGO", label: "MP" },
+                { key: "OTHER", label: "Outro" },
+              ] as { key: PaymentMethod | "ALL"; label: string }[]).map((m) => (
+                <Pressable
+                  key={m.key}
+                  style={[
+                    styles.chip,
+                    filters.paymentMethod === m.key && styles.chipActive,
+                  ]}
+                  onPress={() =>
+                    setFilters((prev) => ({ ...prev, paymentMethod: m.key }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      filters.paymentMethod === m.key && styles.chipTextActive,
+                    ]}
+                  >
+                    {m.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+
+            {/* Source */}
+            <Text style={styles.filterLabel}>Origem</Text>
+            <View style={styles.chipRow}>
+              {([
+                { key: "ALL", label: "Todas" },
+                { key: "MANUAL", label: "Manual" },
+                { key: "IMPORT", label: "Importado" },
+                { key: "BANK_NOTIFICATION", label: "Notificação" },
+              ] as { key: TransactionSource | "ALL"; label: string }[]).map((s) => (
+                <Pressable
+                  key={s.key}
+                  style={[
+                    styles.chip,
+                    filters.source === s.key && styles.chipActive,
+                  ]}
+                  onPress={() =>
+                    setFilters((prev) => ({ ...prev, source: s.key }))
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.chipText,
+                      filters.source === s.key && styles.chipTextActive,
+                    ]}
+                  >
+                    {s.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Search */}
+            <Text style={styles.filterLabel}>Buscar</Text>
+            <TextInput
+              style={styles.filterInput}
+              value={filters.searchText}
+              onChangeText={(v) =>
+                setFilters((prev) => ({ ...prev, searchText: v }))
+              }
+              placeholder="Descrição, categoria, notas..."
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+
             {/* Clear button */}
             {isFiltersActive(filters) && (
               <Pressable style={styles.clearBtn} onPress={clearFilters}>
@@ -590,6 +744,37 @@ export default function TransactionsScreen() {
         }
         renderItem={({ item }) => {
           const isIncome = item.type === "INCOME";
+          const statusColors: Record<string, string> = {
+            PAID: colors.success,
+            PENDING: colors.warning,
+            OVERDUE: colors.danger,
+          };
+          const statusLabels: Record<string, string> = {
+            PAID: "Pago",
+            PENDING: "Pendente",
+            OVERDUE: "Atrasado",
+          };
+          const paymentIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+            CASH: "cash-outline",
+            PIX: "flash-outline",
+            CREDIT_CARD: "card-outline",
+            DEBIT_CARD: "card-outline",
+            BANK_TRANSFER: "business-outline",
+            BOLETO: "barcode-outline",
+            MERCADO_PAGO: "wallet-outline",
+            OTHER: "ellipsis-horizontal-circle-outline",
+          };
+          const sourceLabels: Record<string, string> = {
+            MANUAL: "Manual",
+            IMPORT: "Importado",
+            BANK_NOTIFICATION: "Notificação",
+          };
+          const sourceIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
+            MANUAL: "hand-right-outline",
+            IMPORT: "cloud-download-outline",
+            BANK_NOTIFICATION: "notifications-outline",
+          };
+          const itemSource = item.source ?? "MANUAL";
           return (
             <View style={styles.card}>
               <View
@@ -609,19 +794,39 @@ export default function TransactionsScreen() {
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                   <Text style={styles.desc} numberOfLines={1}>
                     {item.description}
                   </Text>
-                  {item.paymentMethod === "BOLETO" && (
-                    <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+                  {item.status !== "PAID" && (
+                    <View style={[styles.statusBadge, { backgroundColor: (statusColors[item.status] ?? colors.textMuted) + "22" }]}>
+                      <Text style={[styles.statusBadgeText, { color: statusColors[item.status] ?? colors.textMuted }]}>
+                        {statusLabels[item.status] ?? item.status}
+                      </Text>
+                    </View>
                   )}
                 </View>
                 <Text style={styles.meta}>
                   {item.category?.name ?? "Sem categoria"} ·{" "}
                   {formatDate(item.date)}
-                  {item.paymentMethod === "BOLETO" && " · Boleto"}
                 </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                    <Ionicons name={paymentIcons[item.paymentMethod] ?? "cash-outline"} size={12} color={colors.textMuted} />
+                    <Text style={styles.metaSmall}>
+                      {item.paymentMethod === "CREDIT_CARD" ? "Crédito" : item.paymentMethod === "DEBIT_CARD" ? "Débito" : item.paymentMethod === "BANK_TRANSFER" ? "Transf." : item.paymentMethod === "MERCADO_PAGO" ? "MP" : item.paymentMethod === "OTHER" ? "Outro" : item.paymentMethod === "CASH" ? "Dinheiro" : item.paymentMethod}
+                    </Text>
+                  </View>
+                  {itemSource !== "MANUAL" && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <Ionicons name={sourceIcons[itemSource] ?? "hand-right-outline"} size={12} color={colors.textMuted} />
+                      <Text style={styles.metaSmall}>{sourceLabels[itemSource] ?? itemSource}</Text>
+                    </View>
+                  )}
+                  {item.bankOrigin && (
+                    <Text style={styles.metaSmall}>· {item.bankOrigin}</Text>
+                  )}
+                </View>
               </View>
               <View style={{ alignItems: "flex-end" }}>
                 <Text
@@ -1549,6 +1754,19 @@ function createStyles() {
   actionButton: {
     padding: 6,
     borderRadius: 4,
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  statusBadgeText: {
+    fontSize: 10,
+    fontWeight: "600",
+  },
+  metaSmall: {
+    fontSize: 11,
+    color: colors.textMuted,
   },
   });
 }
