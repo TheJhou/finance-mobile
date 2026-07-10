@@ -38,9 +38,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const isDark = resolveIsDark(mode, systemScheme as string | null);
 
-  useEffect(() => {
-    applyTheme(isDark ? "dark" : "light");
-  }, [isDark]);
+  // Apply theme synchronously during render so that children using
+  // useMemo([isDark]) see the correct colors object immediately.
+  applyTheme(isDark ? "dark" : "light");
 
   const setTheme = useCallback((newMode: ThemeMode) => {
     setMode(newMode);

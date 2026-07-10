@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -12,6 +12,8 @@ import { colors, spacing } from "@/lib/theme";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
 
 function RootNavigator() {
+  const { isDark } = useTheme();
+  const styles = useMemo(() => createStyles(), [isDark]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isAuth, setIsAuth] = useState<boolean | null>(null);
@@ -120,19 +122,21 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.background,
-    padding: spacing.lg,
-    gap: spacing.sm,
-  },
-  errorTitle: { fontSize: 16, fontWeight: "700", color: colors.danger },
-  errorMsg: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    textAlign: "center",
-  },
-});
+function createStyles() {
+  return StyleSheet.create({
+    center: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.background,
+      padding: spacing.lg,
+      gap: spacing.sm,
+    },
+    errorTitle: { fontSize: 16, fontWeight: "700", color: colors.danger },
+    errorMsg: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textAlign: "center",
+    },
+  });
+}

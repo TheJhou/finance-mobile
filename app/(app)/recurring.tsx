@@ -396,6 +396,7 @@ interface RecurringFormProps {
 function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<RecurringFormProps>) {
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
+  const formStyles = useMemo(() => createFormStyles(), [isDark]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
@@ -612,7 +613,8 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<Recu
   );
 }
 
-const formStyles = StyleSheet.create({
+function createFormStyles() {
+  return StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -673,6 +675,7 @@ const formStyles = StyleSheet.create({
   pillDot: { width: 10, height: 10, borderRadius: 5 },
   pillText: { fontSize: 13, color: colors.textPrimary, fontWeight: "500" },
 });
+}
 
 function createStyles() {
   return StyleSheet.create({
