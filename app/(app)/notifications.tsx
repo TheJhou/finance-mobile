@@ -239,7 +239,7 @@ export default function NotificationsScreen() {
       }
       
       BankNotifications?.openPermissionSettings();
-      showToast("warning", "Abra as configurações e ative 'Finance App'");
+      showToast("warning", "Abra as configurações e ative 'Kilun'");
       
       // Check permission again after a delay to see if user enabled it
       const settingsTimeout = setTimeout(() => {
@@ -247,7 +247,7 @@ export default function NotificationsScreen() {
       }, 2000);
     } catch (err) {
       console.error("[Notifications] Error opening settings:", err);
-      showToast("error", "Falha ao abrir configurações. Abra manualmente em Configurações > Aplicativos > Finance App > Notificações");
+      showToast("error", "Falha ao abrir configurações. Abra manualmente em Configurações > Aplicativos > Kilun > Notificações");
     }
   };
 

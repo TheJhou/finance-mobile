@@ -21,7 +21,15 @@ function getProfileDir(): Directory {
 
 export async function getProfilePhotoUri(): Promise<string | null> {
   try {
-    return await AsyncStorage.getItem(PROFILE_PHOTO_KEY);
+    const uri = await AsyncStorage.getItem(PROFILE_PHOTO_KEY);
+    if (!uri) return null;
+    // Ensure cache-buster exists so Image always fetches fresh content
+    if (!uri.includes("?t=")) {
+      const withBuster = `${uri}?t=${Date.now()}`;
+      await AsyncStorage.setItem(PROFILE_PHOTO_KEY, withBuster);
+      return withBuster;
+    }
+    return uri;
   } catch {
     return null;
   }
@@ -64,16 +72,18 @@ export async function saveProfilePhoto(sourceUri: string, base64Data?: string): 
     }
   }
 
-  await AsyncStorage.setItem(PROFILE_PHOTO_KEY, destFile.uri);
-  notifyPhotoChange(destFile.uri);
-  return destFile.uri;
+  const cacheBusterUri = `${destFile.uri}?t=${Date.now()}`;
+  await AsyncStorage.setItem(PROFILE_PHOTO_KEY, cacheBusterUri);
+  notifyPhotoChange(cacheBusterUri);
+  return cacheBusterUri;
 }
 
 export async function deleteProfilePhoto(): Promise<void> {
   try {
     const uri = await AsyncStorage.getItem(PROFILE_PHOTO_KEY);
     if (uri) {
-      const file = new File(uri);
+      const baseUri = uri.split("?")[0];
+      const file = new File(baseUri);
       if (file.exists) file.delete();
       await AsyncStorage.removeItem(PROFILE_PHOTO_KEY);
       notifyPhotoChange(null);

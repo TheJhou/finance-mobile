@@ -59,7 +59,7 @@ export default function TermsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Aceitação dos Termos</Text>
           <Text style={styles.sectionText}>
-            Bem-vindo ao Finance App. Ao usar nosso aplicativo, você concorda com estes Termos de Uso e nossa Política de Privacidade. Se você não concordar, não use o aplicativo.
+            Bem-vindo ao Kilun. Ao usar nosso aplicativo, você concorda com estes Termos de Uso e nossa Política de Privacidade. Se você não concordar, não use o aplicativo.
           </Text>
         </View>
 
@@ -67,7 +67,7 @@ export default function TermsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>2. Descrição do Serviço</Text>
           <Text style={styles.sectionText}>
-            O Finance App é um aplicativo de controle financeiro pessoal que oferece:
+            O Kilun é um aplicativo de controle financeiro pessoal que oferece:
           </Text>
           <View style={styles.featureList}>
             <View style={styles.featureItem}>
@@ -160,7 +160,7 @@ export default function TermsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>7. Propriedade Intelectual</Text>
           <Text style={styles.sectionText}>
-            O Finance App e todo seu conteúdo são protegidos por direitos autorais e outras leis de propriedade intelectual. Você não pode copiar, modificar ou distribuir nosso conteúdo sem permissão.
+            O Kilun e todo seu conteúdo são protegidos por direitos autorais e outras leis de propriedade intelectual. Você não pode copiar, modificar ou distribuir nosso conteúdo sem permissão.
           </Text>
         </View>
 
@@ -196,7 +196,7 @@ export default function TermsScreen() {
         <View style={styles.agreementCard}>
           <Ionicons name="checkmark-circle" size={20} color={colors.success} />
           <View style={styles.agreementContent}>
-            <Text style={styles.agreementTitle}>Ao usar o Finance App, você:</Text>
+            <Text style={styles.agreementTitle}>Ao usar o Kilun, você:</Text>
             <Text style={styles.agreementText}>
               • Confirma que leu e entendeu estes termos{'\n'}
               • Concorda em cumprir todas as obrigações aqui descritas{'\n'}
@@ -206,7 +206,7 @@ export default function TermsScreen() {
         </View>
 
         <Text style={styles.footerText}>
-          Finance App © 2026 - Todos os direitos reservados
+          Kilun © 2026 - Todos os direitos reservados
         </Text>
 
         {isOnboarding && (

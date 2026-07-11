@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Finance App",
+    "name": "Kilun",
     "slug": "finance-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,7 @@
         "foregroundImage": "./assets/images/Icone.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.thejhou.financeapp",
+      "package": "com.thejhou.kilun",
       "versionCode": 15,
       "permissions": [
         "android.permission.INTERNET",

@@ -48,7 +48,7 @@ export default function PrivacyScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>1. Compromisso com sua Privacidade</Text>
           <Text style={styles.sectionText}>
-            No Finance App, levamos sua privacidade muito a sério. Esta política explica como coletamos, usamos, armazenamos e protegemos suas informações pessoais, em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018) e outras regulamentações aplicáveis.
+            No Kilun, levamos sua privacidade muito a sério. Esta política explica como coletamos, usamos, armazenamos e protegemos suas informações pessoais, em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018) e outras regulamentações aplicáveis.
           </Text>
         </View>
 
@@ -317,7 +317,7 @@ export default function PrivacyScreen() {
         </View>
 
         <Text style={styles.footerText}>
-          Finance App © 2026 - Privacidade e Segurança em Primeiro Lugar
+          Kilun © 2026 - Privacidade e Segurança em Primeiro Lugar
         </Text>
       </ScrollView>
     </SafeAreaView>

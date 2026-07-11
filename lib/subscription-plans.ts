@@ -93,12 +93,12 @@ export const SUBSCRIPTION_CONFIG = {
 // Textos para conformidade com Google Play Store
 export const PLAY_STORE_TEXTS = {
   // Título e descrição do app
-  appTitle: 'Finance App - Controle Financeiro',
+  appTitle: 'Kilun - Controle Financeiro',
   appShortDescription: 'Controle suas finanças com IA, exporte relatórios e tenha backup automático.',
   
   // Descrição completa para Google Play
   appFullDescription: `
-O Finance App é a solução completa para controle financeiro pessoal com inteligência artificial.
+O Kilun é a solução completa para controle financeiro pessoal com inteligência artificial.
 
 🏦 **CONTROLE FINANCEIRO COMPLETO**
 • Organize receitas e despesas em categorias personalizadas

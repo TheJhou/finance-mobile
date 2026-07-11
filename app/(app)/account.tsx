@@ -10,7 +10,7 @@ import {
 } from "@/lib/account-service";
 import { getStoredUserName, logout, setStoredUserName } from "@/lib/auth";
 import { getMe } from "@/lib/backend";
-import { deleteProfilePhoto, getProfilePhotoUri, saveProfilePhoto } from "@/lib/profile-photo";
+import { deleteProfilePhoto, getProfilePhotoUri, onProfilePhotoChange, saveProfilePhoto } from "@/lib/profile-photo";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -19,7 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -85,6 +85,10 @@ export default function AccountScreen() {
       return () => { active = false; };
     }, [])
   );
+
+  useEffect(() => {
+    return onProfilePhotoChange((uri) => setPhotoUri(uri));
+  }, []);
 
   const initials = user?.name
     ? user.name.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase()

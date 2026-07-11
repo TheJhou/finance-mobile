@@ -234,7 +234,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail, prof
 
         {/* Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Finance App</Text>
+          <Text style={styles.footerText}>Kilun</Text>
           <Text style={styles.footerVersion}>v1.0.0</Text>
         </View>
       </Animated.View>
