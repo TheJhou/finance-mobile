@@ -85,7 +85,7 @@ export default function ExportDataScreen() {
         if (!isPro) {
           Alert.alert(
             "Recurso PRO",
-            `Exportar em ${selectedFormat.toUpperCase()} é exclusivo do plano Finance Pro.\n\nFaça upgrade na aba "Meu Plano" para desbloquear.`,
+            `Exportar em ${selectedFormat.toUpperCase()} é exclusivo do plano Kilun Pro.\n\nFaça upgrade na aba "Meu Plano" para desbloquear.`,
             [{ text: "OK" }]
           );
           return;

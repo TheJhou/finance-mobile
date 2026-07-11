@@ -41,7 +41,7 @@ export default function PrivacyScreen() {
         {/* Last Updated */}
         <View style={styles.updateCard}>
           <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.updateText}>Última atualização: 08 de julho de 2026</Text>
+          <Text style={styles.updateText}>Última atualização: 11 de julho de 2026</Text>
         </View>
 
         {/* Introduction */}
@@ -60,15 +60,27 @@ export default function PrivacyScreen() {
           <View style={styles.dataList}>
             <View style={styles.dataItem}>
               <Ionicons name="person-outline" size={16} color={colors.primary} />
-              <Text style={styles.dataText}>Nome, e-mail e informações de perfil</Text>
+              <Text style={styles.dataText}>Nome, e-mail e foto de perfil</Text>
             </View>
             <View style={styles.dataItem}>
               <Ionicons name="card-outline" size={16} color={colors.primary} />
-              <Text style={styles.dataText}>Dados de transações financeiras</Text>
+              <Text style={styles.dataText}>Dados de transações financeiras (receitas, despesas, categorias)</Text>
             </View>
             <View style={styles.dataItem}>
               <Ionicons name="pricetag-outline" size={16} color={colors.primary} />
-              <Text style={styles.dataText}>Categorias personalizadas</Text>
+              <Text style={styles.dataText}>Categorias personalizadas e transações recorrentes</Text>
+            </View>
+            <View style={styles.dataItem}>
+              <Ionicons name="document-text-outline" size={16} color={colors.primary} />
+              <Text style={styles.dataText}>Documentos importados (boletos, notas fiscais, recibos) para extração via OCR</Text>
+            </View>
+            <View style={styles.dataItem}>
+              <Ionicons name="mic-outline" size={16} color={colors.primary} />
+              <Text style={styles.dataText}>Áudios gravados para transcrição de transações</Text>
+            </View>
+            <View style={styles.dataItem}>
+              <Ionicons name="camera-outline" size={16} color={colors.primary} />
+              <Text style={styles.dataText}>Imagens capturadas para reconhecimento via IA</Text>
             </View>
           </View>
 
@@ -76,15 +88,19 @@ export default function PrivacyScreen() {
           <View style={styles.dataList}>
             <View style={styles.dataItem}>
               <Ionicons name="analytics-outline" size={16} color={colors.primary} />
-              <Text style={styles.dataText}>Estatísticas de uso do aplicativo</Text>
+              <Text style={styles.dataText}>Estatísticas de uso do aplicativo (anônimas)</Text>
             </View>
             <View style={styles.dataItem}>
               <Ionicons name="phone-portrait-outline" size={16} color={colors.primary} />
-              <Text style={styles.dataText}>Informações do dispositivo (modelo, sistema operacional)</Text>
+              <Text style={styles.dataText}>Informações do dispositivo (modelo, sistema operacional, versão do app)</Text>
             </View>
             <View style={styles.dataItem}>
               <Ionicons name="notifications-outline" size={16} color={colors.primary} />
-              <Text style={styles.dataText}>Dados de notificações bancárias (com sua permissão)</Text>
+              <Text style={styles.dataText}>Conteúdo de notificações bancárias (com sua permissão explícita)</Text>
+            </View>
+            <View style={styles.dataItem}>
+              <Ionicons name="server-outline" size={16} color={colors.primary} />
+              <Text style={styles.dataText}>Endereço IP e logs de acesso para segurança</Text>
             </View>
           </View>
         </View>
@@ -102,7 +118,7 @@ export default function PrivacyScreen() {
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={styles.featureText}>Consentimento (Art. 7º, I): para processamento de notificações bancárias</Text>
+              <Text style={styles.featureText}>Consentimento (Art. 7º, I): para processamento de notificações bancárias, áudio, imagens e documentos</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.success} />
@@ -129,7 +145,11 @@ export default function PrivacyScreen() {
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-              <Text style={styles.featureText}>Para usar inteligência artificial na categorização</Text>
+              <Text style={styles.featureText}>Para usar inteligência artificial na categorização e extração de dados</Text>
+            </View>
+            <View style={styles.featureItem}>
+              <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+              <Text style={styles.featureText}>Para transcrever áudios e reconhecer documentos via OCR</Text>
             </View>
             <View style={styles.featureItem}>
               <Ionicons name="checkmark-circle" size={16} color={colors.success} />
@@ -172,7 +192,11 @@ export default function PrivacyScreen() {
           <View style={styles.dataList}>
             <View style={styles.dataItem}>
               <Ionicons name="cloud-outline" size={16} color={colors.primary} />
-              <Text style={styles.dataText}>Com provedores de IA para processamento (OpenAI, Google)</Text>
+              <Text style={styles.dataText}>Com provedores de IA para processamento (Google Gemini, OpenAI)</Text>
+            </View>
+            <View style={styles.dataItem}>
+              <Ionicons name="server-outline" size={16} color={colors.primary} />
+              <Text style={styles.dataText}>Com provedores de infraestrutura em nuvem (hospedagem e armazenamento)</Text>
             </View>
             <View style={styles.dataItem}>
               <Ionicons name="card-outline" size={16} color={colors.primary} />
@@ -234,9 +258,16 @@ export default function PrivacyScreen() {
                 <Text style={styles.rightDescription}>Saber sobre o compartilhamento de seus dados</Text>
               </View>
             </View>
+            <View style={styles.rightItem}>
+              <Ionicons name="close-circle-outline" size={16} color={colors.primary} />
+              <View style={styles.rightContent}>
+                <Text style={styles.rightTitle}>Revogação do Consentimento</Text>
+                <Text style={styles.rightDescription}>Retirar o consentimento a qualquer momento (Art. 8º, §5º)</Text>
+              </View>
+            </View>
           </View>
           <Text style={styles.sectionText}>
-            Os pedidos serão respondidos em até 15 dias úteis, conforme previsto pela LGPD.
+            Os pedidos serão respondidos em até 15 dias úteis, conforme previsto pelo Art. 19 da LGPD. Você também pode apresentar reclamação à Autoridade Nacional de Proteção de Dados (ANPD) caso entenda que seus direitos foram violados.
           </Text>
           <TouchableOpacity style={styles.rightsButton} onPress={handleExerciseRights}>
             <Ionicons name="mail-outline" size={16} color="#fff" />
@@ -259,9 +290,11 @@ export default function PrivacyScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>9. Retenção de Dados</Text>
           <Text style={styles.sectionText}>
-            • Mantemos seus dados enquanto você usar o app{'\n'}
-            • Dados de transações são mantidos para histórico financeiro{'\n'}
-            • Backup de notificações por 30 dias{'\n'}
+            • Mantemos seus dados enquanto sua conta estiver ativa{'\n'}
+            • Dados de transações são mantidos para histórico financeiro enquanto a conta existir{'\n'}
+            • Áudios e imagens processados por IA são excluídos após o processamento{'\n'}
+            • Conteúdo de notificações bancárias é processado e descartado imediatamente{'\n'}
+            • Ao excluir a conta, todos os dados são permanentemente removidos em até 30 dias{'\n'}
             • Excluímos dados quando solicitado ou quando exigido por lei
           </Text>
         </View>
@@ -270,7 +303,7 @@ export default function PrivacyScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>10. Transferência Internacional</Text>
           <Text style={styles.sectionText}>
-            Alguns dados podem ser processados fora do Brasil (serviços de IA). Garantimos que os provedores cumpram padrões de segurança equivalentes ou superiores aos exigidos pela LGPD.
+            Alguns dados podem ser processados fora do Brasil por provedores de IA (Google Gemini, OpenAI) e provedores de infraestrutura em nuvem. Garantimos que essas transferências ocorram em conformidade com o Art. 33 da LGPD, utilizando cláusulas contratuais padrão ou garantias equivalentes de proteção de dados.
           </Text>
         </View>
 
@@ -278,7 +311,7 @@ export default function PrivacyScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>11. Proteção de Crianças</Text>
           <Text style={styles.sectionText}>
-            Nosso serviço não é direcionado a menores de 18 anos. Não coletamos intencionalmente informações de crianças. Se descobrirmos que coletamos dados de uma criança, os deletaremos imediatamente.
+            Nosso serviço não é direcionado a menores de 18 anos. Não coletamos intencionalmente informações de crianças ou adolescentes. Se descobrirmos que coletamos dados de menor de 18 anos, os excluiremos imediatamente, em conformidade com o Estatuto da Criança e do Adolescente (ECA - Lei nº 8.069/1990) e a LGPD.
           </Text>
         </View>
 
@@ -294,7 +327,7 @@ export default function PrivacyScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>13. Encarregado de Dados (DPO)</Text>
           <Text style={styles.sectionText}>
-            Para exercer seus direitos, tirar dúvidas ou reportar problemas relacionados à privacidade, entre em contato com nosso Encarregado de Dados (DPO):
+            Para exercer seus direitos, tirar dúvidas ou reportar problemas relacionados à privacidade, entre em contato com nosso Encarregado pelo Tratamento de Dados Pessoais (DPO), conforme exigido pelo Art. 41 da LGPD:
           </Text>
           <TouchableOpacity style={styles.contactButton} onPress={handleEmailSupport}>
             <Ionicons name="mail-outline" size={20} color={colors.primary} />
@@ -311,7 +344,7 @@ export default function PrivacyScreen() {
           <View style={styles.authorityContent}>
             <Text style={styles.authorityTitle}>Conformidade LGPD</Text>
             <Text style={styles.authorityText}>
-              Esta política está em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018) e regulamentações aplicáveis.
+              Esta política está em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018), suas atualizações e as resoluções da Autoridade Nacional de Proteção de Dados (ANPD).
             </Text>
           </View>
         </View>

@@ -52,7 +52,7 @@ export default function TermsScreen() {
         {/* Last Updated */}
         <View style={styles.updateCard}>
           <Ionicons name="time-outline" size={16} color={colors.textMuted} />
-          <Text style={styles.updateText}>Última atualização: 08 de julho de 2026</Text>
+          <Text style={styles.updateText}>Última atualização: 11 de julho de 2026</Text>
         </View>
 
         {/* Introduction */}
@@ -102,7 +102,7 @@ export default function TermsScreen() {
 
         {/* Subscription */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>4. Assinatura Finance Pro</Text>
+          <Text style={styles.sectionTitle}>4. Assinatura Kilun Pro</Text>
           <Text style={styles.sectionText}>
             • Assinatura mensal de R$ 14,90{'\n'}
             • Renovação automática mensal{'\n'}
@@ -148,7 +148,7 @@ export default function TermsScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>6. Privacidade e Proteção de Dados (LGPD)</Text>
           <Text style={styles.sectionText}>
-            Sua privacidade é importante para nós. Tratamos seus dados pessoais em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018). Nossa Política de Privacidade explica detalhadamente como coletamos, usamos, armazenamos e protegemos seus dados, bem como seus direitos como titular.
+            Sua privacidade é importante para nós. Tratamos seus dados pessoais em conformidade com a Lei Geral de Proteção de Dados (LGPD - Lei nº 13.709/2018) e as resoluções da Autoridade Nacional de Proteção de Dados (ANPD). Nossa Política de Privacidade explica detalhadamente como coletamos, usamos, armazenamos e protegemos seus dados, bem como seus direitos como titular, incluindo acesso, correção, eliminação, portabilidade, oposição e revogação de consentimento.
           </Text>
           <TouchableOpacity style={styles.linkButton} onPress={() => router.push('/privacy')}>
             <Ionicons name="shield-checkmark-outline" size={16} color={colors.primary} />

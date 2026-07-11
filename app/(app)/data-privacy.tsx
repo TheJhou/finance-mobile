@@ -2,59 +2,77 @@ import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
 import { RowSeparator } from "@/components/account/row-separator";
 import { ScreenLayout } from "@/components/account/screen-layout";
-import { deleteAccount } from "@/lib/account-service";
+import { deleteAccount, exportAccountData } from "@/lib/account-service";
 import { logout } from "@/lib/auth";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
+import { File, Paths } from "expo-file-system";
 import { useRouter } from "expo-router";
+import * as Sharing from "expo-sharing";
 import { useMemo, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 
 export default function DataPrivacyScreen() {
   const router = useRouter();
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
   const [deleting, setDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    Alert.prompt(
       "Excluir conta",
-      "Esta ação é irreversível. Todos os seus dados serão permanentemente excluídos. Deseja continuar?",
+      "Esta ação é irreversível. Todos os seus dados serão permanentemente excluídos. Digite sua senha para confirmar.",
       [
         { text: "Cancelar", style: "cancel" },
         {
-          text: "Continuar",
+          text: "Excluir definitivamente",
           style: "destructive",
-          onPress: () => {
-            Alert.alert(
-              "Confirmação final",
-              "Digite sua senha para confirmar a exclusão permanente da sua conta.",
-              [
-                { text: "Cancelar", style: "cancel" },
-                {
-                  text: "Excluir definitivamente",
-                  style: "destructive",
-                  onPress: async () => {
-                    try {
-                      setDeleting(true);
-                      await deleteAccount("confirm");
-                      await logout();
-                      Alert.alert("Conta excluída", "Sua conta foi excluída com sucesso.");
-                      router.replace("/" as any);
-                    } catch (err) {
-                      Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao excluir conta");
-                    } finally {
-                      setDeleting(false);
-                    }
-                  },
-                },
-              ]
-            );
+          onPress: async (password?: string) => {
+            if (!password) return;
+            try {
+              setDeleting(true);
+              await deleteAccount(password);
+              await logout();
+              Alert.alert("Conta excluída", "Sua conta foi excluída com sucesso.");
+              router.replace("/" as any);
+            } catch (err) {
+              Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao excluir conta");
+            } finally {
+              setDeleting(false);
+            }
           },
         },
-      ]
+      ],
+      "secure-text"
     );
+  };
+
+  const handleExportLgpd = async () => {
+    try {
+      setExporting(true);
+      const blob = await exportAccountData();
+      const reader = new FileReader();
+      const base64 = await new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          resolve(result.split(",")[1] || "");
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const file = new File(Paths.cache, `lgpd-export-${Date.now()}.json`);
+      file.write(atob(base64));
+      await Sharing.shareAsync(file.uri, {
+        mimeType: "application/json",
+        dialogTitle: "Exportação de dados (LGPD)",
+      });
+    } catch (err) {
+      Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao exportar dados");
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -63,7 +81,7 @@ export default function DataPrivacyScreen() {
         <Ionicons name="shield-checkmark-outline" size={32} color={colors.primary} />
         <Text style={styles.infoTitle}>Seus dados estão seguros</Text>
         <Text style={styles.infoText}>
-          Levamos sua privacidade a sério. Seus dados são criptografados e nunca compartilhados com terceiros.
+          Levamos sua privacidade a sério. Seus dados são criptografados e tratados em conformidade com a LGPD (Lei nº 13.709/2018).
         </Text>
       </View>
 
@@ -71,16 +89,16 @@ export default function DataPrivacyScreen() {
         <AccountRow
           icon="download-outline"
           iconColor={colors.info}
-          label="Exportar meus dados"
+          label="Exportar relatórios"
           onPress={() => router.push("/export-data" as any)}
         />
         <RowSeparator />
         <AccountRow
           icon="document-text-outline"
           iconColor={colors.info}
-          label="Baixar dados da conta (LGPD)"
-          subtitle="Solicite seus dados conforme a LGPD"
-          onPress={() => Alert.alert("LGPD", "Sua solicitação foi registrada. Você receberá um e-mail com seus dados em até 72h.")}
+          label="Baixar todos os meus dados (LGPD)"
+          subtitle="Exportação completa conforme Art. 18 da LGPD"
+          onPress={handleExportLgpd}
         />
       </AccountSection>
 
@@ -104,12 +122,21 @@ export default function DataPrivacyScreen() {
         <AccountRow
           icon="trash-outline"
           iconColor={colors.danger}
-          label="Solicitar exclusão da conta"
-          subtitle="Exclusão permanente e irreversível"
+          label="Excluir conta e todos os dados"
+          subtitle="Exclusão permanente e irreversível (direito ao esquecimento)"
           danger
           onPress={handleDeleteAccount}
         />
       </AccountSection>
+
+      {(deleting || exporting) && (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>
+            {deleting ? "Excluindo conta..." : "Exportando dados..."}
+          </Text>
+        </View>
+      )}
     </ScreenLayout>
   );
 }
@@ -136,6 +163,22 @@ function createStyles() {
       textAlign: "center",
       paddingHorizontal: spacing.lg,
       lineHeight: 18,
+    },
+    loadingOverlay: {
+      position: "absolute",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.md,
+    },
+    loadingText: {
+      color: "#fff",
+      fontSize: 14,
+      fontWeight: "600",
     },
   });
 }

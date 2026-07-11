@@ -55,7 +55,7 @@ export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
   },
   PRO: {
     code: 'PRO',
-    name: 'Finance Pro',
+    name: 'Kilun Pro',
     description: 'Recursos avançados com IA ilimitada para controle financeiro completo',
     price: 14.99,
     priceDisplay: 'R$ 14,99',
@@ -85,8 +85,8 @@ export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
 // URLs e links para Google Play Store
 export const SUBSCRIPTION_CONFIG = {
   purchaseUrl: `${BACKEND_URL}/purchase`,
-  termsUrl: 'https://finance-app.com/terms',
-  privacyUrl: 'https://finance-app.com/privacy',
+  termsUrl: 'https://kilun.app/terms',
+  privacyUrl: 'https://kilun.app/privacy',
   supportUrl: 'mailto:jonathas.duarte78@gmail.com',
 };
 
@@ -119,7 +119,7 @@ O Kilun é a solução completa para controle financeiro pessoal com inteligênc
 • Backup automático
 • ${PLANS.FREE.tokenLimit.toLocaleString('pt-BR')} tokens de IA por mês
 
-💎 **FINANCE PRO - R$ 14,99/mês**
+💎 **KILUN PRO - R$ 14,99/mês**
 • ${PLANS.PRO.tokenLimit.toLocaleString('pt-BR')} tokens de IA por mês (uso intensivo)
 • Importação por foto, texto e áudio ilimitados
 • OCR de documentos (boleto, nota fiscal, etc.)
@@ -142,7 +142,7 @@ Perfeito para:
   `.trim(),
   
   // Textos de assinatura para Google Play Billing
-  subscriptionTitle: 'Finance Pro',
+  subscriptionTitle: 'Kilun Pro',
   subscriptionDescription: 'Recursos avançados com IA ilimitada e exportação premium',
   subscriptionPrice: 'R$ 14,99/mês',
   
