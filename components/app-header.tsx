@@ -1,12 +1,12 @@
 import DrawerMenu from "@/components/drawer-menu";
 import { getStoredUserName } from "@/lib/auth";
 import { getDb } from "@/lib/db";
-import { getProfilePhotoUri } from "@/lib/profile-photo";
+import { getProfilePhotoUri, onProfilePhotoChange } from "@/lib/profile-photo";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -53,9 +53,16 @@ export function AppHeader() {
     }
   }, []);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadUserData();
+    }, [loadUserData])
+  );
+
+  // Subscribe to real-time photo changes from account screen
   useEffect(() => {
-    loadUserData();
-  }, [loadUserData]);
+    return onProfilePhotoChange((uri) => setProfilePhoto(uri));
+  }, []);
 
   return (
     <>

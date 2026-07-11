@@ -3,6 +3,18 @@ import { Directory, File, Paths } from "expo-file-system";
 
 const PROFILE_PHOTO_KEY = "profile_photo_uri";
 
+type PhotoListener = (uri: string | null) => void;
+const photoListeners = new Set<PhotoListener>();
+
+export function onProfilePhotoChange(listener: PhotoListener): () => void {
+  photoListeners.add(listener);
+  return () => { photoListeners.delete(listener); };
+}
+
+function notifyPhotoChange(uri: string | null) {
+  photoListeners.forEach((l) => l(uri));
+}
+
 function getProfileDir(): Directory {
   return new Directory(Paths.document, "profile");
 }
@@ -53,6 +65,7 @@ export async function saveProfilePhoto(sourceUri: string, base64Data?: string): 
   }
 
   await AsyncStorage.setItem(PROFILE_PHOTO_KEY, destFile.uri);
+  notifyPhotoChange(destFile.uri);
   return destFile.uri;
 }
 
@@ -63,6 +76,7 @@ export async function deleteProfilePhoto(): Promise<void> {
       const file = new File(uri);
       if (file.exists) file.delete();
       await AsyncStorage.removeItem(PROFILE_PHOTO_KEY);
+      notifyPhotoChange(null);
     }
   } catch {
     // ignore

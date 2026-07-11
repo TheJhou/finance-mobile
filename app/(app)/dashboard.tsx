@@ -87,6 +87,7 @@ export default function DashboardScreen() {
   const [monthStartDay, setMonthStartDay] = useState(1);
 
   const fetchingRef = useRef(false);
+  const fetchIdRef = useRef(0);
   const lastFetchRef = useRef(0);
   const lastFetchedMonthRef = useRef(-1);
   const lastFetchedYearRef = useRef(-1);
@@ -130,25 +131,27 @@ export default function DashboardScreen() {
   }, []);
 
   const fetchData = useCallback(async () => {
-    if (fetchingRef.current) return;
     const monthChanged = lastFetchedMonthRef.current !== selectedMonth || lastFetchedYearRef.current !== selectedYear;
     if (Date.now() - lastFetchRef.current < 5000 && !refreshing && !monthChanged) return;
-    fetchingRef.current = true;
+    const fetchId = ++fetchIdRef.current;
     lastFetchRef.current = Date.now();
 
     try {
       // Load cached name immediately
       const cachedName = await getStoredUserName();
+      if (fetchIdRef.current !== fetchId) return;
       if (cachedName) setUserName(cachedName);
 
       // Load month start day setting
       const startDay = await loadMonthStartDay();
+      if (fetchIdRef.current !== fetchId) return;
       setMonthStartDay(startDay);
 
       const [dashRes, billsRes] = await Promise.all([
         getDashboard({ year: selectedYear, month: selectedMonth, monthStartDay: startDay }),
         getUpcomingBills({ year: selectedYear, month: selectedMonth, monthStartDay: startDay }),
       ]);
+      if (fetchIdRef.current !== fetchId) return;
       setData(dashRes);
       setBills(billsRes);
       lastFetchedMonthRef.current = selectedMonth;
@@ -159,6 +162,7 @@ export default function DashboardScreen() {
 
       // Backend calls serialized with delays to avoid rate limiting
       const currentTokenStatus = getTokenLimitStatus();
+      if (fetchIdRef.current !== fetchId) return;
       setTokenLimitStatus(currentTokenStatus);
 
       if (!currentTokenStatus.exceeded) {
@@ -168,6 +172,7 @@ export default function DashboardScreen() {
           getStreak(),
           getDashboardScore(),
         ]);
+        if (fetchIdRef.current !== fetchId) return;
         if (meRes.status === "fulfilled" && meRes.value.name) setUserName(meRes.value.name);
         if (goalsRes.status === "fulfilled") setGoals(goalsRes.value);
         if (streakRes.status === "fulfilled") setStreak(streakRes.value);
@@ -189,11 +194,14 @@ export default function DashboardScreen() {
 
       setError(null);
     } catch (err) {
+      if (fetchIdRef.current !== fetchId) return;
       setError(err instanceof Error ? err.message : "Erro ao carregar");
     } finally {
-      fetchingRef.current = false;
-      setLoading(false);
-      setRefreshing(false);
+      if (fetchIdRef.current === fetchId) {
+        fetchingRef.current = false;
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [refreshing, notificationsScheduled, selectedYear, selectedMonth]);
 
