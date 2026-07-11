@@ -31,6 +31,18 @@ export async function setBiometricEnabled(enabled: boolean): Promise<void> {
 
 const BIOMETRIC_UNLOCKED_KEY = "biometric_unlocked";
 
+type UnlockListener = (unlocked: boolean) => void;
+const unlockListeners = new Set<UnlockListener>();
+
+export function onBiometricUnlockChange(listener: UnlockListener): () => void {
+  unlockListeners.add(listener);
+  return () => { unlockListeners.delete(listener); };
+}
+
+function notifyUnlockChange(unlocked: boolean) {
+  unlockListeners.forEach((l) => l(unlocked));
+}
+
 export async function isBiometricUnlocked(): Promise<boolean> {
   try {
     const value = await AsyncStorage.getItem(BIOMETRIC_UNLOCKED_KEY);
@@ -42,6 +54,7 @@ export async function isBiometricUnlocked(): Promise<boolean> {
 
 export async function setBiometricUnlocked(unlocked: boolean): Promise<void> {
   await AsyncStorage.setItem(BIOMETRIC_UNLOCKED_KEY, unlocked ? "true" : "false");
+  notifyUnlockChange(unlocked);
 }
 
 export async function authenticateWithBiometrics(

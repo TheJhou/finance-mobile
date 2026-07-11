@@ -23,7 +23,8 @@ export default function LockScreen() {
     if (!mountedRef.current) return;
     if (result.success) {
       await setBiometricUnlocked(true);
-      router.replace("/(app)/dashboard" as any);
+      // Replace to root — RootNavigator will re-evaluate and show the app
+      router.replace("/" as any);
     } else {
       setError(result.error ?? "Falha na autenticação");
     }

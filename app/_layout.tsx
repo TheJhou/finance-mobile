@@ -6,7 +6,7 @@ import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { isAuthenticated } from "@/lib/auth";
-import { isBiometricEnabled, isBiometricUnlocked, setBiometricUnlocked } from "@/lib/biometric";
+import { isBiometricEnabled, isBiometricUnlocked, onBiometricUnlockChange, setBiometricUnlocked } from "@/lib/biometric";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
@@ -21,56 +21,62 @@ function RootNavigator() {
   const [locked, setLocked] = useState(false);
   const [checkingLock, setCheckingLock] = useState(true);
 
+  // Single parallel init: DB + auth + biometric settings — eliminates sequential useEffect chain
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getDb(), isAuthenticated()])
-      .then(([, authenticated]) => {
-        if (!cancelled) {
-          setReady(true);
-          setIsAuth(authenticated);
+    Promise.all([
+      getDb(),
+      isAuthenticated(),
+      isBiometricEnabled(),
+    ])
+      .then(([, authenticated, bioEnabled]) => {
+        if (cancelled) return;
+        setReady(true);
+        setIsAuth(authenticated);
+        setBiometricEnabled(authenticated && bioEnabled);
+        if (!authenticated || !bioEnabled) {
+          setLocked(false);
+          setCheckingLock(false);
+        } else {
+          // Biometric enabled — always lock on startup, never trust persisted unlocked state
+          setLocked(true);
+          setCheckingLock(false);
         }
       })
       .catch((e: unknown) => {
-        if (!cancelled) {
-          setError(e instanceof Error ? e.message : "Erro ao inicializar DB");
-        }
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : "Erro ao inicializar DB");
       });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  useEffect(() => {
-    if (isAuth) {
-      isBiometricEnabled().then(setBiometricEnabled);
-    }
-  }, [isAuth]);
-
-  // Check lock state once on app open (cold start only)
-  useEffect(() => {
-    if (!ready || isAuth === null) return;
-    if (!isAuth || !biometricEnabled) {
-      setLocked(false);
-      setCheckingLock(false);
-      return;
-    }
-    isBiometricUnlocked().then((unlocked) => {
-      setLocked(!unlocked);
-      setCheckingLock(false);
-    });
-  }, [ready, isAuth, biometricEnabled]);
-
-  // Clear unlocked flag when app goes to background so it re-prompts on next cold start
+  // Clear unlocked flag when app goes to background so it re-prompts on return
   useEffect(() => {
     if (!isAuth || !biometricEnabled) return;
     const handler = (nextState: AppStateStatus) => {
       if (nextState === "background" || nextState === "inactive") {
         void setBiometricUnlocked(false);
+        setLocked(true);
+      } else if (nextState === "active") {
+        // Re-check lock when returning from background
+        isBiometricUnlocked().then((unlocked) => {
+          setLocked(!unlocked);
+        });
       }
     };
     const sub = AppState.addEventListener("change", handler);
     return () => sub.remove();
   }, [isAuth, biometricEnabled]);
+
+  // Subscribe to unlock events from lock screen — instant reaction, no polling
+  useEffect(() => {
+    if (!biometricEnabled) return;
+    return onBiometricUnlockChange((unlocked) => {
+      setLocked(!unlocked);
+    });
+  }, [biometricEnabled]);
 
   if (error) {
     return (
