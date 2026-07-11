@@ -167,7 +167,7 @@ export default function NotificationsScreen() {
           date: toDateInputValue(new Date(item.postTime)),
           categoryId: item.categoryId || undefined,
           notes: `Auto-importado de ${item.bank || "Banco"}`,
-          source: "TEXT",
+          source: "BANK_NOTIFICATION",
         });
       } catch (syncErr) {
         console.warn("[AutoImport] Falha ao sincronizar com backend:", syncErr);

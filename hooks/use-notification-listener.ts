@@ -1,5 +1,6 @@
 import { analyzeText } from "@/lib/backend";
 import {
+  cleanupOldQueueItems,
   enqueueNotification,
   getPendingAiNotifications,
   isNotificationInQueue,
@@ -21,6 +22,8 @@ import { useEffect, useRef } from "react";
 const HEALTH_CHECK_INTERVAL_MS = 15_000;
 const AI_RETRY_INTERVAL_MS = 30_000;
 const REBIND_BACKOFF_MS = 5_000;
+const MAX_CONCURRENT_PROCESSING = 3;
+const QUEUE_BACKPRESSURE_THRESHOLD = 50;
 
 export function useNotificationListener() {
   const isOnlineRef = useRef(true);
@@ -35,8 +38,6 @@ export function useNotificationListener() {
       return;
     }
     console.log("[AutoImport] Listener registrado com sucesso");
-
-    let destroyed = false;
 
     // ── NetInfo: monitora conectividade em tempo real ──────────────────
     const netInfoSub = NetInfo.addEventListener((state) => {
@@ -57,9 +58,8 @@ export function useNotificationListener() {
       isOnlineRef.current = state.isConnected === true && state.isInternetReachable !== false;
     });
 
-    // ── Processa notificação bruta: parse local → enfileira no SQLite ──
+    // ── Processa notificação bruta: parse → persiste no SQLite → enriquece com IA ──
     async function processNotification(event: BankNotificationEvent) {
-      if (destroyed) return;
       const isBankApp = event.packageName in BANK_APPS;
       console.log(
         `[AutoImport] Notificação recebida: pkg=${event.packageName} bank=${isBankApp} title=${event.title}`
@@ -88,79 +88,13 @@ export function useNotificationListener() {
           return;
         }
 
-        if (destroyed) return;
-
         const categories = await listCategories();
         if (categories.length === 0) return;
 
+        // Fallback local: inferência por keywords
         let categoryId = categories[0].id;
         let categoryName = categories[0].name;
         let description = parsed.description;
-
-        // Tenta IA apenas se online
-        if (isOnlineRef.current) {
-          try {
-            const aiResult = await analyzeText(
-              text,
-              "TEXT",
-              categories.map((c) => ({ id: c.id, name: c.name })),
-              { bank: parsed.bank, paymentMethod: parsed.paymentMethod }
-            );
-            if (destroyed) return;
-            const draft = aiResult?.draft;
-            if (draft) {
-              if (draft.description) description = draft.description;
-              if (draft.categoryId) {
-                const matched = categories.find((c) => c.id === draft.categoryId);
-                if (matched) {
-                  categoryId = matched.id;
-                  categoryName = matched.name;
-                }
-              }
-            }
-
-            const insertedId = await enqueueNotification({
-              packageName: event.packageName,
-              title: event.title,
-              text,
-              bigText: event.bigText,
-              subText: event.subText,
-              postTime: event.postTime,
-              rawText: text,
-              amount: draft?.amount ?? parsed.amount,
-              description,
-              type: (draft?.type as TransactionType) ?? parsed.type,
-              paymentMethod: (draft?.paymentMethod as PaymentMethod) ?? parsed.paymentMethod,
-              bank: parsed.bank,
-              categoryId,
-              categoryName,
-            });
-
-            if (insertedId) {
-              await updateWithAiResult(insertedId, {
-                description,
-                categoryId,
-                categoryName,
-              });
-            }
-
-            console.log(
-              `[AutoImport] Enfileirado com IA: ${description} R$${draft?.amount ?? parsed.amount}`
-            );
-            return;
-          } catch (aiErr) {
-            console.warn(
-              "[AutoImport] IA falhou, usando inferência local:",
-              aiErr instanceof Error ? aiErr.message : aiErr
-            );
-          }
-        } else {
-          console.log("[AutoImport] Offline — usando inferência local");
-        }
-
-        if (destroyed) return;
-
-        // Fallback local (offline ou IA falhou) — enfileira com ai_enriched=0
         const inferredCatName = inferCategoryFromText(text);
         const matched = inferredCatName
           ? categories.find(
@@ -172,7 +106,9 @@ export function useNotificationListener() {
           categoryName = matched.name;
         }
 
-        const fallbackId = await enqueueNotification({
+        // Persiste imediatamente no SQLite com dados do fallback local (ai_enriched=0)
+        // Isso garante que a notificação não se perca mesmo se o app for desmontado
+        const insertedId = await enqueueNotification({
           packageName: event.packageName,
           title: event.title,
           text,
@@ -189,12 +125,59 @@ export function useNotificationListener() {
           categoryName,
         });
 
-        if (fallbackId) {
-          await updateWithAiResult(fallbackId, {
-            description,
-            categoryId,
-            categoryName,
-          });
+        if (!insertedId) return;
+
+        // Backpressure: se a fila em memória ainda está grande, pula IA e usa fallback
+        const shouldSkipAi = processingQueueRef.current.length > QUEUE_BACKPRESSURE_THRESHOLD;
+
+        // Tenta enriquecimento com IA apenas se online e sem backpressure
+        if (isOnlineRef.current && !shouldSkipAi) {
+          try {
+            const aiResult = await analyzeText(
+              text,
+              "TEXT",
+              categories.map((c) => ({ id: c.id, name: c.name })),
+              { bank: parsed.bank, paymentMethod: parsed.paymentMethod }
+            );
+            const draft = aiResult?.draft;
+            if (draft) {
+              let aiDescription = description;
+              let aiCategoryId = categoryId;
+              let aiCategoryName = categoryName;
+
+              if (draft.description) aiDescription = draft.description;
+              if (draft.categoryId) {
+                const catMatch = categories.find((c) => c.id === draft.categoryId);
+                if (catMatch) {
+                  aiCategoryId = catMatch.id;
+                  aiCategoryName = catMatch.name;
+                }
+              }
+
+              await updateWithAiResult(insertedId, {
+                description: aiDescription,
+                categoryId: aiCategoryId,
+                categoryName: aiCategoryName,
+                amount: draft.amount ?? undefined,
+                type: (draft.type as TransactionType) ?? undefined,
+                paymentMethod: (draft.paymentMethod as PaymentMethod) ?? undefined,
+              });
+
+              console.log(
+                `[AutoImport] Enriquecido com IA: ${aiDescription} R$${draft.amount ?? parsed.amount}`
+              );
+              return;
+            }
+          } catch (aiErr) {
+            console.warn(
+              "[AutoImport] IA falhou, fallback local já persistido:",
+              aiErr instanceof Error ? aiErr.message : aiErr
+            );
+          }
+        } else if (shouldSkipAi) {
+          console.log("[AutoImport] Backpressure — IA pulada, fallback local salvo");
+        } else {
+          console.log("[AutoImport] Offline — salvo com fallback local, será reprocessado");
         }
 
         console.log(
@@ -208,14 +191,14 @@ export function useNotificationListener() {
       }
     }
 
-    // ── Fila de processamento: garante que notificações não se percam ──
+    // ── Fila de processamento: processa até MAX_CONCURRENT em paralelo ──
     async function drainQueue() {
       if (isProcessingRef.current) return;
       isProcessingRef.current = true;
       try {
-        while (processingQueueRef.current.length > 0 && !destroyed) {
-          const event = processingQueueRef.current.shift()!;
-          await processNotification(event);
+        while (processingQueueRef.current.length > 0) {
+          const batch = processingQueueRef.current.splice(0, MAX_CONCURRENT_PROCESSING);
+          await Promise.allSettled(batch.map((e) => processNotification(e)));
         }
       } finally {
         isProcessingRef.current = false;
@@ -240,13 +223,14 @@ export function useNotificationListener() {
         if (categories.length === 0) return;
 
         for (const item of pendingItems) {
-          if (destroyed || !isOnlineRef.current) break;
+          if (!isOnlineRef.current) break;
 
           try {
             const aiResult = await analyzeText(
               item.rawText,
               "TEXT",
-              categories.map((c) => ({ id: c.id, name: c.name }))
+              categories.map((c) => ({ id: c.id, name: c.name })),
+              { bank: item.bank ?? undefined, paymentMethod: item.paymentMethod ?? undefined }
             );
             const draft = aiResult?.draft;
             if (draft) {
@@ -267,6 +251,9 @@ export function useNotificationListener() {
                 description,
                 categoryId,
                 categoryName,
+                amount: draft.amount ?? undefined,
+                type: (draft.type as TransactionType) ?? undefined,
+                paymentMethod: (draft.paymentMethod as PaymentMethod) ?? undefined,
               });
               console.log(`[AutoImport] IA reprocessou: ${description}`);
             }
@@ -347,11 +334,11 @@ export function useNotificationListener() {
       }
     }, AI_RETRY_INTERVAL_MS);
 
-    // ── Retry inicial (notificações que ficaram pendentes de sessão anterior)
+    // ── Startup: limpa notificações antigas e reprocessa pendentes ─────
+    void cleanupOldQueueItems();
     void retryPendingAiEnrichment();
 
     return () => {
-      destroyed = true;
       netInfoSub();
       notifSub.remove();
       connSub.remove();

@@ -263,7 +263,7 @@ export async function autoSaveTransaction(transaction: {
   date: string;
   categoryId?: string;
   notes?: string;
-  source?: "TEXT" | "DOCUMENT" | "AUDIO" | "PHOTO" | "VOICE";
+  source?: "TEXT" | "DOCUMENT" | "AUDIO" | "PHOTO" | "VOICE" | "BANK_NOTIFICATION";
 }) {
   const response = await authFetch(`${BACKEND_URL}/imports/auto-save`, {
     method: "POST",

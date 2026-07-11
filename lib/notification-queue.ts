@@ -156,14 +156,42 @@ export async function updateWithAiResult(
     description: string;
     categoryId: string;
     categoryName: string;
+    amount?: number | null;
+    type?: TransactionType | null;
+    paymentMethod?: PaymentMethod | null;
   }
 ): Promise<void> {
   const db = await getDb();
+  const sets: string[] = [
+    "description = ?",
+    "category_id = ?",
+    "category_name = ?",
+    "ai_enriched = 1",
+    "status = 'AI_PROCESSED'",
+  ];
+  const params: (string | number | null)[] = [
+    data.description,
+    data.categoryId,
+    data.categoryName,
+  ];
+
+  if (data.amount != null) {
+    sets.push("amount = ?");
+    params.push(data.amount);
+  }
+  if (data.type != null) {
+    sets.push("type = ?");
+    params.push(data.type);
+  }
+  if (data.paymentMethod != null) {
+    sets.push("payment_method = ?");
+    params.push(data.paymentMethod);
+  }
+
+  params.push(id);
   await db.runAsync(
-    `UPDATE notification_queue
-     SET description = ?, category_id = ?, category_name = ?, ai_enriched = 1, status = 'AI_PROCESSED'
-     WHERE id = ?`,
-    [data.description, data.categoryId, data.categoryName, id]
+    `UPDATE notification_queue SET ${sets.join(", ")} WHERE id = ?`,
+    params
   );
 }
 
