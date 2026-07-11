@@ -570,6 +570,25 @@ export class BackupSystem {
     }
   }
 
+  /**
+   * Exclui um backup específico da nuvem pelo filename.
+   */
+  static async deleteCloudBackup(filename: string): Promise<boolean> {
+    const response = await authFetch(
+      `${BACKEND_URL}/backup/${encodeURIComponent(filename)}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) {
+      let msg = 'Erro ao excluir backup da nuvem';
+      try {
+        const err = await response.json();
+        msg = err.error || err.message || msg;
+      } catch {}
+      throw new Error(msg);
+    }
+    return true;
+  }
+
   // ── Get backup statistics
   static async getBackupStats(): Promise<{
     totalBackups: number;

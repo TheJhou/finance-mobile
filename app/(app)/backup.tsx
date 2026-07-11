@@ -278,6 +278,32 @@ export default function BackupScreen() {
     );
   };
 
+  const handleDeleteCloudBackup = (item: CloudBackupEntry) => {
+    Alert.alert(
+      "Excluir Backup da Nuvem",
+      `Deseja excluir o backup "${item.filename}" da nuvem?\nEsta ação não pode ser desfeita.`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Excluir",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setLoadingCloud(true);
+              await BackupSystem.deleteCloudBackup(item.filename);
+              Alert.alert("Sucesso", "Backup excluído da nuvem");
+              await loadData();
+            } catch (error) {
+              Alert.alert("Erro", error instanceof Error ? error.message : "Falha ao excluir backup da nuvem");
+            } finally {
+              setLoadingCloud(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleImportBackup = async () => {
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -523,40 +549,48 @@ export default function BackupScreen() {
                       {formatFileSize(item.sizeBytes)} • {item.filename}
                     </Text>
                   </View>
-                  <Pressable
-                    style={styles.backupActionButton}
-                    onPress={() => {
-                      Alert.alert(
-                        "Restaurar",
-                        `Restaurar o backup "${item.filename}"?\nIsso substituirá todos os dados atuais.`,
-                        [
-                          { text: "Cancelar", style: "cancel" },
-                          {
-                            text: "Restaurar",
-                            style: "destructive",
-                            onPress: async () => {
-                              try {
-                                setRestoringCloud(true);
-                                const result = await BackupSystem.downloadAndRestoreByFilename(item.filename);
-                                if (result.success) {
-                                  Alert.alert("Sucesso", `Dados restaurados!\n\nRegistros: ${result.recordsRestored}`);
-                                  await loadData();
-                                } else {
-                                  Alert.alert("Erro", result.error || "Falha ao restaurar");
+                  <View style={styles.backupActions}>
+                    <Pressable
+                      style={styles.backupActionButton}
+                      onPress={() => {
+                        Alert.alert(
+                          "Restaurar",
+                          `Restaurar o backup "${item.filename}"?\nIsso substituirá todos os dados atuais.`,
+                          [
+                            { text: "Cancelar", style: "cancel" },
+                            {
+                              text: "Restaurar",
+                              style: "destructive",
+                              onPress: async () => {
+                                try {
+                                  setRestoringCloud(true);
+                                  const result = await BackupSystem.downloadAndRestoreByFilename(item.filename);
+                                  if (result.success) {
+                                    Alert.alert("Sucesso", `Dados restaurados!\n\nRegistros: ${result.recordsRestored}`);
+                                    await loadData();
+                                  } else {
+                                    Alert.alert("Erro", result.error || "Falha ao restaurar");
+                                  }
+                                } catch {
+                                  Alert.alert("Erro", "Falha ao restaurar da nuvem");
+                                } finally {
+                                  setRestoringCloud(false);
                                 }
-                              } catch {
-                                Alert.alert("Erro", "Falha ao restaurar da nuvem");
-                              } finally {
-                                setRestoringCloud(false);
-                              }
+                              },
                             },
-                          },
-                        ]
-                      );
-                    }}
-                  >
-                    <Ionicons name="refresh-outline" size={18} color={colors.primary} />
-                  </Pressable>
+                          ]
+                        );
+                      }}
+                    >
+                      <Ionicons name="refresh-outline" size={18} color={colors.primary} />
+                    </Pressable>
+                    <Pressable
+                      style={styles.backupActionButton}
+                      onPress={() => handleDeleteCloudBackup(item)}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                    </Pressable>
+                  </View>
                 </View>
               )}
             />
