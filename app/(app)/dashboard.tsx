@@ -320,13 +320,25 @@ export default function DashboardScreen() {
 
         {data && (
           <>
-            {/* ── Saldo disponível ── */}
+            {/* ── Saldo do mês + Caixa ── */}
             <View style={styles.balanceCard}>
               <View style={styles.balanceHeaderRow}>
-                <Text style={styles.balanceLabel}>Saldo disponível</Text>
+                <Text style={styles.balanceLabel}>Resumo financeiro</Text>
                 <Ionicons name="eye-outline" size={18} color={colors.textMuted} />
               </View>
-              <Text style={styles.balanceValue}>{formatCurrency(data.balance)}</Text>
+              <View style={styles.balanceDualRow}>
+                <View style={styles.balanceDualItem}>
+                  <Text style={styles.balanceDualLabel}>Saldo do mês</Text>
+                  <Text style={[styles.balanceDualValue, { color: (data.monthlyIncome - data.monthlyExpense) >= 0 ? colors.success : colors.danger }]}>
+                    {formatCurrency(data.monthlyIncome - data.monthlyExpense)}
+                  </Text>
+                </View>
+                <View style={styles.balanceDualDivider} />
+                <View style={styles.balanceDualItem}>
+                  <Text style={styles.balanceDualLabel}>Caixa</Text>
+                  <Text style={styles.balanceDualValue}>{formatCurrency(data.balance)}</Text>
+                </View>
+              </View>
               <View style={styles.balanceSubRow}>
                 <View>
                   <Text style={styles.balanceSubLabel}>Receitas do mês</Text>
@@ -387,7 +399,7 @@ export default function DashboardScreen() {
                 <View style={[styles.miniCardIcon, { backgroundColor: colors.primary + "1a" }]}>
                   <Ionicons name="wallet" size={16} color={colors.primary} />
                 </View>
-                <Text style={styles.miniCardLabel}>Saldo acumulado</Text>
+                <Text style={styles.miniCardLabel}>Caixa</Text>
                 <Text style={styles.miniCardValue}>{formatCurrency(data.balance)}</Text>
                 <Text style={styles.miniCardSub}>Total</Text>
                 {balanceChange !== null ? (
@@ -886,6 +898,11 @@ function createStyles() {
   balanceHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   balanceLabel: { fontSize: 13, color: colors.textSecondary, fontWeight: "500" },
   balanceValue: { fontSize: 28, fontWeight: "800", color: colors.success },
+  balanceDualRow: { flexDirection: "row", alignItems: "stretch", gap: spacing.md, marginTop: 4 },
+  balanceDualItem: { flex: 1 },
+  balanceDualLabel: { fontSize: 11, color: colors.textMuted, fontWeight: "500" },
+  balanceDualValue: { fontSize: 22, fontWeight: "800", color: colors.textPrimary, marginTop: 2 },
+  balanceDualDivider: { width: 1, backgroundColor: colors.border },
   balanceSubRow: { flexDirection: "row", gap: spacing.xl, marginTop: 4 },
   balanceSubLabel: { fontSize: 11, color: colors.textMuted },
   balanceSubValue: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
