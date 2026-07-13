@@ -102,3 +102,35 @@ export interface DashboardData {
   monthlyTrend: { month: string; income: number; expense: number }[];
   evolution: { month: string; balance: number }[];
 }
+
+export type HealthScorePillarKey = "organization" | "stability" | "control" | "planning" | "reserve";
+
+export interface HealthScorePillar {
+  key: HealthScorePillarKey;
+  label: string;
+  score: number;
+  maxScore: number;
+  weight: number;
+  color: string;
+  status: string;
+  description: string;
+  suggestion: string;
+}
+
+export interface HealthScoreTrend {
+  direction: "up" | "down" | "stable";
+  percentage: number | null;
+  description: string;
+}
+
+export interface HealthScoreResult {
+  overall: number;
+  label: string;
+  summary: string;
+  suggestion: string;
+  color: string;
+  pillars: HealthScorePillar[];
+  trend: HealthScoreTrend;
+  risks: string[];
+  highlights: string[];
+}

@@ -1,6 +1,7 @@
 import { getStoredUserName, isAuthenticated } from "@/lib/auth";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
+import { calculateHealthScore } from "@/lib/health-score";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
@@ -8,7 +9,7 @@ import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { getTokenLimitStatus, resetTokenLimitStatus } from "@/lib/token-limit";
-import type { DashboardData } from "@/lib/types";
+import type { DashboardData, HealthScoreResult } from "@/lib/types";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -231,20 +232,31 @@ export default function DashboardScreen() {
 
   const pieColors = [colors.primary, "#f472b6", colors.info, colors.warning, colors.success, "#fb923c"];
 
-  const economia = data ? data.monthlyIncome - data.monthlyExpense : 0;
-  const economiaPercent = data && data.monthlyIncome > 0 ? Math.round((economia / data.monthlyIncome) * 100) : 0;
-  const comprometimento = data && data.monthlyIncome > 0 ? Math.round((data.monthlyExpense / data.monthlyIncome) * 100) : 0;
-  const subOrganizacao = streak ? Math.min(100, Math.round(streak.streak * 3.3 + (streak.todayRegistered ? 20 : 0))) : 0;
-  const subEstabilidade = Math.min(100, Math.max(0, 100 - comprometimento));
-  const subControle = data ? Math.min(100, Math.max(0, data.overdueAmount > 0 ? 40 : data.pendingCount > 3 ? 60 : 90)) : 0;
-  const subPlanejamento = Math.min(100, goals.length * 20 + (bills.length > 0 ? 20 : 0));
-  const healthScore = data
-    ? Math.min(100, Math.max(0, Math.round((subOrganizacao + subEstabilidade + subControle + subPlanejamento) / 4)))
-    : 0;
   // Use selected month for comparison, not always the real current month
   const selectedMonthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
   const prevMonthDate = new Date(selectedYear, selectedMonth - 1, 1);
   const prevMonthStr = toDateInputValue(prevMonthDate).slice(0, 7);
+
+  const economia = data ? data.monthlyIncome - data.monthlyExpense : 0;
+  const economiaPercent = data && data.monthlyIncome > 0 ? Math.round((economia / data.monthlyIncome) * 100) : 0;
+  const comprometimento = data && data.monthlyIncome > 0 ? Math.round((data.monthlyExpense / data.monthlyIncome) * 100) : 0;
+  const healthScoreData: HealthScoreResult | null = data
+    ? calculateHealthScore(
+        data,
+        streak ? { streak: streak.streak, todayRegistered: streak.todayRegistered, totalDays: streak.totalDays } : null,
+        goals.map((g) => ({
+          name: g.name,
+          targetValue: g.targetValue,
+          savedValue: g.savedValue,
+          progress: g.progress,
+          remaining: g.remaining,
+          deadline: g.deadline,
+        })),
+        bills.map((b) => ({ name: b.name, amount: b.amount, date: b.date })),
+        selectedMonthStr
+      )
+    : null;
+  const healthScore = healthScoreData?.overall ?? 0;
   const prevMonth = data ? data.monthlyTrend.find((m: { month: string; income: number; expense: number }) => m.month === prevMonthStr) ?? null : null;
   const incomeChange = prevMonth && prevMonth.income > 0 ? Math.round(((data!.monthlyIncome - prevMonth.income) / prevMonth.income) * 100) : null;
   const expenseChange = prevMonth && prevMonth.expense > 0 ? Math.round(((data!.monthlyExpense - prevMonth.expense) / prevMonth.expense) * 100) : null;
@@ -418,37 +430,49 @@ export default function DashboardScreen() {
                   <Text style={styles.sectionTitle}>Saúde financeira</Text>
                   <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
                 </View>
-                <Text style={styles.linkText}>Ver detalhes {">"}</Text>
+                <TouchableOpacity onPress={() => router.push("/health" as any)}>
+                  <Text style={styles.linkText}>Ver detalhes {">"}</Text>
+                </TouchableOpacity>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
-                <CircularProgress size={90} strokeWidth={8} progress={healthScore / 100} progressColor={healthScore >= 70 ? colors.success : healthScore >= 40 ? colors.warning : colors.danger}>
+                <CircularProgress size={90} strokeWidth={8} progress={healthScore / 100} progressColor={healthScoreData?.color || colors.success}>
                   <Text style={{ fontSize: 28, fontWeight: "800", color: colors.textPrimary }}>{healthScore}</Text>
                   <Text style={{ fontSize: 10, color: colors.textMuted }}>de 100</Text>
                 </CircularProgress>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, gap: 4 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: healthScoreData?.color || colors.textPrimary }}>
+                    {healthScoreData?.label || "Calculando..."}
+                  </Text>
                   <Text style={{ fontSize: 13, color: colors.textSecondary, lineHeight: 18 }}>
-                    {healthScore >= 70 ? "Muito bom! Continue assim para alcançar todos os seus objetivos." : healthScore >= 40 ? "Razoável. Tente reduzir gastos para melhorar." : "Atenção! Seus gastos estão muito altos."}
+                    {healthScoreData?.summary || "Aguarde, estamos avaliando sua saúde financeira."}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: colors.primary, fontWeight: "600", marginTop: 2 }}>
+                    {healthScoreData?.suggestion}
                   </Text>
                 </View>
               </View>
               <View style={styles.healthScoresRow}>
-                <View style={styles.healthScoreItem}>
-                  <Text style={styles.healthScoreLabel}>Organização</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.info }]}>{subOrganizacao}</Text>
-                </View>
-                <View style={styles.healthScoreItem}>
-                  <Text style={styles.healthScoreLabel}>Estabilidade</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.primary }]}>{subEstabilidade}</Text>
-                </View>
-                <View style={styles.healthScoreItem}>
-                  <Text style={styles.healthScoreLabel}>Controle</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.success }]}>{subControle}</Text>
-                </View>
-                <View style={styles.healthScoreItem}>
-                  <Text style={styles.healthScoreLabel}>Planejamento</Text>
-                  <Text style={[styles.healthScoreValue, { color: colors.warning }]}>{subPlanejamento}</Text>
-                </View>
+                {healthScoreData?.pillars.map((pillar) => (
+                  <View key={pillar.key} style={styles.healthScoreItem}>
+                    <Text style={styles.healthScoreLabel}>{pillar.label}</Text>
+                    <Text style={[styles.healthScoreValue, { color: pillar.color }]}>{pillar.score}</Text>
+                  </View>
+                ))}
               </View>
+              {healthScoreData && healthScoreData.risks.length > 0 && (
+                <View style={styles.warningBanner}>
+                  <Text style={styles.warningBannerTitle}>⚠️ Atenção</Text>
+                  <Text style={styles.warningBannerText}>{healthScoreData.risks[0]}</Text>
+                </View>
+              )}
+              {healthScoreData && healthScoreData.highlights.length > 0 && (
+                <View style={{ backgroundColor: colors.success + "1a", borderRadius: radius.md, padding: spacing.sm, gap: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: "700", color: colors.success }}>✓ Destaques</Text>
+                  <Text style={{ fontSize: 11, color: colors.textSecondary }} numberOfLines={2}>
+                    {healthScoreData.highlights.slice(0, 2).join(" • ")}
+                  </Text>
+                </View>
+              )}
             </View>
 
             {/* ── Radar Financeiro ── */}
