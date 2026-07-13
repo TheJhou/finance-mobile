@@ -1,29 +1,35 @@
 import { analyzeText } from "@/lib/backend";
 import {
-  cleanupOldQueueItems,
-  enqueueNotification,
-  getPendingAiNotifications,
-  isNotificationInQueue,
-  updateWithAiResult,
+    acquireLock,
+    cleanupOldQueueItems,
+    cleanupStaleLocks,
+    enqueueNotification,
+    getPendingAiNotifications,
+    incrementRetryCount,
+    isNotificationInQueue,
+    releaseLock,
+    updateWithAiResult,
 } from "@/lib/notification-queue";
 import {
-  BANK_APPS,
-  inferCategoryFromText,
-  parseNotification,
+    BANK_APPS,
+    inferCategoryFromText,
+    parseNotification,
 } from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
+import { processSyncQueue } from "@/lib/sync-queue";
 import type { PaymentMethod, TransactionType } from "@/lib/types";
 import BankNotifications, {
-  type BankNotificationEvent,
+    type BankNotificationEvent,
 } from "@/modules/bank-notifications";
 import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef } from "react";
 
-const HEALTH_CHECK_INTERVAL_MS = 15_000;
-const AI_RETRY_INTERVAL_MS = 30_000;
+const HEALTH_CHECK_INTERVAL_MS = 60_000;
+const AI_RETRY_INTERVAL_MS = 60_000;
 const REBIND_BACKOFF_MS = 5_000;
 const MAX_CONCURRENT_PROCESSING = 3;
 const QUEUE_BACKPRESSURE_THRESHOLD = 50;
+const SYNC_INTERVAL_MS = 120_000;
 
 export function useNotificationListener() {
   const isOnlineRef = useRef(true);
@@ -48,6 +54,7 @@ export function useNotificationListener() {
       if (isOnline && !wasOnline) {
         console.log("[AutoImport] Internet restaurada — reprocessando notificações pendentes");
         void retryPendingAiEnrichment();
+        void processSyncQueue();
       } else if (!isOnline && wasOnline) {
         console.log("[AutoImport] Sem internet — notificações serão salvas com fallback local");
       }
@@ -212,7 +219,8 @@ export function useNotificationListener() {
       aiRetryInProgressRef.current = true;
 
       try {
-        const pendingItems = await getPendingAiNotifications();
+        await cleanupStaleLocks();
+        const pendingItems = await getPendingAiNotifications(10);
         if (pendingItems.length === 0) return;
 
         console.log(
@@ -224,6 +232,9 @@ export function useNotificationListener() {
 
         for (const item of pendingItems) {
           if (!isOnlineRef.current) break;
+
+          const locked = await acquireLock(item.id);
+          if (!locked) continue;
 
           try {
             const aiResult = await analyzeText(
@@ -256,13 +267,18 @@ export function useNotificationListener() {
                 paymentMethod: (draft.paymentMethod as PaymentMethod) ?? undefined,
               });
               console.log(`[AutoImport] IA reprocessou: ${description}`);
+            } else {
+              await incrementRetryCount(item.id);
             }
           } catch (err) {
             console.warn(
               `[AutoImport] Falha ao reprocessar ${item.id}:`,
               err instanceof Error ? err.message : err
             );
-            break;
+            await incrementRetryCount(item.id);
+            continue;
+          } finally {
+            await releaseLock(item.id);
           }
         }
       } finally {
@@ -334,9 +350,17 @@ export function useNotificationListener() {
       }
     }, AI_RETRY_INTERVAL_MS);
 
+    // ── Sync queue: processa itens pendentes de sync com backend ──────
+    const syncInterval = setInterval(() => {
+      if (isOnlineRef.current) {
+        void processSyncQueue();
+      }
+    }, SYNC_INTERVAL_MS);
+
     // ── Startup: limpa notificações antigas e reprocessa pendentes ─────
     void cleanupOldQueueItems();
     void retryPendingAiEnrichment();
+    void processSyncQueue();
 
     return () => {
       netInfoSub();
@@ -344,6 +368,7 @@ export function useNotificationListener() {
       connSub.remove();
       clearInterval(healthCheck);
       clearInterval(aiRetryInterval);
+      clearInterval(syncInterval);
     };
   }, []);
 }

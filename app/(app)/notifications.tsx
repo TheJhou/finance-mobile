@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, logout, register } from "@/lib/auth";
-import { ApiError, analyzeText, autoSaveTransaction, ocrDocument, transcribeAudio } from "@/lib/backend";
+import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
 import {
     getPendingApprovalNotifications,
     markApproved,
@@ -10,6 +10,7 @@ import {
 import { listCategories } from "@/lib/repositories/categories";
 import { createTransaction } from "@/lib/repositories/transactions";
 import { checkProFeature } from "@/lib/subscription";
+import { enqueueSync, processSyncQueue, type SyncPayload } from "@/lib/sync-queue";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Category, DocumentType, TransactionStatus } from "@/lib/types";
@@ -142,7 +143,7 @@ export default function NotificationsScreen() {
   const handleApprove = useCallback(async (item: NotificationQueueItem) => {
     setApprovingId(item.id);
     try {
-      await createTransaction({
+      const txData = {
         description: item.description || "Transação",
         amount: item.amount || 0,
         type: (item.type || "EXPENSE") as "INCOME" | "EXPENSE",
@@ -150,28 +151,29 @@ export default function NotificationsScreen() {
         date: toDateInputValue(new Date(item.postTime)),
         categoryId: item.categoryId || "",
         notes: `Auto-importado de ${item.bank || "Banco"}`,
-        status: 'PAID',
-        source: "BANK_NOTIFICATION",
+        status: 'PAID' as TransactionStatus,
+        source: "BANK_NOTIFICATION" as const,
         bankOrigin: item.bank || null,
-      });
+      };
+
+      const created = await createTransaction(txData);
+
       await markApproved(item.id);
       await loadPending();
       showToast('success', `Transação aprovada: ${item.description}`);
 
-      try {
-        await autoSaveTransaction({
-          description: item.description || "Transação",
-          amount: item.amount || 0,
-          type: (item.type || "EXPENSE") as "INCOME" | "EXPENSE",
-          paymentMethod: (item.paymentMethod || "OTHER") as any,
-          date: toDateInputValue(new Date(item.postTime)),
-          categoryId: item.categoryId || undefined,
-          notes: `Auto-importado de ${item.bank || "Banco"}`,
-          source: "BANK_NOTIFICATION",
-        });
-      } catch (syncErr) {
-        console.warn("[AutoImport] Falha ao sincronizar com backend:", syncErr);
-      }
+      const syncPayload: SyncPayload = {
+        description: txData.description,
+        amount: txData.amount,
+        type: txData.type,
+        paymentMethod: txData.paymentMethod,
+        date: txData.date,
+        categoryId: txData.categoryId || undefined,
+        notes: txData.notes,
+        source: "BANK_NOTIFICATION",
+      };
+      await enqueueSync(created.id, syncPayload);
+      void processSyncQueue();
     } catch {
       showToast('error', 'Falha ao salvar transação');
     } finally {

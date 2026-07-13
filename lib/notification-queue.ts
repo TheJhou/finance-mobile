@@ -3,6 +3,9 @@ import type { PaymentMethod, TransactionType } from "@/lib/types";
 
 export type NotificationQueueStatus = "PENDING_AI" | "AI_PROCESSED" | "APPROVED" | "REJECTED";
 
+export const MAX_AI_RETRIES = 3;
+export const LOCK_STALE_MINUTES = 5;
+
 export interface NotificationQueueItem {
   id: string;
   packageName: string;
@@ -15,6 +18,9 @@ export interface NotificationQueueItem {
   createdAt: string;
   status: NotificationQueueStatus;
   aiEnriched: boolean;
+  aiRetryCount: number;
+  lastAiAttempt: string | null;
+  processingLock: string | null;
   amount: number | null;
   description: string | null;
   type: TransactionType | null;
@@ -36,6 +42,9 @@ interface NotificationQueueRow {
   created_at: string;
   status: NotificationQueueStatus;
   ai_enriched: number;
+  ai_retry_count: number;
+  last_ai_attempt: string | null;
+  processing_lock: string | null;
   amount: number | null;
   description: string | null;
   type: TransactionType | null;
@@ -58,6 +67,9 @@ function rowToItem(row: NotificationQueueRow): NotificationQueueItem {
     createdAt: row.created_at,
     status: row.status,
     aiEnriched: row.ai_enriched === 1,
+    aiRetryCount: row.ai_retry_count ?? 0,
+    lastAiAttempt: row.last_ai_attempt ?? null,
+    processingLock: row.processing_lock ?? null,
     amount: row.amount,
     description: row.description,
     type: row.type,
@@ -232,28 +244,106 @@ export async function getPendingApprovalNotifications(): Promise<NotificationQue
 }
 
 /**
- * Retorna todas as notificações com status PENDING_AI e ai_enriched = 0
- * (ainda não enriquecidas pela IA, usando fallback local).
+ * Retorna notificações com status PENDING_AI e ai_enriched = 0 que ainda podem ser retried.
+ * Filtra por ai_retry_count < MAX_AI_RETRIES e respeita backoff baseado em last_ai_attempt.
+ * Limita o batch para evitar processamento massivo.
  */
-export async function getPendingAiNotifications(): Promise<NotificationQueueItem[]> {
+export async function getPendingAiNotifications(limit = 10): Promise<NotificationQueueItem[]> {
   const db = await getDb();
   const rows = await db.getAllAsync<NotificationQueueRow>(
     `SELECT * FROM notification_queue
-     WHERE status = 'PENDING_AI' AND ai_enriched = 0
-     ORDER BY created_at ASC`
+     WHERE status = 'PENDING_AI'
+       AND ai_enriched = 0
+       AND ai_retry_count < ?
+       AND (
+         last_ai_attempt IS NULL
+         OR datetime(last_ai_attempt) < datetime('now', '-30 seconds')
+       )
+       AND (
+         processing_lock IS NULL
+         OR datetime(processing_lock) < datetime('now', '-5 minutes')
+       )
+     ORDER BY created_at ASC
+     LIMIT ?`,
+    [MAX_AI_RETRIES, limit]
   );
   return rows.map(rowToItem);
 }
 
 /**
+ * Tenta adquirir um lock de processamento para um item.
+ * Retorna true se o lock foi adquirido, false se já estava locked.
+ */
+export async function acquireLock(id: string): Promise<boolean> {
+  const db = await getDb();
+  const lockId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const result = await db.runAsync(
+    `UPDATE notification_queue
+     SET processing_lock = datetime('now')
+     WHERE id = ?
+       AND status = 'PENDING_AI'
+       AND (
+         processing_lock IS NULL
+         OR datetime(processing_lock) < datetime('now', '-5 minutes')
+       )`,
+    [id]
+  );
+  return result.changes > 0;
+}
+
+/**
+ * Libera o lock de processamento de um item.
+ */
+export async function releaseLock(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE notification_queue SET processing_lock = NULL WHERE id = ?`,
+    [id]
+  );
+}
+
+/**
+ * Incrementa o contador de retry e atualiza last_ai_attempt.
+ */
+export async function incrementRetryCount(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE notification_queue
+     SET ai_retry_count = ai_retry_count + 1,
+         last_ai_attempt = datetime('now'),
+         processing_lock = NULL
+     WHERE id = ?`,
+    [id]
+  );
+}
+
+/**
+ * Limpa locks expirados (stale locks com mais de LOCK_STALE_MINUTES).
+ */
+export async function cleanupStaleLocks(): Promise<void> {
+  const db = await getDb();
+  await db.execAsync(
+    `UPDATE notification_queue
+     SET processing_lock = NULL
+     WHERE processing_lock IS NOT NULL
+       AND datetime(processing_lock) < datetime('now', '-5 minutes')`
+  );
+}
+
+/**
  * Remove notificações antigas já processadas (APPROVED/REJECTED) com mais de 30 dias.
+ * Também remove notificações PENDING_AI com retry_count >= MAX_AI_RETRIES (IA falhou) após 7 dias.
  */
 export async function cleanupOldQueueItems(): Promise<void> {
   const db = await getDb();
   await db.execAsync(
     `DELETE FROM notification_queue
      WHERE status IN ('APPROVED', 'REJECTED')
-     AND created_at < datetime('now', '-30 days')`
+     AND created_at < datetime('now', '-30 days');
+     DELETE FROM notification_queue
+     WHERE status = 'PENDING_AI'
+     AND ai_retry_count >= ${MAX_AI_RETRIES}
+     AND created_at < datetime('now', '-7 days');`
   );
 }
 

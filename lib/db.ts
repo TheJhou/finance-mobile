@@ -158,7 +158,7 @@ export function resetDbCache(): void {
   dbPromise = null;
 }
 
-const CURRENT_DB_VERSION = 3;
+const CURRENT_DB_VERSION = 4;
 
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
@@ -393,6 +393,43 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     `);
   }
 
+  if (currentVersion < 4) {
+    const queueCols = await db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(notification_queue)`
+    );
+    const existingQueueCols = new Set(queueCols.map((c) => c.name));
+
+    const queueColsToAdd: string[] = [];
+    if (!existingQueueCols.has("ai_retry_count"))
+      queueColsToAdd.push(`ALTER TABLE notification_queue ADD COLUMN ai_retry_count INTEGER NOT NULL DEFAULT 0`);
+    if (!existingQueueCols.has("last_ai_attempt"))
+      queueColsToAdd.push(`ALTER TABLE notification_queue ADD COLUMN last_ai_attempt TEXT`);
+    if (!existingQueueCols.has("processing_lock"))
+      queueColsToAdd.push(`ALTER TABLE notification_queue ADD COLUMN processing_lock TEXT`);
+
+    if (queueColsToAdd.length > 0) {
+      await db.execAsync(queueColsToAdd.join("; "));
+    }
+
+    await db.execAsync(`
+      CREATE INDEX IF NOT EXISTS idx_notif_queue_retry ON notification_queue(ai_enriched, ai_retry_count);
+      CREATE INDEX IF NOT EXISTS idx_notif_queue_lock ON notification_queue(processing_lock);
+
+      CREATE TABLE IF NOT EXISTS sync_queue (
+        id TEXT PRIMARY KEY,
+        transaction_id TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        last_attempt TEXT,
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','SYNCED','FAILED'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_status ON sync_queue(status);
+      CREATE INDEX IF NOT EXISTS idx_sync_queue_retry ON sync_queue(retry_count);
+    `);
+  }
+
   await db.execAsync(`PRAGMA user_version = ${CURRENT_DB_VERSION}`);
 
   await seedDefaultCategories(db);
@@ -428,7 +465,11 @@ async function addMultiUserSupport(db: SQLite.SQLiteDatabase): Promise<void> {
 async function cleanupOldNotificationQueue(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
     DELETE FROM notification_queue
-    WHERE status = 'REJECTED' AND created_at < datetime('now', '-30 days')
+    WHERE status IN ('REJECTED', 'APPROVED') AND created_at < datetime('now', '-30 days');
+    DELETE FROM notification_queue
+    WHERE status = 'PENDING_AI' AND ai_retry_count >= 3 AND created_at < datetime('now', '-7 days');
+    DELETE FROM sync_queue
+    WHERE status IN ('SYNCED', 'FAILED') AND created_at < datetime('now', '-30 days');
   `);
 }
 
