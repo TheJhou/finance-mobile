@@ -14,7 +14,7 @@ import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Dimensions,
@@ -102,7 +102,7 @@ export default function DashboardScreen() {
         setAiForecast(null);
         return;
       }
-      const today = new Date().toISOString().slice(0, 10);
+      const today = toDateInputValue(new Date());
       const cached = await AsyncStorage.getItem(AI_FORECAST_KEY);
       if (cached) {
         const parsed: AiForecast = JSON.parse(cached);
@@ -133,7 +133,9 @@ export default function DashboardScreen() {
 
   const fetchData = useCallback(async () => {
     const monthChanged = lastFetchedMonthRef.current !== selectedMonth || lastFetchedYearRef.current !== selectedYear;
-    if (Date.now() - lastFetchRef.current < 5000 && !refreshing && !monthChanged) return;
+    // Only skip if a fetch is already in progress AND month hasn't changed AND not refreshing
+    if (fetchingRef.current && !refreshing && !monthChanged) return;
+    fetchingRef.current = true;
     const fetchId = ++fetchIdRef.current;
     lastFetchRef.current = Date.now();
 
@@ -204,13 +206,18 @@ export default function DashboardScreen() {
         setRefreshing(false);
       }
     }
-  }, [refreshing, notificationsScheduled, selectedYear, selectedMonth]);
+  }, [refreshing, notificationsScheduled, selectedYear, selectedMonth, loadAiForecast]);
 
   useFocusEffect(
     useCallback(() => {
       fetchData();
     }, [fetchData])
   );
+
+  // Re-fetch when month/year changes while screen is focused
+  useEffect(() => {
+    fetchData();
+  }, [selectedMonth, selectedYear, fetchData]);
 
   const onRefresh = () => {
     setRefreshing(true);

@@ -2,12 +2,13 @@ import { DatePicker } from "@/components/date-picker";
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import type { DreData, DrePeriod, DrePeriodRange } from "@/lib/repositories/dre";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
+import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Alert,
@@ -76,6 +77,8 @@ function CategoryRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
+const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
 export default function DreScreen() {
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
@@ -89,6 +92,8 @@ export default function DreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [period, setPeriod] = useState<DrePeriodRange>(buildPeriodRange("month"));
   const periodRef = useRef<DrePeriodRange>(period);
 
@@ -107,11 +112,19 @@ export default function DreScreen() {
     }
   }, []);
 
+  const rebuildPeriod = useCallback(async (type: DrePeriod, from?: string, to?: string) => {
+    const startDay = await loadMonthStartDay();
+    const p = buildPeriodRange(type, from, to, { year: selectedYear, month: selectedMonth, monthStartDay: startDay });
+    periodRef.current = p;
+    setPeriod(p);
+    return p;
+  }, [selectedYear, selectedMonth]);
+
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      fetchData();
-    }, [fetchData])
+      rebuildPeriod(selectedPeriod).then(p => fetchData(p));
+    }, [fetchData, rebuildPeriod, selectedPeriod])
   );
 
   function selectPeriod(key: DrePeriod) {
@@ -120,11 +133,8 @@ export default function DreScreen() {
       return;
     }
     setSelectedPeriod(key);
-    const p = buildPeriodRange(key);
-    periodRef.current = p;
-    setPeriod(p);
     setLoading(true);
-    fetchData(p);
+    rebuildPeriod(key).then(p => fetchData(p));
   }
 
   function applyCustomPeriod() {
@@ -144,6 +154,23 @@ export default function DreScreen() {
     setLoading(true);
     fetchData(p);
   }
+
+  function changeMonth(delta: number) {
+    const next = new Date(selectedYear, selectedMonth + delta, 1);
+    setSelectedMonth(next.getMonth());
+    setSelectedYear(next.getFullYear());
+  }
+
+  // Rebuild period and fetch when month/year changes (not custom period)
+  useEffect(() => {
+    if (selectedPeriod === "custom") return;
+    let cancelled = false;
+    setLoading(true);
+    rebuildPeriod(selectedPeriod).then(p => {
+      if (!cancelled) fetchData(p);
+    });
+    return () => { cancelled = true; };
+  }, [selectedMonth, selectedYear, selectedPeriod, rebuildPeriod, fetchData]);
 
   async function handleExport(format: "csv" | "xlsx" | "pdf") {
     if (!data) return;
@@ -217,6 +244,30 @@ export default function DreScreen() {
           </TouchableOpacity>
         ))}
       </ScrollView>
+
+      {/* Month selector */}
+      {selectedPeriod !== "custom" && (
+        <View style={styles.monthSelector}>
+          <TouchableOpacity onPress={() => changeMonth(-1)} hitSlop={8}>
+            <Ionicons name="chevron-back" size={22} color={colors.primary} />
+          </TouchableOpacity>
+          <Text style={styles.monthSelectorText}>
+            {MONTH_NAMES[selectedMonth]} {selectedYear}
+          </Text>
+          <TouchableOpacity onPress={() => changeMonth(1)} hitSlop={8}>
+            <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+          </TouchableOpacity>
+          {!(selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth()) && (
+            <TouchableOpacity style={styles.todayBtn} onPress={() => {
+              const now = new Date();
+              setSelectedMonth(now.getMonth());
+              setSelectedYear(now.getFullYear());
+            }}>
+              <Text style={styles.todayBtnText}>Hoje</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.centered}>
@@ -568,6 +619,33 @@ function createStyles() {
   periodChipTextActive: {
     color: colors.primary,
     fontWeight: "700",
+  },
+
+  // Month selector
+  monthSelector: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.lg,
+  },
+  monthSelectorText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.textPrimary,
+  },
+  todayBtn: {
+    marginLeft: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.primary + "22",
+    borderRadius: radius.full,
+  },
+  todayBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.primary,
   },
 
   scrollContent: {

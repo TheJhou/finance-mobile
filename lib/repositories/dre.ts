@@ -51,32 +51,50 @@ export interface DreTransaction {
 
 const MONTH_NAMES_SHORT = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-export function buildPeriodRange(type: DrePeriod, customFrom?: string, customTo?: string): DrePeriodRange {
+export function buildPeriodRange(
+  type: DrePeriod,
+  customFrom?: string,
+  customTo?: string,
+  opts?: { year?: number; month?: number; monthStartDay?: number },
+): DrePeriodRange {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
+  const y = opts?.year ?? now.getFullYear();
+  const m = opts?.month ?? now.getMonth();
+  const startDay = opts?.monthStartDay ?? 1;
+
+  function customMonthRange(year: number, month: number): { from: string; to: string } {
+    if (startDay === 1) {
+      return {
+        from: formatDateLocal(new Date(year, month, 1)),
+        to: formatDateLocal(new Date(year, month + 1, 0)),
+      };
+    }
+    return {
+      from: formatDateLocal(new Date(year, month, startDay)),
+      to: formatDateLocal(new Date(year, month + 1, startDay - 1)),
+    };
+  }
 
   switch (type) {
     case "month": {
-      const from = formatDateLocal(new Date(y, m, 1));
-      const to = formatDateLocal(new Date(y, m + 1, 0));
+      const { from, to } = customMonthRange(y, m);
       return { type, from, to, label: `${MONTH_NAMES_SHORT[m]} ${y}` };
     }
     case "quarter": {
       const qStart = Math.floor(m / 3) * 3;
-      const from = formatDateLocal(new Date(y, qStart, 1));
-      const to = formatDateLocal(new Date(y, qStart + 3, 0));
-      return { type, from, to, label: `${Math.floor(m / 3) + 1}º Trim. ${y}` };
+      const { from: qFrom } = customMonthRange(y, qStart);
+      const { to: qTo } = customMonthRange(y, qStart + 2);
+      return { type, from: qFrom, to: qTo, label: `${Math.floor(m / 3) + 1}º Trim. ${y}` };
     }
     case "semester": {
       const sStart = m < 6 ? 0 : 6;
-      const from = formatDateLocal(new Date(y, sStart, 1));
-      const to = formatDateLocal(new Date(y, sStart + 6, 0));
-      return { type, from, to, label: `${sStart === 0 ? "1º" : "2º"} Sem. ${y}` };
+      const { from: sFrom } = customMonthRange(y, sStart);
+      const { to: sTo } = customMonthRange(y, sStart + 5);
+      return { type, from: sFrom, to: sTo, label: `${sStart === 0 ? "1º" : "2º"} Sem. ${y}` };
     }
     case "year": {
-      const from = formatDateLocal(new Date(y, 0, 1));
-      const to = formatDateLocal(new Date(y, 12, 0));
+      const { from } = customMonthRange(y, 0);
+      const { to } = customMonthRange(y, 11);
       return { type, from, to, label: `Ano ${y}` };
     }
     case "custom": {

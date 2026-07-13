@@ -39,7 +39,8 @@ function monthRange(year?: number, month?: number, monthStartDay?: number): { fi
 export async function getDashboard(opts?: { year?: number; month?: number; monthStartDay?: number }): Promise<DashboardData> {
   void processRecurringDue().catch((err) => console.warn("[Dashboard] processRecurringDue failed:", err));
   const db = await getDb();
-  const { first, last } = monthRange(opts?.year, opts?.month, opts?.monthStartDay);
+  const startDay = opts?.monthStartDay ?? getCachedMonthStartDay();
+  const { first, last } = monthRange(opts?.year, opts?.month, startDay);
   const today = formatDateLocal(new Date());
   const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
@@ -53,12 +54,14 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
   const upcomingStart = isCurrentMonth ? today : first;
   const upcomingEnd = isCurrentMonth ? in7Days : last;
 
-  // Monthly trend: 6 months ending at the selected month (not always from today)
+  // Monthly trend: 6 months ending at the selected month (respecting monthStartDay)
   const trendStart = formatDateLocal(new Date(
     (opts?.year ?? new Date().getFullYear()),
     (opts?.month ?? new Date().getMonth()) - 5,
-    1
+    startDay
   ));
+  // Shift days so strftime groups by custom month period (e.g. day 5 → 1st of that period's month)
+  const trendShift = startDay - 1;
 
   const [
     balanceRow, incomeRow, expenseRow, pendingRow,
@@ -115,14 +118,14 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
       [first, last]
     ),
     db.getAllAsync<{ month: string; income: number; expense: number }>(
-      `SELECT strftime('%Y-%m', date) as month,
+      `SELECT strftime('%Y-%m', date(date, '-' || ? || ' days')) as month,
          SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
          SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
        FROM transactions
        WHERE status = 'PAID' AND date >= ?
-       GROUP BY strftime('%Y-%m', date)
+       GROUP BY strftime('%Y-%m', date(date, '-' || ? || ' days'))
        ORDER BY month ASC`,
-      [trendStart]
+      [trendShift, trendStart, trendShift]
     ),
   ]);
 

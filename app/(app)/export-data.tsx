@@ -1,5 +1,6 @@
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
+import { loadMonthStartDay } from "@/lib/settings";
 import { checkProFeature } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -92,7 +93,8 @@ export default function ExportDataScreen() {
         }
       }
 
-      const periodRange = buildPeriodRange(selectedPeriod);
+      const startDay = await loadMonthStartDay();
+      const periodRange = buildPeriodRange(selectedPeriod, undefined, undefined, { monthStartDay: startDay });
       const data = await getDreData(periodRange);
 
       switch (selectedFormat) {
