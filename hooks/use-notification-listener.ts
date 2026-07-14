@@ -1,25 +1,25 @@
 import { analyzeText } from "@/lib/backend";
 import {
-    acquireLock,
-    cleanupOldQueueItems,
-    cleanupStaleLocks,
-    enqueueNotification,
-    getPendingAiNotifications,
-    incrementRetryCount,
-    isNotificationInQueue,
-    releaseLock,
-    updateWithAiResult,
+  acquireLock,
+  cleanupOldQueueItems,
+  cleanupStaleLocks,
+  enqueueNotification,
+  getPendingAiNotifications,
+  incrementRetryCount,
+  isNotificationInQueue,
+  releaseLock,
+  updateWithAiResult,
 } from "@/lib/notification-queue";
 import {
-    BANK_APPS,
-    inferCategoryFromText,
-    parseNotification,
+  BANK_APPS,
+  inferCategoryFromText,
+  parseNotification,
 } from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
 import { processSyncQueue } from "@/lib/sync-queue";
 import type { PaymentMethod, TransactionType } from "@/lib/types";
 import BankNotifications, {
-    type BankNotificationEvent,
+  type BankNotificationEvent,
 } from "@/modules/bank-notifications";
 import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef } from "react";
@@ -27,7 +27,7 @@ import { useEffect, useRef } from "react";
 const HEALTH_CHECK_INTERVAL_MS = 60_000;
 const AI_RETRY_INTERVAL_MS = 60_000;
 const REBIND_BACKOFF_MS = 5_000;
-const MAX_CONCURRENT_PROCESSING = 3;
+const MAX_CONCURRENT_PROCESSING = 1;
 const QUEUE_BACKPRESSURE_THRESHOLD = 50;
 const SYNC_INTERVAL_MS = 120_000;
 
@@ -37,6 +37,7 @@ export function useNotificationListener() {
   const processingQueueRef = useRef<BankNotificationEvent[]>([]);
   const isProcessingRef = useRef(false);
   const lastRebindRef = useRef(0);
+  const dbBusyRef = useRef(false);
 
   useEffect(() => {
     if (!BankNotifications) {
@@ -44,6 +45,12 @@ export function useNotificationListener() {
       return;
     }
     console.log("[AutoImport] Listener registrado com sucesso");
+
+    function runDbExclusive(fn: () => Promise<void>): void {
+      if (dbBusyRef.current) return;
+      dbBusyRef.current = true;
+      void fn().finally(() => { dbBusyRef.current = false; });
+    }
 
     // ── NetInfo: monitora conectividade em tempo real ──────────────────
     const netInfoSub = NetInfo.addEventListener((state) => {
@@ -54,7 +61,7 @@ export function useNotificationListener() {
       if (isOnline && !wasOnline) {
         console.log("[AutoImport] Internet restaurada — reprocessando notificações pendentes");
         void retryPendingAiEnrichment();
-        void processSyncQueue();
+        runDbExclusive(() => processSyncQueue());
       } else if (!isOnline && wasOnline) {
         console.log("[AutoImport] Sem internet — notificações serão salvas com fallback local");
       }
@@ -198,25 +205,34 @@ export function useNotificationListener() {
       }
     }
 
-    // ── Fila de processamento: processa até MAX_CONCURRENT em paralelo ──
+    // ── Fila de processamento: processa uma notificação por vez ────────
     async function drainQueue() {
       if (isProcessingRef.current) return;
+      if (dbBusyRef.current) {
+        setTimeout(() => void drainQueue(), 100);
+        return;
+      }
       isProcessingRef.current = true;
+      dbBusyRef.current = true;
       try {
         while (processingQueueRef.current.length > 0) {
-          const batch = processingQueueRef.current.splice(0, MAX_CONCURRENT_PROCESSING);
-          await Promise.allSettled(batch.map((e) => processNotification(e)));
+          const event = processingQueueRef.current.shift();
+          if (!event) continue;
+          await processNotification(event);
         }
       } finally {
         isProcessingRef.current = false;
+        dbBusyRef.current = false;
       }
     }
 
     // ── Reprocesso de notificações que ficaram sem IA (offline) ────────
     async function retryPendingAiEnrichment() {
       if (aiRetryInProgressRef.current) return;
+      if (dbBusyRef.current) return;
       if (!isOnlineRef.current) return;
       aiRetryInProgressRef.current = true;
+      dbBusyRef.current = true;
 
       try {
         await cleanupStaleLocks();
@@ -283,6 +299,7 @@ export function useNotificationListener() {
         }
       } finally {
         aiRetryInProgressRef.current = false;
+        dbBusyRef.current = false;
       }
     }
 
@@ -353,14 +370,14 @@ export function useNotificationListener() {
     // ── Sync queue: processa itens pendentes de sync com backend ──────
     const syncInterval = setInterval(() => {
       if (isOnlineRef.current) {
-        void processSyncQueue();
+        runDbExclusive(() => processSyncQueue());
       }
     }, SYNC_INTERVAL_MS);
 
     // ── Startup: limpa notificações antigas e reprocessa pendentes ─────
-    void cleanupOldQueueItems();
+    runDbExclusive(() => cleanupOldQueueItems());
     void retryPendingAiEnrichment();
-    void processSyncQueue();
+    runDbExclusive(() => processSyncQueue());
 
     return () => {
       netInfoSub();
