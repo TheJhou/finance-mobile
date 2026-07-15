@@ -104,8 +104,9 @@ export default function DreScreen() {
       const result = await getDreData(activePeriod);
       setData(result);
     } catch (e) {
-      setError("Erro ao carregar dados. Tente novamente.");
-      console.error(e);
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[DRE] fetchData error:", msg);
+      setError(msg.includes("database") || msg.includes("SQL") ? "Erro no banco de dados. Reinicie o app se persistir." : `Erro: ${msg}`);
     } finally {
       setLoading(false);
       setRefreshing(false);
