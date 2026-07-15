@@ -136,33 +136,38 @@ export default function CategoriesScreen() {
       <FlatList
         data={items}
         keyExtractor={(item) => item.id}
+        numColumns={2}
         contentContainerStyle={styles.list}
+        columnWrapperStyle={styles.row}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
         }
-        ItemSeparatorComponent={() => <View style={{ height: spacing.sm }} />}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <View style={[styles.dot, { backgroundColor: item.color }]} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{item.name}</Text>
-              {item.isDefault ? (
-                <Text style={styles.badge}>Padrão</Text>
-              ) : null}
-            </View>
-            {!item.isDefault ? (
-              <Pressable
-                onPress={() => handleDelete(item)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={({ pressed }) => [styles.deleteBtn, { opacity: pressed ? 0.6 : 1 }]}
-              >
-                <Ionicons name="trash-outline" size={18} color={colors.danger} />
-              </Pressable>
-            ) : (
-              <View style={styles.lockIcon}>
-                <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+            <View style={styles.cardTop}>
+              <View style={[styles.dot, { backgroundColor: item.color }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name} numberOfLines={2}>{item.name}</Text>
+                {item.isDefault ? (
+                  <Text style={styles.badge}>Padrão</Text>
+                ) : null}
               </View>
-            )}
+            </View>
+            <View style={styles.cardActions}>
+              {!item.isDefault ? (
+                <Pressable
+                  onPress={() => handleDelete(item)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={({ pressed }) => [styles.deleteBtn, { opacity: pressed ? 0.6 : 1 }]}
+                >
+                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
+                </Pressable>
+              ) : (
+                <View style={styles.lockIcon}>
+                  <Ionicons name="lock-closed-outline" size={14} color={colors.textMuted} />
+                </View>
+              )}
+            </View>
           </View>
         )}
       />
@@ -302,15 +307,27 @@ function createStyles() {
     borderRadius: radius.md,
   },
   list: { padding: spacing.lg, gap: spacing.sm, flexGrow: 1, paddingBottom: 96 },
+  row: { gap: spacing.sm },
   card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
+    flex: 1,
+    gap: spacing.sm,
     padding: spacing.md,
     backgroundColor: colors.surface,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: colors.border,
+  },
+  cardTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  cardActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingTop: spacing.sm,
   },
   dot: { width: 14, height: 14, borderRadius: 7 },
   name: { fontSize: 14, fontWeight: "600", color: colors.textPrimary },
