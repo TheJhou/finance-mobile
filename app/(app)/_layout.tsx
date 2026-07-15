@@ -37,6 +37,7 @@ export default function AppLayout() {
       fontSize: 10,
       fontWeight: "600" as const,
     },
+    safeAreaInsets: { top: 0 },
   }), [isDark, tabBarStyle]);
 
   useNotificationListener();

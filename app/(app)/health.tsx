@@ -1,3 +1,7 @@
+import type { GoalData, StreakData } from "@/lib/backend";
+import { getGoals, getStreak } from "@/lib/backend";
+import { calculateHealthScore } from "@/lib/health-score";
+import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -19,10 +23,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Svg, { Circle as SvgCircle } from "react-native-svg";
-import type { GoalData, StreakData } from "@/lib/backend";
-import { getGoals, getStreak } from "@/lib/backend";
-import { calculateHealthScore } from "@/lib/health-score";
-import type { UpcomingBill } from "@/lib/repositories/dashboard";
 
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_PADDING = spacing.lg;
@@ -124,7 +124,7 @@ export default function HealthScreen() {
 
   if (loading || !healthScoreData) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={["left", "right"]}>
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>

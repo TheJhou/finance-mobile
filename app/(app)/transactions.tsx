@@ -7,10 +7,10 @@ import { extractTransactionFromPhoto } from "@/lib/ai";
 import { isAuthenticated } from "@/lib/auth";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-    createTransaction,
-    deleteTransaction,
-    listTransactions,
-    updateTransaction,
+  createTransaction,
+  deleteTransaction,
+  listTransactions,
+  updateTransaction,
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -21,20 +21,20 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-    ActivityIndicator,
-    FlatList,
-    KeyboardAvoidingView,
-    LayoutAnimation,
-    Modal,
-    Platform,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    UIManager,
-    View,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  LayoutAnimation,
+  Modal,
+  Platform,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  UIManager,
+  View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -323,7 +323,7 @@ export default function TransactionsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={["left", "right"]}>
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} size="large" />
         </View>
