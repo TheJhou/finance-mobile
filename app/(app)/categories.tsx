@@ -1,5 +1,7 @@
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { ScrollFade } from "@/components/ui/scroll-fade";
 import {
     createCategory,
     deleteCategory,
@@ -13,7 +15,6 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     KeyboardAvoidingView,
     Modal,
@@ -62,6 +63,8 @@ export default function CategoriesScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<Category | null>(null);
+  const [infoDialog, setInfoDialog] = useState<{ title: string; message: string; variant?: "default" | "warning" | "danger" | "success" } | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -89,29 +92,10 @@ export default function CategoriesScreen() {
 
   const handleDelete = (item: Category) => {
     if (item.isDefault) {
-      Alert.alert("Aviso", "Categorias padrão não podem ser excluídas.");
+      setInfoDialog({ title: "Aviso", message: "Categorias padrão não podem ser excluídas.", variant: "warning" });
       return;
     }
-    Alert.alert("Excluir categoria", `Remover "${item.name}"?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteCategory(item.id);
-            fetchItems();
-          } catch (err) {
-            Alert.alert(
-              "Erro",
-              err instanceof Error
-                ? err.message
-                : "Falha ao excluir. Existem transações usando essa categoria?"
-            );
-          }
-        },
-      },
-    ]);
+    setConfirmDel(item);
   };
 
   if (loading) {
@@ -188,6 +172,38 @@ export default function CategoriesScreen() {
         }}
         styles={styles}
       />
+
+      <ConfirmDialog
+        visible={confirmDel !== null}
+        title="Excluir categoria"
+        message={`Remover "${confirmDel?.name ?? ""}"?`}
+        confirmText="Excluir"
+        variant="danger"
+        onCancel={() => setConfirmDel(null)}
+        onConfirm={async () => {
+          if (!confirmDel) return;
+          try {
+            await deleteCategory(confirmDel.id);
+            setConfirmDel(null);
+            fetchItems();
+          } catch (err) {
+            setConfirmDel(null);
+            setInfoDialog({ title: "Erro", message: err instanceof Error ? err.message : "Falha ao excluir. Existem transações usando essa categoria?", variant: "danger" });
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        visible={infoDialog !== null}
+        title={infoDialog?.title ?? ""}
+        message={infoDialog?.message ?? ""}
+        confirmText="OK"
+        cancelText=""
+        variant={infoDialog?.variant ?? "default"}
+        onCancel={() => setInfoDialog(null)}
+        onConfirm={() => setInfoDialog(null)}
+      />
+      <ScrollFade />
     </SafeAreaView>
   );
 }

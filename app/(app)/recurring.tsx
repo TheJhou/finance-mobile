@@ -1,5 +1,6 @@
 import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { listCategories } from "@/lib/repositories/categories";
 import {
@@ -20,7 +21,6 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     KeyboardAvoidingView,
     Modal,
@@ -83,6 +83,8 @@ export default function RecurringScreen() {
   const [postingItem, setPostingItem] = useState<RecurringTransaction | null>(null);
   const [postDate, setPostDate] = useState(toDateInputValue(new Date()));
   const [posting, setPosting] = useState(false);
+  const [confirmDel, setConfirmDel] = useState<RecurringTransaction | null>(null);
+  const [infoDialog, setInfoDialog] = useState<{ title: string; message: string; variant?: "default" | "warning" | "danger" | "success" } | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -110,24 +112,7 @@ export default function RecurringScreen() {
   };
 
   const handleDelete = (item: RecurringTransaction) => {
-    Alert.alert("Excluir recorrência", `Remover "${item.description}"?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteRecurring(item.id);
-            fetchItems();
-          } catch (err) {
-            Alert.alert(
-              "Erro",
-              err instanceof Error ? err.message : "Falha ao excluir"
-            );
-          }
-        },
-      },
-    ]);
+    setConfirmDel(item);
   };
 
   const handleEdit = (item: RecurringTransaction) => {
@@ -140,7 +125,7 @@ export default function RecurringScreen() {
       await toggleRecurringActive(item.id, !item.isActive);
       fetchItems();
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Falha");
+      setInfoDialog({ title: "Erro", message: err instanceof Error ? err.message : "Falha", variant: "danger" });
     }
   };
 
@@ -153,7 +138,7 @@ export default function RecurringScreen() {
   const confirmPost = async () => {
     if (!postingItem) return;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(postDate)) {
-      Alert.alert("Data inválida", "Use o formato AAAA-MM-DD");
+      setInfoDialog({ title: "Data inválida", message: "Use o formato AAAA-MM-DD", variant: "warning" });
       return;
     }
     setPosting(true);
@@ -161,10 +146,10 @@ export default function RecurringScreen() {
       await postRecurringTransaction(postingItem.id, postDate);
       setShowPostModal(false);
       setPostingItem(null);
-      Alert.alert("Sucesso", `"${postingItem.description}" lançada como transação em ${postDate}.`);
+      setInfoDialog({ title: "Sucesso", message: `"${postingItem.description}" lançada como transação em ${postDate}.`, variant: "success" });
       fetchItems();
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao lançar");
+      setInfoDialog({ title: "Erro", message: err instanceof Error ? err.message : "Falha ao lançar", variant: "danger" });
     } finally {
       setPosting(false);
     }
@@ -382,6 +367,37 @@ export default function RecurringScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      <ConfirmDialog
+        visible={confirmDel !== null}
+        title="Excluir recorrência"
+        message={`Remover "${confirmDel?.description ?? ""}"?`}
+        confirmText="Excluir"
+        variant="danger"
+        onCancel={() => setConfirmDel(null)}
+        onConfirm={async () => {
+          if (!confirmDel) return;
+          try {
+            await deleteRecurring(confirmDel.id);
+            setConfirmDel(null);
+            fetchItems();
+          } catch (err) {
+            setConfirmDel(null);
+            setInfoDialog({ title: "Erro", message: err instanceof Error ? err.message : "Falha ao excluir", variant: "danger" });
+          }
+        }}
+      />
+
+      <ConfirmDialog
+        visible={infoDialog !== null}
+        title={infoDialog?.title ?? ""}
+        message={infoDialog?.message ?? ""}
+        confirmText="OK"
+        cancelText=""
+        variant={infoDialog?.variant ?? "default"}
+        onCancel={() => setInfoDialog(null)}
+        onConfirm={() => setInfoDialog(null)}
+      />
     </SafeAreaView>
   );
 }

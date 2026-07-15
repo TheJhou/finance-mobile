@@ -1,14 +1,16 @@
 import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
+import { ScrollFade } from "@/components/ui/scroll-fade";
 import { extractTransactionFromPhoto } from "@/lib/ai";
 import { isAuthenticated } from "@/lib/auth";
 import { listCategories } from "@/lib/repositories/categories";
 import {
-  createTransaction,
-  deleteTransaction,
-  listTransactions,
-  updateTransaction,
+    createTransaction,
+    deleteTransaction,
+    listTransactions,
+    updateTransaction,
 } from "@/lib/repositories/transactions";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -19,21 +21,20 @@ import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  LayoutAnimation,
-  Modal,
-  Platform,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  UIManager,
-  View,
+    ActivityIndicator,
+    FlatList,
+    KeyboardAvoidingView,
+    LayoutAnimation,
+    Modal,
+    Platform,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    UIManager,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -204,6 +205,7 @@ export default function TransactionsScreen() {
   const [editingItem, setEditingItem] = useState<Transaction | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Filters>(INITIAL_FILTERS);
+  const [confirmDel, setConfirmDel] = useState<{ item: Transaction } | null>(null);
 
   const fetchItems = useCallback(async () => {
     try {
@@ -311,24 +313,7 @@ export default function TransactionsScreen() {
   };
 
   const handleDelete = (item: Transaction) => {
-    Alert.alert("Excluir transação", `Remover "${item.description}"?`, [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Excluir",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await deleteTransaction(item.id);
-            fetchItems();
-          } catch (err) {
-            Alert.alert(
-              "Erro",
-              err instanceof Error ? err.message : "Falha ao excluir"
-            );
-          }
-        },
-      },
-    ]);
+    setConfirmDel({ item });
   };
 
   const handleEdit = (item: Transaction) => {
@@ -698,6 +683,7 @@ export default function TransactionsScreen() {
               </Pressable>
             )}
           </ScrollView>
+          <ScrollFade height={16} fadeColor={colors.surface} />
         </View>
       )}
 
@@ -876,6 +862,24 @@ export default function TransactionsScreen() {
           fetchItems();
         }}
       />
+
+      <ConfirmDialog
+        visible={confirmDel !== null}
+        title="Excluir transação"
+        message={`Remover "${confirmDel?.item.description ?? ""}"?`}
+        confirmText="Excluir"
+        variant="danger"
+        onCancel={() => setConfirmDel(null)}
+        onConfirm={async () => {
+          if (!confirmDel) return;
+          try {
+            await deleteTransaction(confirmDel.item.id);
+            setConfirmDel(null);
+            fetchItems();
+          } catch {}
+        }}
+      />
+      <ScrollFade />
     </SafeAreaView>
   );
 }
@@ -911,6 +915,7 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
   const [saving, setSaving] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [infoDialog, setInfoDialog] = useState<{ title: string; message: string; variant?: "default" | "warning" | "danger" | "success" } | null>(null);
   const selectedDocumentMeta = documentTypeMeta[documentType];
 
   useEffect(() => {
@@ -986,12 +991,12 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
     try {
       const authed = await isAuthenticated();
       if (!authed) {
-        Alert.alert("Login necessário", "Faça login na aba Importar para usar o escaneamento por IA.");
+        setInfoDialog({ title: "Login necessário", message: "Faça login na aba Importar para usar o escaneamento por IA.", variant: "warning" });
         return;
       }
       const permission = await ImagePicker.requestCameraPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("Permissão", "Precisamos de acesso à câmera para escanear recibos.");
+        setInfoDialog({ title: "Permissão", message: "Precisamos de acesso à câmera para escanear recibos.", variant: "warning" });
         return;
       }
       const result = await ImagePicker.launchCameraAsync({
@@ -1033,10 +1038,11 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
         if (match) setCategoryId(match.id);
       }
     } catch (error) {
-      Alert.alert(
-        "Erro ao escanear",
-        error instanceof Error ? error.message : "Falha ao processar imagem"
-      );
+      setInfoDialog({
+        title: "Erro ao escanear",
+        message: error instanceof Error ? error.message : "Falha ao processar imagem",
+        variant: "danger",
+      });
     } finally {
       setScanning(false);
     }
@@ -1416,6 +1422,17 @@ function TransactionForm({ visible, onClose, onSaved, editingItem }: FormProps) 
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <ConfirmDialog
+        visible={infoDialog !== null}
+        title={infoDialog?.title ?? ""}
+        message={infoDialog?.message ?? ""}
+        confirmText="OK"
+        cancelText=""
+        variant={infoDialog?.variant ?? "default"}
+        onCancel={() => setInfoDialog(null)}
+        onConfirm={() => setInfoDialog(null)}
+      />
     </Modal>
   );
 }
@@ -1479,6 +1496,8 @@ function createStyles() {
     maxHeight: 340,
     borderWidth: 1,
     borderColor: colors.border,
+    position: "relative",
+    overflow: "hidden",
   },
   filterLabel: {
     fontSize: 13,

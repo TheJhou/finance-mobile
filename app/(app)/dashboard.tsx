@@ -1,3 +1,4 @@
+import { ScrollFade } from "@/components/ui/scroll-fade";
 import { getStoredUserName, isAuthenticated } from "@/lib/auth";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
@@ -874,6 +875,7 @@ export default function DashboardScreen() {
           </View>
         </Modal>
       </ScrollView>
+      <ScrollFade />
     </SafeAreaView>
   );
 }

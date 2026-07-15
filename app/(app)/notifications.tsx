@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { isAuthenticated, login, logout, register } from "@/lib/auth";
+import { isAuthenticated, login, register } from "@/lib/auth";
 import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
 import {
     getPendingApprovalNotifications,
@@ -59,11 +59,8 @@ export default function NotificationsScreen() {
   const [connected, setConnected] = useState(false);
   const [pendingNotifications, setPendingNotifications] = useState<NotificationQueueItem[]>([]);
   const [approvingId, setApprovingId] = useState<string | null>(null);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(
-    null
-  );
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loggedIn, setLoggedIn] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [loginName, setLoginName] = useState("");
@@ -116,9 +113,6 @@ export default function NotificationsScreen() {
   const loadCategories = useCallback(async () => {
     const cats = await listCategories();
     setCategories(cats);
-    if (cats.length > 0) {
-      setSelectedCategoryId((prev) => prev ?? cats[0].id);
-    }
   }, []);
 
   const loadPending = useCallback(async () => {
@@ -306,19 +300,10 @@ export default function NotificationsScreen() {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
-    setLoggedIn(false);
-  };
-
   const handleProcessText = async () => {
     if (!freeText.trim()) return;
     if (!loggedIn) {
       showToast("warning", "Faça login para usar a IA.");
-      return;
-    }
-    if (!selectedCategoryId) {
-      showToast("warning", "Configure uma categoria padrão primeiro.");
       return;
     }
     setProcessingText(true);
@@ -348,20 +333,13 @@ export default function NotificationsScreen() {
         resolvedDate = today;
       }
 
-      // Garante categoryId válido
-      const resolvedCategoryId = draft.categoryId || selectedCategoryId;
-      if (!resolvedCategoryId) {
-        showToast("warning", "Nenhuma categoria disponível. Adicione uma categoria primeiro.");
-        return;
-      }
-
       await createTransaction({
         description: draft.description || freeText.substring(0, 50),
         amount: draft.amount,
         type: draft.type || "EXPENSE",
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: resolvedDate,
-        categoryId: resolvedCategoryId,
+        categoryId: draft.categoryId || "",
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: draft.boletoNumber || null,
         cnpj: draft.cnpj || null,
@@ -391,10 +369,6 @@ export default function NotificationsScreen() {
   const handlePickDocument = async () => {
     if (!loggedIn) {
       showToast("warning", "Faça login para usar OCR.");
-      return;
-    }
-    if (!selectedCategoryId) {
-      showToast("warning", "Configure uma categoria padrão primeiro.");
       return;
     }
     const isPro = await checkProFeature("OCR");
@@ -430,16 +404,13 @@ export default function NotificationsScreen() {
       if (isNaN(ocrParsed.getTime()) || ocrParsed < new Date(ocrNow.getFullYear(), ocrNow.getMonth() - 6, 1) || ocrParsed > new Date(ocrNow.getFullYear(), ocrNow.getMonth() + 6, 1)) {
         ocrDate = ocrToday;
       }
-      const ocrCategoryId = (draft.categoryId as string) || selectedCategoryId;
-      if (!ocrCategoryId) { showToast("warning", "Nenhuma categoria disponível."); return; }
-
       await createTransaction({
         description: (draft.description as string) || `Documento: ${asset.name}`,
         amount: Number(draft.amount),
         type: normalizeType(draft.type),
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: ocrDate,
-        categoryId: ocrCategoryId,
+        categoryId: (draft.categoryId as string) || "",
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: (draft.boletoNumber as string) || null,
         cnpj: (draft.cnpj as string) || null,
@@ -464,10 +435,6 @@ export default function NotificationsScreen() {
   const handleStartRecording = async () => {
     if (!loggedIn) {
       showToast("warning", "Faça login para usar transcrição de áudio.");
-      return;
-    }
-    if (!selectedCategoryId) {
-      showToast("warning", "Configure uma categoria padrão primeiro.");
       return;
     }
     try {
@@ -501,7 +468,7 @@ export default function NotificationsScreen() {
       if (!uri) throw new Error("Falha ao obter URI do áudio");
 
       const transcribedText = await transcribeAudio(uri, "audio/webm");
-      const analysis = await analyzeText(transcribedText, "AUDIO", categories);
+      const analysis = await analyzeText(transcribedText, "AUDIO", categories.map((c) => ({ id: c.id, name: c.name })));
       const draft = analysis.draft;
       if (!draft || !draft.amount || Number(draft.amount) <= 0) {
         showToast("warning", "Não foi possível identificar o valor no áudio. Revise manualmente.");
@@ -514,16 +481,13 @@ export default function NotificationsScreen() {
       if (isNaN(audioParsed.getTime()) || audioParsed < new Date(audioNow.getFullYear(), audioNow.getMonth() - 6, 1) || audioParsed > new Date(audioNow.getFullYear(), audioNow.getMonth() + 6, 1)) {
         audioDate = audioToday;
       }
-      const audioCategoryId = draft.categoryId || selectedCategoryId;
-      if (!audioCategoryId) { showToast("warning", "Nenhuma categoria disponível."); return; }
-
       await createTransaction({
         description: draft.description || transcribedText.substring(0, 50),
         amount: Number(draft.amount),
         type: normalizeType(draft.type),
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: audioDate,
-        categoryId: audioCategoryId,
+        categoryId: draft.categoryId || "",
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: draft.boletoNumber || null,
         cnpj: draft.cnpj || null,
@@ -554,10 +518,10 @@ export default function NotificationsScreen() {
           <Text style={styles.subtitle}>Adicione transações de forma inteligente</Text>
         </View>
         {loggedIn ? (
-          <Pressable style={styles.authChip} onPress={handleLogout}>
+          <View style={styles.authChip}>
             <View style={styles.authDot} />
             <Text style={styles.authChipText}>Conectado</Text>
-          </Pressable>
+          </View>
         ) : (
           <Pressable
             style={[styles.authChip, { borderColor: colors.warning }]}
@@ -769,50 +733,6 @@ export default function NotificationsScreen() {
             )}
           </Pressable>
         </View>
-
-        {/* Category selector */}
-        {categories.length > 0 && (
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="pricetag-outline" size={16} color={colors.primary} />
-              <Text style={styles.sectionLabel}>Categoria padrão</Text>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.pillRow}
-            >
-              {categories.map((cat) => {
-                const active = cat.id === selectedCategoryId;
-                return (
-                  <Pressable
-                    key={cat.id}
-                    onPress={() => setSelectedCategoryId(cat.id)}
-                    style={[
-                      styles.pill,
-                      active && { backgroundColor: cat.color, borderColor: cat.color },
-                    ]}
-                  >
-                    <View
-                      style={[
-                        styles.pillDot,
-                        { backgroundColor: active ? colors.textInverse : cat.color },
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.pillText,
-                        active && { color: "#fff" },
-                      ]}
-                    >
-                      {cat.name}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
 
         {/* Pending bank notifications awaiting approval */}
         <View style={styles.section}>
