@@ -375,6 +375,7 @@ export default function TransactionsScreen() {
           <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.lg + 16 }}
           >
             {/* Date presets */}
             <Text style={styles.filterLabel}>Período</Text>
@@ -1491,7 +1492,6 @@ function createStyles() {
     backgroundColor: colors.surface,
     marginHorizontal: spacing.lg,
     borderRadius: radius.lg,
-    padding: spacing.md,
     marginBottom: spacing.sm,
     maxHeight: 340,
     borderWidth: 1,
