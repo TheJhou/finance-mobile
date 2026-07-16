@@ -1,4 +1,4 @@
-import { ScrollFade } from "@/components/ui/scroll-fade";
+import { HorizontalScrollFade, ScrollFade } from "@/components/ui/scroll-fade";
 import { getStoredUserName, isAuthenticated } from "@/lib/auth";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
@@ -372,7 +372,7 @@ export default function DashboardScreen() {
             </View>
 
             {/* ── 4 Summary Mini-Cards (horizontal scroll) ── */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -CARD_PADDING }} contentContainerStyle={{ paddingHorizontal: CARD_PADDING, gap: spacing.md }}>
+            <HorizontalScrollFade showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -CARD_PADDING }} contentContainerStyle={{ paddingHorizontal: CARD_PADDING, gap: spacing.md }}>
               {/* Receitas */}
               <View style={styles.miniCard}>
                 <View style={[styles.miniCardIcon, { backgroundColor: colors.incomeBg }]}>
@@ -429,7 +429,7 @@ export default function DashboardScreen() {
                   <Text style={styles.miniCardNote}>Acumulado total</Text>
                 )}
               </View>
-            </ScrollView>
+            </HorizontalScrollFade>
 
             {/* ── Saúde Financeira ── */}
             <View style={styles.sectionCard}>
@@ -489,7 +489,12 @@ export default function DashboardScreen() {
                 <Text style={styles.sectionTitle}>Radar Financeiro</Text>
                 <Text style={styles.linkText}>Ver tudo {">"}</Text>
               </View>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.lg }}>
+              <HorizontalScrollFade
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: spacing.lg }}
+                fadeColor={colors.surface}
+                fadeWidth={20}
+              >
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
                     <Ionicons name="alert-circle" size={24} color={colors.danger} />
@@ -527,7 +532,7 @@ export default function DashboardScreen() {
                   </View>
                   <Text style={styles.radarLabel}>Comprometimento{"\n"}da renda</Text>
                 </TouchableOpacity>
-              </ScrollView>
+              </HorizontalScrollFade>
             </View>
 
             {/* ── Two-column: Gastos por categoria + Gastos ao longo do mês ── */}
