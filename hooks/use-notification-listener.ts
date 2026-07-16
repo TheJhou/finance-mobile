@@ -1,32 +1,32 @@
 import { analyzeText } from "@/lib/backend";
 import {
-  acquireLock,
-  cleanupOldQueueItems,
-  cleanupStaleLocks,
-  enqueueNotification,
-  getPendingAiNotifications,
-  incrementRetryCount,
-  isNotificationInQueue,
-  releaseLock,
-  updateWithAiResult,
+    acquireLock,
+    cleanupOldQueueItems,
+    cleanupStaleLocks,
+    enqueueNotification,
+    getPendingAiNotifications,
+    incrementRetryCount,
+    isNotificationInQueue,
+    releaseLock,
+    updateWithAiResult,
 } from "@/lib/notification-queue";
 import {
-  BANK_APPS,
-  inferCategoryFromText,
-  parseNotification,
+    BANK_APPS,
+    inferCategoryFromText,
+    parseNotification,
 } from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
 import { processSyncQueue } from "@/lib/sync-queue";
 import type { PaymentMethod, TransactionType } from "@/lib/types";
 import BankNotifications, {
-  type BankNotificationEvent,
+    type BankNotificationEvent,
 } from "@/modules/bank-notifications";
 import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef } from "react";
 
-const HEALTH_CHECK_INTERVAL_MS = 60_000;
+const HEALTH_CHECK_INTERVAL_MS = 30_000;
 const AI_RETRY_INTERVAL_MS = 60_000;
-const REBIND_BACKOFF_MS = 5_000;
+const REBIND_BACKOFF_MS = 15_000;
 const MAX_CONCURRENT_PROCESSING = 1;
 const QUEUE_BACKPRESSURE_THRESHOLD = 50;
 const SYNC_INTERVAL_MS = 120_000;

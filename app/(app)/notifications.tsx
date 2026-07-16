@@ -185,18 +185,6 @@ export default function NotificationsScreen() {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         checkPermission();
-        if (BankNotifications) {
-          const granted = BankNotifications.isPermissionGranted();
-          const connected = BankNotifications.isListenerConnected();
-          if (granted && !connected) {
-            try {
-              BankNotifications.requestRebind();
-              console.log("[Notifications] Auto-rebind on app foreground");
-            } catch (e) {
-              console.warn("[Notifications] Auto-rebind failed:", e);
-            }
-          }
-        }
       }
     });
     return () => sub.remove();
@@ -209,7 +197,7 @@ export default function NotificationsScreen() {
         const isConnected = BankNotifications.isListenerConnected();
         setConnected(isConnected);
       }
-    }, 30_000);
+    }, 15_000);
     return () => clearInterval(interval);
   }, [moduleAvailable]);
 

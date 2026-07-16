@@ -2,10 +2,10 @@ package expo.modules.banknotifications
 
 import android.content.ComponentName
 import android.content.Context
-import android.os.Build
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class BankNotificationListenerService : NotificationListenerService() {
 
@@ -29,21 +29,22 @@ class BankNotificationListenerService : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    Log.w(TAG, "Notification listener disconnected — requesting rebind")
+    Log.w(TAG, "Notification listener disconnected — requesting rebind via official API")
     isConnected = false
     connectionCallback?.invoke(false)
     try {
-      requestRebind(this)
+      // Use the official NotificationListenerService.requestRebind (API 24+)
+      // This asks Android to rebind without disabling/enabling the component,
+      // which avoids revoking the notification listener permission.
+      val component = ComponentName(this, BankNotificationListenerService::class.java)
+      NotificationListenerService.requestRebind(component)
+      Log.i(TAG, "requestRebind: official API called successfully")
     } catch (e: Throwable) {
       Log.e(TAG, "requestRebind failed", e)
     }
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {
-    val cb = listener ?: run {
-      Log.w(TAG, "Notification received but JS listener is null — buffering skipped (pkg=${sbn.packageName})")
-      return
-    }
     if (sbn.packageName !in BANK_PACKAGES) return
     val extras = sbn.notification.extras
     val title = extras.getCharSequence("android.title")?.toString() ?: ""
@@ -59,10 +60,22 @@ class BankNotificationListenerService : NotificationListenerService() {
       "subText" to subText,
       "postTime" to sbn.postTime
     )
-    try {
-      cb.invoke(payload)
-    } catch (e: Throwable) {
-      Log.e(TAG, "Error dispatching notification to JS", e)
+
+    val cb = listener
+    if (cb != null) {
+      try {
+        cb.invoke(payload)
+      } catch (e: Throwable) {
+        Log.e(TAG, "Error dispatching notification to JS", e)
+      }
+    } else {
+      // JS listener is null (app in background or not observing) — buffer for later
+      if (bufferedNotifications.size < MAX_BUFFER) {
+        bufferedNotifications.add(payload)
+        Log.i(TAG, "Notification buffered (JS listener null, buffer=${bufferedNotifications.size}, pkg=${sbn.packageName})")
+      } else {
+        Log.w(TAG, "Buffer full — dropping notification (pkg=${sbn.packageName})")
+      }
     }
   }
 
@@ -100,25 +113,29 @@ class BankNotificationListenerService : NotificationListenerService() {
     @Volatile
     var connectionCallback: ((Boolean) -> Unit)? = null
 
+    private const val MAX_BUFFER = 100
+    val bufferedNotifications = ConcurrentLinkedQueue<Map<String, Any?>>()
+
+    fun drainBufferedNotifications(): List<Map<String, Any?>> {
+      val drained = mutableListOf<Map<String, Any?>>()
+      while (true) {
+        val item = bufferedNotifications.poll() ?: break
+        drained.add(item)
+      }
+      if (drained.isNotEmpty()) {
+        Log.i(TAG, "Drained ${drained.size} buffered notifications")
+      }
+      return drained
+    }
+
     fun requestRebind(context: Context) {
       try {
-        val pm = context.packageManager
         val component = ComponentName(context, BankNotificationListenerService::class.java)
-
-        // Disable then re-enable the component to force Android to rebind
-        pm.setComponentEnabledSetting(
-          component,
-          android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
-          android.content.pm.PackageManager.DONT_KILL_APP
-        )
-        // Small delay between disable and enable to ensure Android processes the state change
-        Thread.sleep(200)
-        pm.setComponentEnabledSetting(
-          component,
-          android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-          android.content.pm.PackageManager.DONT_KILL_APP
-        )
-        Log.i(TAG, "requestRebind: component toggled via PackageManager")
+        // Use the official NotificationListenerService.requestRebind (API 24+)
+        // This is the correct way to request a rebind — it does NOT disable/enable
+        // the component, so it won't revoke the notification listener permission.
+        NotificationListenerService.requestRebind(component)
+        Log.i(TAG, "requestRebind: official API called successfully")
       } catch (e: Throwable) {
         Log.e(TAG, "requestRebind failed", e)
       }

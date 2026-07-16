@@ -50,6 +50,12 @@ class BankNotificationsModule : Module() {
       BankNotificationListenerService.connectionCallback = { connected ->
         weakModule.get()?.sendEvent("onConnectionChange", mapOf("connected" to connected))
       }
+
+      // Drain any notifications that were buffered while JS wasn't observing
+      val buffered = BankNotificationListenerService.drainBufferedNotifications()
+      for (payload in buffered) {
+        weakModule.get()?.sendEvent("onNotification", payload)
+      }
     }
 
     OnStopObserving {
