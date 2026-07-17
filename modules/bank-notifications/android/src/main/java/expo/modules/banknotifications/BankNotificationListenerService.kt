@@ -17,12 +17,14 @@ class BankNotificationListenerService : NotificationListenerService() {
     isConnected = true
     connectionCallback?.invoke(true)
 
-    // Replay any notifications that arrived while we were disconnected
+    // Replay only recent notifications (last 60s) to avoid flooding on reconnect
     try {
       val active = getActiveNotifications()
-      if (active.isNotEmpty()) {
-        Log.i(TAG, "Replaying ${active.size} active notifications on reconnect")
-        for (sbn in active) {
+      val now = System.currentTimeMillis()
+      val recent = active.filter { now - it.postTime < 60_000 }
+      if (recent.isNotEmpty()) {
+        Log.i(TAG, "Replaying ${recent.size} recent notifications on reconnect (total active: ${active.size})")
+        for (sbn in recent) {
           onNotificationPosted(sbn)
         }
       }
@@ -32,32 +34,11 @@ class BankNotificationListenerService : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    Log.w(TAG, "Notification listener disconnected — scheduling rebind in 1s")
+    Log.w(TAG, "Notification listener disconnected — JS will handle rebind")
     isConnected = false
     connectionCallback?.invoke(false)
-    // Schedule a delayed rebind: first re-enable the component (in case the
-    // system disabled it), then call requestRebind. This two-step approach
-    // handles the case where Android kills AND disables the service.
-    Handler(Looper.getMainLooper()).postDelayed({
-      try {
-        val pm = packageManager
-        val component = ComponentName(this, BankNotificationListenerService::class.java)
-        val enabledState = pm.getComponentEnabledSetting(component)
-        Log.i(TAG, "Component enabled state: $enabledState")
-        if (enabledState != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-          Log.w(TAG, "Component was disabled by system — re-enabling")
-          pm.setComponentEnabledSetting(
-            component,
-            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
-            PackageManager.DONT_KILL_APP
-          )
-        }
-        NotificationListenerService.requestRebind(component)
-        Log.i(TAG, "requestRebind called successfully after component check")
-      } catch (e: Throwable) {
-        Log.e(TAG, "Delayed rebind failed", e)
-      }
-    }, 1000)
+    // Rebind is handled by the JS side (use-notification-listener.ts) which
+    // coordinates backoff and avoids duplicate simultaneous requestRebind calls.
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -148,18 +129,16 @@ class BankNotificationListenerService : NotificationListenerService() {
       try {
         val pm = context.packageManager
         val component = ComponentName(context, BankNotificationListenerService::class.java)
-        // Step 1: Check if the system disabled our component. If so, re-enable it.
-        // This is critical — requestRebind silently fails if the component is disabled.
         val enabledState = pm.getComponentEnabledSetting(component)
         Log.i(TAG, "requestRebind: component enabled state = $enabledState")
         if (enabledState != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
-          Log.w(TAG, "requestRebind: component was disabled — re-enabling via PackageManager")
+          // Component was disabled by system — re-enable it, then request rebind
+          Log.w(TAG, "requestRebind: component was disabled — re-enabling")
           pm.setComponentEnabledSetting(
             component,
             PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
             PackageManager.DONT_KILL_APP
           )
-          // Give the system a moment to process the component re-enable
           Handler(Looper.getMainLooper()).postDelayed({
             try {
               NotificationListenerService.requestRebind(component)
@@ -167,11 +146,23 @@ class BankNotificationListenerService : NotificationListenerService() {
             } catch (e: Throwable) {
               Log.e(TAG, "requestRebind: failed after re-enable", e)
             }
-          }, 1000)
+          }, 500)
         } else {
-          // Component is enabled — just request rebind directly
+          // Component is enabled but service was killed — toggle to force rebind
+          Log.i(TAG, "requestRebind: toggling component to force rebind")
+          pm.setComponentEnabledSetting(
+            component,
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+            PackageManager.DONT_KILL_APP
+          )
+          Thread.sleep(200)
+          pm.setComponentEnabledSetting(
+            component,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+          )
           NotificationListenerService.requestRebind(component)
-          Log.i(TAG, "requestRebind: called directly (component already enabled)")
+          Log.i(TAG, "requestRebind: toggle + requestRebind done")
         }
       } catch (e: Throwable) {
         Log.e(TAG, "requestRebind failed", e)

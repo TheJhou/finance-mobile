@@ -17,7 +17,7 @@ import {
 } from "@/lib/notifications/parsers";
 import { listCategories } from "@/lib/repositories/categories";
 import { processSyncQueue } from "@/lib/sync-queue";
-import type { PaymentMethod, TransactionType } from "@/lib/types";
+import type { Category, PaymentMethod, TransactionType } from "@/lib/types";
 import BankNotifications, {
     type BankNotificationEvent,
 } from "@/modules/bank-notifications";
@@ -32,6 +32,7 @@ const MAX_CONCURRENT_PROCESSING = 1;
 const QUEUE_BACKPRESSURE_THRESHOLD = 50;
 const SYNC_INTERVAL_MS = 120_000;
 const STARTUP_CHECK_DELAYS_MS = [3_000, 7_000, 12_000];
+const AI_CALL_TIMEOUT_MS = 15_000;
 
 export function useNotificationListener() {
   const isOnlineRef = useRef(true);
@@ -75,7 +76,92 @@ export function useNotificationListener() {
       isOnlineRef.current = state.isConnected === true && state.isInternetReachable !== false;
     });
 
-    // ── Processa notificação bruta: parse → persiste no SQLite → enriquece com IA ──
+    // ── Validação de dados parseados localmente ──────────────────────
+    function validateParsedData(parsed: { amount: number; description: string; type: string; paymentMethod: string; bank: string }): string[] {
+      const warnings: string[] = [];
+      if (!parsed.amount || parsed.amount <= 0) warnings.push("amount inválido");
+      if (!parsed.description || parsed.description.trim().length === 0) warnings.push("description vazia");
+      if (parsed.type !== "INCOME" && parsed.type !== "EXPENSE") warnings.push("type inválido");
+      const validPaymentMethods = ["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER"];
+      if (!validPaymentMethods.includes(parsed.paymentMethod)) warnings.push("paymentMethod inválido");
+      return warnings;
+    }
+
+    // ── Validação da resposta da IA antes de aplicar ──────────────────
+    function validateAiDraft(draft: Record<string, unknown>, categories: Category[]): {
+      valid: boolean;
+      description: string | null;
+      amount: number | null;
+      type: TransactionType | null;
+      paymentMethod: PaymentMethod | null;
+      categoryId: string | null;
+      categoryName: string | null;
+      warnings: string[];
+    } {
+      const warnings: string[] = [];
+      const validTypes: TransactionType[] = ["INCOME", "EXPENSE"];
+      const validPaymentMethods: PaymentMethod[] = ["CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX", "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER"];
+
+      // Description
+      let aiDescription: string | null = null;
+      if (typeof draft.description === "string" && draft.description.trim().length > 0) {
+        aiDescription = draft.description.trim().slice(0, 300);
+      } else {
+        warnings.push("IA: description ausente ou inválida");
+      }
+
+      // Amount
+      let aiAmount: number | null = null;
+      if (typeof draft.amount === "number" && draft.amount > 0 && draft.amount <= 999_999_999.99) {
+        aiAmount = Math.round(draft.amount * 100) / 100;
+      } else if (typeof draft.amount === "string") {
+        const parsed = parseFloat(draft.amount.replace(/[^0-9.,]/g, "").replace(".", "").replace(",", "."));
+        if (!isNaN(parsed) && parsed > 0 && parsed <= 999_999_999.99) {
+          aiAmount = Math.round(parsed * 100) / 100;
+        }
+      }
+      if (aiAmount === null) warnings.push("IA: amount ausente ou inválido");
+
+      // Type
+      let aiType: TransactionType | null = null;
+      if (typeof draft.type === "string" && validTypes.includes(draft.type as TransactionType)) {
+        aiType = draft.type as TransactionType;
+      } else {
+        warnings.push("IA: type ausente ou inválido");
+      }
+
+      // PaymentMethod
+      let aiPaymentMethod: PaymentMethod | null = null;
+      if (typeof draft.paymentMethod === "string" && validPaymentMethods.includes(draft.paymentMethod as PaymentMethod)) {
+        aiPaymentMethod = draft.paymentMethod as PaymentMethod;
+      }
+
+      // Category
+      let aiCategoryId: string | null = null;
+      let aiCategoryName: string | null = null;
+      if (typeof draft.categoryId === "string" && draft.categoryId.trim().length > 0) {
+        const catMatch = categories.find((c) => c.id === draft.categoryId);
+        if (catMatch) {
+          aiCategoryId = catMatch.id;
+          aiCategoryName = catMatch.name;
+        }
+      }
+      if (!aiCategoryId && typeof draft.categoryName === "string" && draft.categoryName.trim().length > 0) {
+        const catMatch = categories.find((c) => c.name.toLowerCase() === draft.categoryName!.toLowerCase());
+        if (catMatch) {
+          aiCategoryId = catMatch.id;
+          aiCategoryName = catMatch.name;
+        }
+      }
+      if (!aiCategoryId) warnings.push("IA: categoria não encontrada");
+
+      // Pelo menos description e amount devem ser válidos para considerar a resposta útil
+      const valid = aiDescription !== null && aiAmount !== null;
+
+      return { valid, description: aiDescription, amount: aiAmount, type: aiType, paymentMethod: aiPaymentMethod, categoryId: aiCategoryId, categoryName: aiCategoryName, warnings };
+    }
+
+    // ── Processa notificação bruta: parse → valida → SQLite → backend → valida resposta ──
     async function processNotification(event: BankNotificationEvent) {
       const isBankApp = event.packageName in BANK_APPS;
       console.log(
@@ -83,9 +169,20 @@ export function useNotificationListener() {
       );
 
       try {
+        // ── Etapa 1: Parse local ──────────────────────────────────────
         const parsed = parseNotification(event);
         if (!parsed) {
           console.log("[AutoImport] Não classificada:", event.packageName, event.title);
+          return;
+        }
+
+        // ── Etapa 2: Validar dados parseados ──────────────────────────
+        const parseWarnings = validateParsedData(parsed);
+        if (parseWarnings.length > 0) {
+          console.warn(`[AutoImport] Validação local: ${parseWarnings.join(", ")}`);
+        }
+        if (parsed.amount <= 0) {
+          console.log("[AutoImport] Amount <= 0 — descartando notificação");
           return;
         }
 
@@ -93,6 +190,7 @@ export function useNotificationListener() {
           .filter(Boolean)
           .join(" ");
 
+        // ── Etapa 3: Dedup ────────────────────────────────────────────
         const alreadyInQueue = await isNotificationInQueue(
           event.packageName,
           event.title,
@@ -105,13 +203,17 @@ export function useNotificationListener() {
           return;
         }
 
+        // ── Etapa 4: Carregar categorias ──────────────────────────────
         const categories = await listCategories();
-        if (categories.length === 0) return;
+        if (categories.length === 0) {
+          console.warn("[AutoImport] Sem categorias — não é possível processar");
+          return;
+        }
 
-        // Fallback local: inferência por keywords
+        // ── Etapa 5: Fallback local (inferência por keywords) ─────────
         let categoryId = categories[0].id;
         let categoryName = categories[0].name;
-        let description = parsed.description;
+        let description = parsed.description || "Transação";
         const inferredCatName = inferCategoryFromText(text);
         const matched = inferredCatName
           ? categories.find(
@@ -123,8 +225,7 @@ export function useNotificationListener() {
           categoryName = matched.name;
         }
 
-        // Persiste imediatamente no SQLite com dados do fallback local (ai_enriched=0)
-        // Isso garante que a notificação não se perca mesmo se o app for desmontado
+        // ── Etapa 6: Salvar no SQLite com dados do fallback (ai_enriched=0) ──
         const insertedId = await enqueueNotification({
           packageName: event.packageName,
           title: event.title,
@@ -142,64 +243,84 @@ export function useNotificationListener() {
           categoryName,
         });
 
-        if (!insertedId) return;
+        if (!insertedId) {
+          console.log("[AutoImport] Dedup no SQLite — notificação já existente");
+          return;
+        }
 
-        // Backpressure: se a fila em memória ainda está grande, pula IA e usa fallback
+        console.log(
+          `[AutoImport] Salvo no SQLite (fallback): ${description} R$${parsed.amount} [${parsed.type}] cat=${categoryName}`
+        );
+
+        // ── Etapa 7: Enriquecimento com IA (backend) ──────────────────
         const shouldSkipAi = processingQueueRef.current.length > QUEUE_BACKPRESSURE_THRESHOLD;
 
-        // Tenta enriquecimento com IA apenas se online e sem backpressure
-        if (isOnlineRef.current && !shouldSkipAi) {
-          try {
-            const aiResult = await analyzeText(
+        if (!isOnlineRef.current) {
+          console.log("[AutoImport] Offline — salvo com fallback local, será reprocessado");
+          return;
+        }
+        if (shouldSkipAi) {
+          console.log("[AutoImport] Backpressure — IA pulada, fallback local salvo");
+          return;
+        }
+
+        try {
+          const aiResult = await Promise.race([
+            analyzeText(
               text,
               "TEXT",
               categories.map((c) => ({ id: c.id, name: c.name })),
               { bank: parsed.bank, paymentMethod: parsed.paymentMethod }
-            );
-            const draft = aiResult?.draft;
-            if (draft) {
-              let aiDescription = description;
-              let aiCategoryId = categoryId;
-              let aiCategoryName = categoryName;
+            ),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("IA timeout")), AI_CALL_TIMEOUT_MS)
+            ),
+          ]);
 
-              if (draft.description) aiDescription = draft.description;
-              if (draft.categoryId) {
-                const catMatch = categories.find((c) => c.id === draft.categoryId);
-                if (catMatch) {
-                  aiCategoryId = catMatch.id;
-                  aiCategoryName = catMatch.name;
-                }
-              }
-
-              await updateWithAiResult(insertedId, {
-                description: aiDescription,
-                categoryId: aiCategoryId,
-                categoryName: aiCategoryName,
-                amount: draft.amount ?? undefined,
-                type: (draft.type as TransactionType) ?? undefined,
-                paymentMethod: (draft.paymentMethod as PaymentMethod) ?? undefined,
-              });
-
-              console.log(
-                `[AutoImport] Enriquecido com IA: ${aiDescription} R$${draft.amount ?? parsed.amount}`
-              );
-              return;
-            }
-          } catch (aiErr) {
-            console.warn(
-              "[AutoImport] IA falhou, fallback local já persistido:",
-              aiErr instanceof Error ? aiErr.message : aiErr
-            );
+          // ── Etapa 8: Validar resposta da IA ─────────────────────────
+          const draft = aiResult?.draft;
+          if (!draft) {
+            console.warn("[AutoImport] IA retornou sem draft — mantendo fallback local");
+            return;
           }
-        } else if (shouldSkipAi) {
-          console.log("[AutoImport] Backpressure — IA pulada, fallback local salvo");
-        } else {
-          console.log("[AutoImport] Offline — salvo com fallback local, será reprocessado");
-        }
 
-        console.log(
-          `[AutoImport] Enfileirado (fallback local): ${description} R$${parsed.amount}`
-        );
+          const validated = validateAiDraft(draft as Record<string, unknown>, categories);
+          if (validated.warnings.length > 0) {
+            console.warn(`[AutoImport] Validação IA: ${validated.warnings.join(", ")}`);
+          }
+
+          if (!validated.valid) {
+            console.warn("[AutoImport] Resposta da IA inválida — mantendo fallback local");
+            return;
+          }
+
+          // ── Etapa 9: Mesclar IA com fallback (IA prevalece, fallback cobre nulos) ──
+          const finalDescription = validated.description ?? description;
+          const finalCategoryId = validated.categoryId ?? categoryId;
+          const finalCategoryName = validated.categoryName ?? categoryName;
+          const finalAmount = validated.amount ?? parsed.amount;
+          const finalType = validated.type ?? parsed.type;
+          const finalPaymentMethod = validated.paymentMethod ?? parsed.paymentMethod;
+
+          // ── Etapa 10: Atualizar SQLite com dados validados da IA ─────
+          await updateWithAiResult(insertedId, {
+            description: finalDescription,
+            categoryId: finalCategoryId,
+            categoryName: finalCategoryName,
+            amount: finalAmount,
+            type: finalType,
+            paymentMethod: finalPaymentMethod,
+          });
+
+          console.log(
+            `[AutoImport] Enriquecido com IA: ${finalDescription} R$${finalAmount} [${finalType}] cat=${finalCategoryName}`
+          );
+        } catch (aiErr) {
+          console.warn(
+            "[AutoImport] IA falhou, fallback local já persistido:",
+            aiErr instanceof Error ? aiErr.message : aiErr
+          );
+        }
       } catch (err) {
         console.error(
           "[AutoImport] Erro ao processar notificação:",
@@ -256,12 +377,17 @@ export function useNotificationListener() {
           if (!locked) continue;
 
           try {
-            const aiResult = await analyzeText(
-              item.rawText,
-              "TEXT",
-              categories.map((c) => ({ id: c.id, name: c.name })),
-              { bank: item.bank ?? undefined, paymentMethod: item.paymentMethod ?? undefined }
-            );
+            const aiResult = await Promise.race([
+              analyzeText(
+                item.rawText,
+                "TEXT",
+                categories.map((c) => ({ id: c.id, name: c.name })),
+                { bank: item.bank ?? undefined, paymentMethod: item.paymentMethod ?? undefined }
+              ),
+              new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("IA timeout")), AI_CALL_TIMEOUT_MS)
+              ),
+            ]);
             const draft = aiResult?.draft;
             if (draft) {
               let description = item.description || "";
@@ -323,10 +449,10 @@ export function useNotificationListener() {
           lastRebindRef.current = 0;
           void retryPendingAiEnrichment();
         } else {
+          // JS is sole coordinator of rebind (Kotlin no longer auto-rebinds)
           const now = Date.now();
           const prevDisconnect = lastDisconnectRef.current;
           lastDisconnectRef.current = now;
-          // Frequent disconnects (within 60s of last one): try immediately
           const isImmediate = now - prevDisconnect < REBIND_IMMEDIATE_THRESHOLD_MS;
           if (isImmediate || now - lastRebindRef.current >= REBIND_BACKOFF_MS) {
             lastRebindRef.current = now;
@@ -336,6 +462,8 @@ export function useNotificationListener() {
             } catch (e) {
               console.warn("[AutoImport] requestRebind falhou:", e);
             }
+          } else {
+            console.warn("[AutoImport] Listener desconectado — aguardando backoff para rebind");
           }
         }
       }
