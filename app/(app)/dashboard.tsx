@@ -438,8 +438,8 @@ export default function DashboardScreen() {
                   <Text style={styles.sectionTitle}>Saúde financeira</Text>
                   <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
                 </View>
-                <TouchableOpacity onPress={() => router.push("/health" as any)}>
-                  <Text style={styles.linkText}>Ver detalhes {">"}</Text>
+                <TouchableOpacity style={styles.linkButton} onPress={() => router.push("/health" as any)}>
+                  <Text style={styles.linkButtonText}>Ver detalhes {">"}</Text>
                 </TouchableOpacity>
               </View>
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg }}>
@@ -487,7 +487,9 @@ export default function DashboardScreen() {
             <View style={styles.sectionCard}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Radar Financeiro</Text>
-                <Text style={styles.linkText}>Ver tudo {">"}</Text>
+                <TouchableOpacity style={styles.linkButton} onPress={() => router.push("/transactions" as any)}>
+                  <Text style={styles.linkButtonText}>Ver tudo {">"}</Text>
+                </TouchableOpacity>
               </View>
               <HorizontalScrollFade
                 showsHorizontalScrollIndicator={false}
@@ -541,7 +543,7 @@ export default function DashboardScreen() {
                 <View style={[styles.sectionCard, { flex: 1 }]}>
                   <View style={styles.sectionHeader}>
                     <Text style={styles.sectionTitleSm}>Gastos por categoria</Text>
-                    <TouchableOpacity onPress={() => setChartModal("category")}><Text style={styles.linkTextSm}>Ver todas {">"}</Text></TouchableOpacity>
+                    <TouchableOpacity style={styles.linkButtonSm} onPress={() => setChartModal("category")}><Text style={styles.linkButtonTextSm}>Ver todas {">"}</Text></TouchableOpacity>
                   </View>
                   <View style={{ alignItems: "center" }}>
                     <PieChart
@@ -579,7 +581,7 @@ export default function DashboardScreen() {
               <View style={[styles.sectionCard, { flex: 1 }]}>
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitleSm}>Gastos ao longo do mês</Text>
-                  <TouchableOpacity onPress={() => setChartModal("bar")}><Text style={styles.linkTextSm}>Ver mais {">"}</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.linkButtonSm} onPress={() => setChartModal("bar")}><Text style={styles.linkButtonTextSm}>Ver mais {">"}</Text></TouchableOpacity>
                 </View>
                 <BarChart
                   data={dailyExpenseChartData}
@@ -612,7 +614,7 @@ export default function DashboardScreen() {
                     <Text style={{ fontSize: 9, fontWeight: "700", color: colors.primary }}>IA</Text>
                   </View>
                 </View>
-                <TouchableOpacity onPress={() => setChartModal("line")}><Text style={styles.linkText}>Ver gráfico {">"}  </Text></TouchableOpacity>
+                <TouchableOpacity style={styles.linkButton} onPress={() => setChartModal("line")}><Text style={styles.linkButtonText}>Ver gráfico {">"}</Text></TouchableOpacity>
               </View>
 
               {forecastLoading && !aiForecast ? (
@@ -708,7 +710,7 @@ export default function DashboardScreen() {
               <View style={[styles.sectionCard, { width: HALF_WIDTH }]}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.sectionTitleSm}>Contas futuras{"\n"}previstas</Text>
-                  <TouchableOpacity onPress={() => router.push("/recurring")}><Text style={styles.linkTextSm}>Ver todos {">"}</Text></TouchableOpacity>
+                  <TouchableOpacity style={styles.linkButtonSm} onPress={() => router.push("/recurring")}><Text style={styles.linkButtonTextSm}>Ver todos {">"}</Text></TouchableOpacity>
                 </View>
                 <View style={{ gap: 8 }}>
                   {bills.length > 0 ? bills.map((bill: UpcomingBill) => (
@@ -728,7 +730,7 @@ export default function DashboardScreen() {
               <TouchableOpacity style={[styles.sectionCard, { width: HALF_WIDTH }]} onPress={() => router.push("/plan")} activeOpacity={0.8}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.sectionTitleSm}>Metas</Text>
-                  <Text style={styles.linkTextSm}>Ver todas {">"}  </Text>
+                  <Text style={styles.linkButtonTextSm}>Ver todas {">"}</Text>
                 </View>
                 {goals.length > 0 ? (
                   <View style={{ gap: 6 }}>
@@ -961,6 +963,10 @@ function createStyles() {
   sectionTitleSm: { fontSize: 13, fontWeight: "700", color: colors.textPrimary },
   linkText: { fontSize: 12, color: colors.primary, fontWeight: "600" },
   linkTextSm: { fontSize: 10, color: colors.primary, fontWeight: "600" },
+  linkButton: { backgroundColor: colors.primary, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 },
+  linkButtonText: { fontSize: 12, color: "#000000", fontWeight: "700" },
+  linkButtonSm: { backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
+  linkButtonTextSm: { fontSize: 10, color: "#000000", fontWeight: "700" },
 
   /* Health Scores */
   healthScoresRow: { flexDirection: "row", justifyContent: "space-between" },
