@@ -24,9 +24,10 @@ import BankNotifications, {
 import NetInfo from "@react-native-community/netinfo";
 import { useEffect, useRef } from "react";
 
-const HEALTH_CHECK_INTERVAL_MS = 30_000;
+const HEALTH_CHECK_INTERVAL_MS = 15_000;
 const AI_RETRY_INTERVAL_MS = 60_000;
-const REBIND_BACKOFF_MS = 15_000;
+const REBIND_BACKOFF_MS = 5_000;
+const REBIND_IMMEDIATE_THRESHOLD_MS = 60_000;
 const MAX_CONCURRENT_PROCESSING = 1;
 const QUEUE_BACKPRESSURE_THRESHOLD = 50;
 const SYNC_INTERVAL_MS = 120_000;
@@ -37,6 +38,7 @@ export function useNotificationListener() {
   const processingQueueRef = useRef<BankNotificationEvent[]>([]);
   const isProcessingRef = useRef(false);
   const lastRebindRef = useRef(0);
+  const lastDisconnectRef = useRef(0);
   const dbBusyRef = useRef(false);
 
   useEffect(() => {
@@ -317,12 +319,17 @@ export function useNotificationListener() {
       (event: { connected: boolean }) => {
         if (event.connected) {
           console.log("[AutoImport] Listener reconectado");
+          lastRebindRef.current = 0;
           void retryPendingAiEnrichment();
         } else {
           const now = Date.now();
-          if (now - lastRebindRef.current >= REBIND_BACKOFF_MS) {
+          const prevDisconnect = lastDisconnectRef.current;
+          lastDisconnectRef.current = now;
+          // Frequent disconnects (within 60s of last one): try immediately
+          const isImmediate = now - prevDisconnect < REBIND_IMMEDIATE_THRESHOLD_MS;
+          if (isImmediate || now - lastRebindRef.current >= REBIND_BACKOFF_MS) {
             lastRebindRef.current = now;
-            console.warn("[AutoImport] Listener desconectado pelo Android — tentando rebind");
+            console.warn("[AutoImport] Listener desconectado — tentando rebind");
             try {
               BankNotifications?.requestRebind();
             } catch (e) {

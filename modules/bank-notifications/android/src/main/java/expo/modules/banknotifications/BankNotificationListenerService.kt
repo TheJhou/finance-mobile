@@ -2,6 +2,8 @@ package expo.modules.banknotifications
 
 import android.content.ComponentName
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -29,11 +31,20 @@ class BankNotificationListenerService : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    Log.w(TAG, "Notification listener disconnected")
+    Log.w(TAG, "Notification listener disconnected — scheduling rebind in 3s")
     isConnected = false
     connectionCallback?.invoke(false)
-    // Do NOT auto-requestRebind here — it causes a disconnect-rebind loop.
-    // JS health check handles reconnection with proper backoff.
+    // Schedule a delayed rebind to avoid immediate disconnect-rebind loop.
+    // The 3s delay gives Android time to settle before requesting rebind.
+    Handler(Looper.getMainLooper()).postDelayed({
+      try {
+        val component = ComponentName(this, BankNotificationListenerService::class.java)
+        NotificationListenerService.requestRebind(component)
+        Log.i(TAG, "Delayed requestRebind: official API called successfully")
+      } catch (e: Throwable) {
+        Log.e(TAG, "Delayed requestRebind failed", e)
+      }
+    }, 3000)
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {
