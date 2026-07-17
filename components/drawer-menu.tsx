@@ -165,12 +165,12 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail, prof
         ]}
       >
         {/* Close button */}
-        <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity style={[styles.closeBtn, { top: insets.top + spacing.sm }]} onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="close" size={22} color={colors.textMuted} />
         </TouchableOpacity>
 
         {/* Avatar + nome */}
-        <View style={styles.profile}>
+        <View style={[styles.profile, { paddingRight: spacing.xl + spacing.sm }]}>
           {profilePhoto ? (
             <Image source={{ uri: profilePhoto }} style={styles.avatarImage} />
           ) : (
@@ -270,9 +270,10 @@ function createStyles() {
     paddingHorizontal: spacing.lg,
   },
   closeBtn: {
-    alignSelf: "flex-end",
+    position: "absolute",
+    right: spacing.sm,
+    zIndex: 10,
     padding: spacing.xs,
-    marginBottom: spacing.md,
   },
   profile: {
     flexDirection: "row",
