@@ -2,16 +2,19 @@ import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
 import { RowSeparator } from "@/components/account/row-separator";
 import { ScreenLayout } from "@/components/account/screen-layout";
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
+import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import { useMemo } from "react";
-import { Alert, Linking, StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Linking, StyleSheet, Text, View } from "react-native";
 
 export default function SupportScreen() {
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
+
+  const { alert, dialog } = useAppDialog();
 
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
   const buildVersion = String(Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "1");
@@ -103,14 +106,14 @@ export default function SupportScreen() {
           icon="code-slash-outline"
           iconColor={colors.textMuted}
           label="Licenças Open Source"
-          onPress={() => Alert.alert("Licenças", "Bibliotecas open source serão listadas aqui em breve.")}
+          onPress={() => alert("Licenças", "Bibliotecas open source serão listadas aqui em breve.")}
         />
         <RowSeparator />
         <AccountRow
           icon="people-outline"
           iconColor={colors.textMuted}
           label="Créditos"
-          onPress={() => Alert.alert("Créditos", "Finance Mobile © 2025")}
+          onPress={() => alert("Créditos", "Finance Mobile © 2025")}
         />
         <RowSeparator />
         <AccountRow
@@ -120,6 +123,7 @@ export default function SupportScreen() {
           onPress={() => Linking.openURL("https://finance.app")}
         />
       </AccountSection>
+      {dialog}
     </ScreenLayout>
   );
 }

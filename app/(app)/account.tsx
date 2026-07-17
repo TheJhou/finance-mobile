@@ -4,6 +4,7 @@ import { EditModal } from "@/components/account/edit-modal";
 import { RowSeparator } from "@/components/account/row-separator";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import {
     changePassword,
     updateProfile,
@@ -22,7 +23,6 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Image,
     Pressable,
     ScrollView,
@@ -57,6 +57,7 @@ export default function AccountScreen() {
   const [editNewPassword, setEditNewPassword] = useState("");
   const [editConfirmPassword, setEditConfirmPassword] = useState("");
   const [emailVerified, setEmailVerified] = useState(false);
+  const { alert, confirm, dialog } = useAppDialog();
 
   useFocusEffect(
     useCallback(() => {
@@ -99,7 +100,7 @@ export default function AccountScreen() {
       setPhotoLoading(true);
       const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        Alert.alert("Permissão necessária", "Permita o acesso à galeria para alterar sua foto de perfil.");
+        alert("Permissão necessária", "Permita o acesso à galeria para alterar sua foto de perfil.", { variant: "warning" });
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -114,38 +115,32 @@ export default function AccountScreen() {
       const uri = await saveProfilePhoto(asset.uri, asset.base64 ?? undefined);
       setPhotoUri(uri);
     } catch {
-      Alert.alert("Erro", "Não foi possível salvar a foto");
+      alert("Erro", "Não foi possível salvar a foto", { variant: "danger" });
     } finally {
       setPhotoLoading(false);
     }
   };
 
   const handleRemovePhoto = () => {
-    Alert.alert("Remover foto", "Deseja remover sua foto de perfil?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Remover",
-        style: "destructive",
-        onPress: async () => {
-          await deleteProfilePhoto();
-          setPhotoUri(null);
-        },
+    confirm("Remover foto", "Deseja remover sua foto de perfil?", {
+      variant: "danger",
+      confirmText: "Remover",
+      onConfirm: async () => {
+        await deleteProfilePhoto();
+        setPhotoUri(null);
       },
-    ]);
+    });
   };
 
   const handleLogout = () => {
-    Alert.alert("Sair da conta", "Tem certeza que deseja sair?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/" as any);
-        },
+    confirm("Sair da conta", "Tem certeza que deseja sair?", {
+      variant: "danger",
+      confirmText: "Sair",
+      onConfirm: async () => {
+        await logout();
+        router.replace("/" as any);
       },
-    ]);
+    });
   };
 
   const openModal = (type: ModalType) => {
@@ -177,9 +172,9 @@ export default function AccountScreen() {
         setUser((prev) => prev ? { ...prev, name: editName.trim() } : null);
       }
       closeModal();
-      Alert.alert("Sucesso", "Nome atualizado com sucesso");
+      alert("Sucesso", "Nome atualizado com sucesso", { variant: "success" });
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao atualizar nome");
+      alert("Erro", err instanceof Error ? err.message : "Erro ao atualizar nome", { variant: "danger" });
     } finally {
       setModalLoading(false);
     }
@@ -187,45 +182,42 @@ export default function AccountScreen() {
 
   const handleSaveEmail = async () => {
     if (!editEmail.trim() || !editEmail.includes("@")) {
-      Alert.alert("Erro", "Digite um e-mail válido");
+      alert("Erro", "Digite um e-mail válido", { variant: "danger" });
       return;
     }
-    Alert.alert(
+    confirm(
       "Confirmar alteração",
       "Você está prestes a alterar seu e-mail. Um link de confirmação será enviado.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Confirmar",
-          onPress: async () => {
-            try {
-              setModalLoading(true);
-              await updateProfile({ email: editEmail.trim().toLowerCase() });
-              setUser((prev) => prev ? { ...prev, email: editEmail.trim().toLowerCase() } : null);
-              closeModal();
-              Alert.alert("Sucesso", "E-mail atualizado. Verifique sua caixa de entrada para confirmar.");
-            } catch (err) {
-              Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao atualizar e-mail");
-            } finally {
-              setModalLoading(false);
-            }
-          },
+      {
+        confirmText: "Confirmar",
+        onConfirm: async () => {
+          try {
+            setModalLoading(true);
+            await updateProfile({ email: editEmail.trim().toLowerCase() });
+            setUser((prev) => prev ? { ...prev, email: editEmail.trim().toLowerCase() } : null);
+            closeModal();
+            alert("Sucesso", "E-mail atualizado. Verifique sua caixa de entrada para confirmar.", { variant: "success" });
+          } catch (err) {
+            alert("Erro", err instanceof Error ? err.message : "Erro ao atualizar e-mail", { variant: "danger" });
+          } finally {
+            setModalLoading(false);
+          }
         },
-      ]
+      }
     );
   };
 
   const handleSavePassword = async () => {
     if (!editCurrentPassword || !editNewPassword || !editConfirmPassword) {
-      Alert.alert("Erro", "Preencha todos os campos");
+      alert("Erro", "Preencha todos os campos", { variant: "danger" });
       return;
     }
     if (editNewPassword.length < 6) {
-      Alert.alert("Erro", "A nova senha deve ter no mínimo 6 caracteres");
+      alert("Erro", "A nova senha deve ter no mínimo 6 caracteres", { variant: "danger" });
       return;
     }
     if (editNewPassword !== editConfirmPassword) {
-      Alert.alert("Erro", "As senhas não coincidem");
+      alert("Erro", "As senhas não coincidem", { variant: "danger" });
       return;
     }
     try {
@@ -235,9 +227,9 @@ export default function AccountScreen() {
         newPassword: editNewPassword,
       });
       closeModal();
-      Alert.alert("Sucesso", "Senha alterada com sucesso");
+      alert("Sucesso", "Senha alterada com sucesso", { variant: "success" });
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao alterar senha");
+      alert("Erro", err instanceof Error ? err.message : "Erro ao alterar senha", { variant: "danger" });
     } finally {
       setModalLoading(false);
     }
@@ -466,6 +458,7 @@ export default function AccountScreen() {
         <Input label="Nova senha" value={editNewPassword} onChangeText={setEditNewPassword} secureTextEntry placeholder="Mínimo 6 caracteres" />
         <Input label="Confirmar nova senha" value={editConfirmPassword} onChangeText={setEditConfirmPassword} secureTextEntry placeholder="••••••••" />
       </EditModal>
+      {dialog}
     </SafeAreaView>
   );
 }

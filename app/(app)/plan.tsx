@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { authFetch, isAuthenticated, login, register } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { acknowledgePurchaseTransaction, closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
@@ -12,16 +13,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
+    ActivityIndicator,
+    Modal,
+    Pressable,
+    RefreshControl,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -43,6 +43,7 @@ export default function PlanScreen() {
   const [authPassword, setAuthPassword] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
+  const { alert, dialog } = useAppDialog();
 
   const fetchStatus = useCallback(async () => {
     clearProCache();
@@ -88,11 +89,11 @@ export default function PlanScreen() {
 
   const handleAuth = async () => {
     if (!authEmail.trim() || !authPassword.trim()) {
-      Alert.alert("Erro", "Preencha todos os campos");
+      alert("Erro", "Preencha todos os campos", { variant: "danger" });
       return;
     }
     if (isRegister && !authName.trim()) {
-      Alert.alert("Erro", "Preencha seu nome");
+      alert("Erro", "Preencha seu nome", { variant: "danger" });
       return;
     }
     setAuthLoading(true);
@@ -110,7 +111,7 @@ export default function PlanScreen() {
       clearProCache();
       fetchStatus();
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Falha na autenticação");
+      alert("Erro", err instanceof Error ? err.message : "Falha na autenticação", { variant: "danger" });
     } finally {
       setAuthLoading(false);
     }
@@ -135,15 +136,15 @@ export default function PlanScreen() {
           });
           if (!response.ok) {
             const err = await response.json().catch(() => ({}));
-            Alert.alert("Erro", err.error || err.message || "Falha ao ativar assinatura");
+            alert("Erro", err.error || err.message || "Falha ao ativar assinatura", { variant: "danger" });
             return;
           }
           await acknowledgePurchaseTransaction(purchase);
-          Alert.alert("Sucesso!", "Assinatura PRO ativada com sucesso!");
+          alert("Sucesso!", "Assinatura PRO ativada com sucesso!", { variant: "success" });
           clearProCache();
           fetchStatus();
         } catch (err) {
-          Alert.alert("Erro", err instanceof Error ? err.message : "Falha ao ativar assinatura");
+          alert("Erro", err instanceof Error ? err.message : "Falha ao ativar assinatura", { variant: "danger" });
         } finally {
           setPurchasing(false);
         }
@@ -151,7 +152,7 @@ export default function PlanScreen() {
       (error) => {
         setPurchasing(false);
         if (!error.toLowerCase().includes("cancel")) {
-          Alert.alert("Erro na compra", error);
+          alert("Erro na compra", error, { variant: "danger" });
         }
       }
     );
@@ -169,7 +170,7 @@ export default function PlanScreen() {
       setPurchasing(false);
       const msg = err instanceof Error ? err.message : "Erro ao iniciar compra";
       if (!msg.toLowerCase().includes("cancel") && !msg.toLowerCase().includes("user")) {
-        Alert.alert("Erro", msg);
+        alert("Erro", msg, { variant: "danger" });
       }
     }
   };
@@ -372,6 +373,7 @@ export default function PlanScreen() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+      {dialog}
     </SafeAreaView>
   );
 }

@@ -4,13 +4,14 @@ import { RowSeparator } from "@/components/account/row-separator";
 import { ScreenLayout } from "@/components/account/screen-layout";
 import { ToggleRow } from "@/components/account/toggle-row";
 import { DatePicker } from "@/components/date-picker";
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { getBoolSetting, loadMonthStartDay, setMonthStartDay, setSetting } from "@/lib/settings";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { toDateInputValue } from "@/lib/utils";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
-import { Alert, View } from "react-native";
+import { View } from "react-native";
 
 export default function PreferencesScreen() {
   const { isDark, mode, setTheme, toggleTheme } = useTheme();
@@ -18,6 +19,7 @@ export default function PreferencesScreen() {
   const [emails, setEmails] = useState(true);
   const [monthStartDay, setMonthStartDayState] = useState(1);
   const [datePickerValue, setDatePickerValue] = useState("");
+  const { alert, dialog } = useAppDialog();
 
   useFocusEffect(
     useCallback(() => {
@@ -51,7 +53,7 @@ export default function PreferencesScreen() {
     const clamped = Math.max(1, Math.min(28, day));
     setMonthStartDay(clamped);
     setMonthStartDayState(clamped);
-    Alert.alert("Dia de início atualizado", `Seu mês financeiro agora começa no dia ${clamped}.`);
+    alert("Dia de início atualizado", `Seu mês financeiro agora começa no dia ${clamped}.`, { variant: "success" });
   };
 
   const themeLabel = mode === "system" ? "Sistema" : isDark ? "Escuro" : "Claro";
@@ -90,7 +92,7 @@ export default function PreferencesScreen() {
           iconColor={colors.info}
           label="Idioma"
           value="Português (BR)"
-          onPress={() => Alert.alert("Idioma", "Seletor de idioma em desenvolvimento")}
+          onPress={() => alert("Idioma", "Seletor de idioma em desenvolvimento")}
         />
         <RowSeparator />
         <AccountRow
@@ -98,7 +100,7 @@ export default function PreferencesScreen() {
           iconColor={colors.warning}
           label="Formato de data"
           value="DD/MM/AAAA"
-          onPress={() => Alert.alert("Formato de data", "Seletor em desenvolvimento")}
+          onPress={() => alert("Formato de data", "Seletor em desenvolvimento")}
         />
         <RowSeparator />
         <AccountRow
@@ -106,7 +108,7 @@ export default function PreferencesScreen() {
           iconColor={colors.success}
           label="Formato de moeda"
           value="R$ (BRL)"
-          onPress={() => Alert.alert("Moeda", "Seletor em desenvolvimento")}
+          onPress={() => alert("Moeda", "Seletor em desenvolvimento")}
         />
       </AccountSection>
 
@@ -127,6 +129,7 @@ export default function PreferencesScreen() {
           onToggle={handleToggleEmails}
         />
       </AccountSection>
+      {dialog}
     </ScreenLayout>
   );
 }

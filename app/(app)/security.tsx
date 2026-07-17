@@ -6,13 +6,14 @@ import { ScreenLayout } from "@/components/account/screen-layout";
 import { ToggleRow } from "@/components/account/toggle-row";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { changePassword } from "@/lib/account-service";
 import { authenticateWithBiometrics, getBiometricTypeName, isBiometricAvailable, isBiometricEnabled, setBiometricEnabled } from "@/lib/biometric";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
-import { Alert, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 export default function SecurityScreen() {
   const { isDark } = useTheme();
@@ -26,6 +27,7 @@ export default function SecurityScreen() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const { alert, dialog } = useAppDialog();
 
   useEffect(() => {
     (async () => {
@@ -43,28 +45,28 @@ export default function SecurityScreen() {
       if (result.success) {
         await setBiometricEnabled(true);
         setBiometricEnabledState(true);
-        Alert.alert("Sucesso", `${biometricTypeName} ativada com sucesso`);
+        alert("Sucesso", `${biometricTypeName} ativada com sucesso`, { variant: "success" });
       } else {
-        Alert.alert("Erro", result.error ?? "Falha na autenticação");
+        alert("Erro", result.error ?? "Falha na autenticação", { variant: "danger" });
       }
     } else {
       await setBiometricEnabled(false);
       setBiometricEnabledState(false);
-      Alert.alert("Desativado", `${biometricTypeName} desativada`);
+      alert("Desativado", `${biometricTypeName} desativada`, { variant: "warning" });
     }
   };
 
   const handleSavePassword = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
-      Alert.alert("Erro", "Preencha todos os campos");
+      alert("Erro", "Preencha todos os campos", { variant: "danger" });
       return;
     }
     if (newPassword.length < 6) {
-      Alert.alert("Erro", "A nova senha deve ter no mínimo 6 caracteres");
+      alert("Erro", "A nova senha deve ter no mínimo 6 caracteres", { variant: "danger" });
       return;
     }
     if (newPassword !== confirmPassword) {
-      Alert.alert("Erro", "As senhas não coincidem");
+      alert("Erro", "As senhas não coincidem", { variant: "danger" });
       return;
     }
     try {
@@ -74,9 +76,9 @@ export default function SecurityScreen() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      Alert.alert("Sucesso", "Senha alterada com sucesso");
+      alert("Sucesso", "Senha alterada com sucesso", { variant: "success" });
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao alterar senha");
+      alert("Erro", err instanceof Error ? err.message : "Erro ao alterar senha", { variant: "danger" });
     } finally {
       setModalLoading(false);
     }
@@ -119,21 +121,21 @@ export default function SecurityScreen() {
           iconColor={colors.primary}
           label="Sessões ativas"
           subtitle="Gerencie dispositivos conectados"
-          onPress={() => Alert.alert("Sessões", "Funcionalidade em desenvolvimento")}
+          onPress={() => alert("Sessões", "Funcionalidade em desenvolvimento")}
         />
         <RowSeparator />
         <AccountRow
           icon="close-circle-outline"
           iconColor={colors.danger}
           label="Encerrar todas as sessões"
-          onPress={() => Alert.alert("Encerrar sessões", "Funcionalidade em desenvolvimento")}
+          onPress={() => alert("Encerrar sessões", "Funcionalidade em desenvolvimento")}
         />
         <RowSeparator />
         <AccountRow
           icon="hardware-chip-outline"
           iconColor={colors.info}
           label="Dispositivos conectados"
-          onPress={() => Alert.alert("Dispositivos", "Funcionalidade em desenvolvimento")}
+          onPress={() => alert("Dispositivos", "Funcionalidade em desenvolvimento")}
         />
       </AccountSection>
 
@@ -152,6 +154,7 @@ export default function SecurityScreen() {
         <Input label="Nova senha" value={newPassword} onChangeText={setNewPassword} secureTextEntry placeholder="Mínimo 6 caracteres" />
         <Input label="Confirmar nova senha" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry placeholder="••••••••" />
       </EditModal>
+      {dialog}
     </ScreenLayout>
   );
 }

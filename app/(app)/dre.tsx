@@ -1,4 +1,5 @@
 import { DatePicker } from "@/components/date-picker";
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import type { DreData, DrePeriod, DrePeriodRange } from "@/lib/repositories/dre";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
@@ -11,7 +12,6 @@ import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     Dimensions,
     Modal,
     Pressable,
@@ -96,6 +96,7 @@ export default function DreScreen() {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [period, setPeriod] = useState<DrePeriodRange>(buildPeriodRange("month"));
   const periodRef = useRef<DrePeriodRange>(period);
+  const { alert, dialog } = useAppDialog();
 
   const fetchData = useCallback(async (p?: DrePeriodRange) => {
     try {
@@ -140,11 +141,11 @@ export default function DreScreen() {
 
   function applyCustomPeriod() {
     if (!customFrom || !customTo) {
-      Alert.alert("Período inválido", "Preencha as datas de início e fim.");
+      alert("Período inválido", "Preencha as datas de início e fim.", { variant: "danger" });
       return;
     }
     if (customFrom > customTo) {
-      Alert.alert("Período inválido", "A data inicial deve ser anterior à data final.");
+      alert("Período inválido", "A data inicial deve ser anterior à data final.", { variant: "danger" });
       return;
     }
     setSelectedPeriod("custom");
@@ -182,7 +183,7 @@ export default function DreScreen() {
       else if (format === "xlsx") await exportDreXLSX(data);
       else await exportDrePDF(data);
     } catch (e) {
-      Alert.alert("Erro ao exportar", "Não foi possível gerar o arquivo. Tente novamente.");
+      alert("Erro ao exportar", "Não foi possível gerar o arquivo. Tente novamente.", { variant: "danger" });
       console.error(e);
     } finally {
       setExporting(false);
@@ -528,6 +529,7 @@ export default function DreScreen() {
           </Pressable>
         </Pressable>
       </Modal>
+      {dialog}
     </SafeAreaView>
   );
 }

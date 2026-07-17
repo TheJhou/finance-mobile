@@ -1,3 +1,4 @@
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { BackupMetadata, BackupSystem, CloudBackupEntry } from "@/lib/backup";
 import { BackupScheduler } from "@/lib/backup-scheduler";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -10,7 +11,6 @@ import * as Sharing from 'expo-sharing';
 import { useCallback, useMemo, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     FlatList,
     Modal,
     Pressable,
@@ -48,6 +48,7 @@ export default function BackupScreen() {
     lastBackup: null as string | null,
     nextBackup: "",
   });
+  const { alert, confirm, dialog } = useAppDialog();
 
   const loadData = useCallback(async () => {
     try {
@@ -94,7 +95,7 @@ export default function BackupScreen() {
       
     } catch (error) {
       console.error("[Backup] Error loading data:", error);
-      Alert.alert("Erro", "Não foi possível carregar os dados de backup");
+      alert("Erro", "Não foi possível carregar os dados de backup", { variant: "danger" });
     } finally {
       setLoading(false);
     }
@@ -112,17 +113,18 @@ export default function BackupScreen() {
       const result = await BackupSystem.createBackup();
 
       if (!result.success) {
-        Alert.alert("Erro", result.error || "Falha ao criar backup");
+        alert("Erro", result.error || "Falha ao criar backup", { variant: "danger" });
         return;
       }
       await loadData();
-      Alert.alert(
+      alert(
         "Sucesso",
-        `Backup local criado com sucesso!\n\nTamanho: ${formatFileSize(result.size || 0)}`
+        `Backup local criado com sucesso!\n\nTamanho: ${formatFileSize(result.size || 0)}`,
+        { variant: "success" }
       );
     } catch (error) {
       console.error("[Backup] Error creating backup:", error);
-      Alert.alert("Erro", "Falha ao criar backup");
+      alert("Erro", "Falha ao criar backup", { variant: "danger" });
     } finally {
       setCreatingBackup(false);
     }
@@ -136,78 +138,70 @@ export default function BackupScreen() {
   const confirmRestore = () => {
     if (!selectedBackup) return;
 
-    Alert.alert(
+    confirm(
       "Confirmar Restauração",
       "Isso substituirá todos os seus dados atuais. Deseja continuar?",
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-          onPress: () => {
+      {
+        variant: "warning",
+        confirmText: "Restaurar",
+        onConfirm: async () => {
+          try {
+            setRestoring(true);
+            const filePath = BackupSystem.getBackupFilePathFromMetadata(selectedBackup);
+            
+            const result = await BackupSystem.restoreBackup(filePath);
+            
+            if (result.success) {
+              const warning = result.error ? `\n\n⚠️ ${result.error}` : "";
+              alert(
+                "Sucesso",
+                `Backup restaurado com sucesso!\n\nTabelas: ${result.restoredTables.join(", ")}\nRegistros: ${result.recordsRestored}${warning}`,
+                { variant: "success" }
+              );
+              await loadData();
+            } else {
+              alert("Erro", result.error || "Falha ao restaurar backup", { variant: "danger" });
+            }
+          } catch (error) {
+            console.error("[Backup] Error restoring backup:", error);
+            alert("Erro", "Falha ao restaurar backup", { variant: "danger" });
+          } finally {
             setRestoring(false);
             setShowRestoreModal(false);
             setSelectedBackup(null);
-          },
+          }
         },
-        {
-          text: "Restaurar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setRestoring(true);
-              const filePath = BackupSystem.getBackupFilePathFromMetadata(selectedBackup);
-              
-              const result = await BackupSystem.restoreBackup(filePath);
-              
-              if (result.success) {
-                const warning = result.error ? `\n\n⚠️ ${result.error}` : "";
-                Alert.alert(
-                  "Sucesso",
-                  `Backup restaurado com sucesso!\n\nTabelas: ${result.restoredTables.join(", ")}\nRegistros: ${result.recordsRestored}${warning}`
-                );
-                await loadData();
-              } else {
-                Alert.alert("Erro", result.error || "Falha ao restaurar backup");
-              }
-            } catch (error) {
-              console.error("[Backup] Error restoring backup:", error);
-              Alert.alert("Erro", "Falha ao restaurar backup");
-            } finally {
-              setRestoring(false);
-              setShowRestoreModal(false);
-              setSelectedBackup(null);
-            }
-          },
+        onCancel: () => {
+          setRestoring(false);
+          setShowRestoreModal(false);
+          setSelectedBackup(null);
         },
-      ]
+      }
     );
   };
 
   const handleDeleteBackup = async (backup: BackupMetadata) => {
-    Alert.alert(
+    confirm(
       "Confirmar Exclusão",
       `Deseja excluir o backup de ${new Date(backup.createdAt).toLocaleDateString("pt-BR")}?`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              const success = await BackupSystem.deleteBackup(backup.id);
-              if (success) {
-                Alert.alert("Sucesso", "Backup excluído");
-                await loadData();
-              } else {
-                Alert.alert("Erro", "Falha ao excluir backup");
-              }
-            } catch (error) {
-              console.error("[Backup] Error deleting backup:", error);
-              Alert.alert("Erro", "Falha ao excluir backup");
+      {
+        variant: "danger",
+        confirmText: "Excluir",
+        onConfirm: async () => {
+          try {
+            const success = await BackupSystem.deleteBackup(backup.id);
+            if (success) {
+              alert("Sucesso", "Backup excluído", { variant: "success" });
+              await loadData();
+            } else {
+              alert("Erro", "Falha ao excluir backup", { variant: "danger" });
             }
-          },
+          } catch (error) {
+            console.error("[Backup] Error deleting backup:", error);
+            alert("Erro", "Falha ao excluir backup", { variant: "danger" });
+          }
         },
-      ]
+      }
     );
   };
 
@@ -218,9 +212,10 @@ export default function BackupScreen() {
       const { isAuthenticated } = await import("@/lib/auth");
       const authed = await isAuthenticated();
       if (!authed) {
-        Alert.alert(
+        alert(
           "Login necessário",
-          "Faça login na aba Importar para usar o backup na nuvem."
+          "Faça login na aba Importar para usar o backup na nuvem.",
+          { variant: "warning" }
         );
         return;
       }
@@ -228,79 +223,74 @@ export default function BackupScreen() {
       const { localResult, cloudError } = await BackupSystem.createAndUploadBackup();
 
       if (!localResult.success) {
-        Alert.alert("Erro", localResult.error || "Falha ao criar backup");
+        alert("Erro", localResult.error || "Falha ao criar backup", { variant: "danger" });
         return;
       }
       await loadData();
       if (cloudError) {
-        Alert.alert(
+        alert(
           "Backup local criado",
-          `Backup salvo localmente, mas o envio para a nuvem falhou:\n\n${cloudError}`
+          `Backup salvo localmente, mas o envio para a nuvem falhou:\n\n${cloudError}`,
+          { variant: "warning" }
         );
       } else {
-        Alert.alert("Sucesso", `Backup enviado para a nuvem com sucesso!`);
+        alert("Sucesso", `Backup enviado para a nuvem com sucesso!`, { variant: "success" });
       }
     } catch (error) {
       console.error("[Backup] Cloud error:", error);
-      Alert.alert("Erro", error instanceof Error ? error.message : "Falha ao fazer backup na nuvem");
+      alert("Erro", error instanceof Error ? error.message : "Falha ao fazer backup na nuvem", { variant: "danger" });
     } finally {
       setUploadingCloud(false);
     }
   };
 
   const handleRestoreFromCloud = async () => {
-    Alert.alert(
+    confirm(
       "Restaurar da Nuvem",
       "Isso substituirá todos os seus dados pelo backup mais recente na nuvem. Deseja continuar?",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Restaurar",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setRestoringCloud(true);
-              const result = await BackupSystem.downloadAndRestoreLatest();
-              if (result.success) {
-                Alert.alert("Sucesso", `Dados restaurados da nuvem!\n\nRegistros: ${result.recordsRestored}`);
-                await loadData();
-              } else {
-                Alert.alert("Erro", result.error || "Falha ao restaurar da nuvem");
-              }
-            } catch {
-              Alert.alert("Erro", "Falha ao restaurar da nuvem");
-            } finally {
-              setRestoringCloud(false);
+      {
+        variant: "warning",
+        confirmText: "Restaurar",
+        onConfirm: async () => {
+          try {
+            setRestoringCloud(true);
+            const result = await BackupSystem.downloadAndRestoreLatest();
+            if (result.success) {
+              alert("Sucesso", `Dados restaurados da nuvem!\n\nRegistros: ${result.recordsRestored}`, { variant: "success" });
+              await loadData();
+            } else {
+              alert("Erro", result.error || "Falha ao restaurar da nuvem", { variant: "danger" });
             }
-          },
+          } catch {
+            alert("Erro", "Falha ao restaurar da nuvem", { variant: "danger" });
+          } finally {
+            setRestoringCloud(false);
+          }
         },
-      ]
+      }
     );
   };
 
   const handleDeleteCloudBackup = (item: CloudBackupEntry) => {
-    Alert.alert(
+    confirm(
       "Excluir Backup da Nuvem",
       `Deseja excluir o backup "${item.filename}" da nuvem?\nEsta ação não pode ser desfeita.`,
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              setLoadingCloud(true);
-              await BackupSystem.deleteCloudBackup(item.filename);
-              Alert.alert("Sucesso", "Backup excluído da nuvem");
-              await loadData();
-            } catch (error) {
-              Alert.alert("Erro", error instanceof Error ? error.message : "Falha ao excluir backup da nuvem");
-            } finally {
-              setLoadingCloud(false);
-            }
-          },
+      {
+        variant: "danger",
+        confirmText: "Excluir",
+        onConfirm: async () => {
+          try {
+            setLoadingCloud(true);
+            await BackupSystem.deleteCloudBackup(item.filename);
+            alert("Sucesso", "Backup excluído da nuvem", { variant: "success" });
+            await loadData();
+          } catch (error) {
+            alert("Erro", error instanceof Error ? error.message : "Falha ao excluir backup da nuvem", { variant: "danger" });
+          } finally {
+            setLoadingCloud(false);
+          }
         },
-      ]
+      }
     );
   };
 
@@ -317,17 +307,18 @@ export default function BackupScreen() {
       const restoreResult = await BackupSystem.restoreBackup(filePath);
 
       if (restoreResult.success) {
-        Alert.alert(
+        alert(
           "Sucesso",
-          `Backup importado e restaurado!\n\nTabelas: ${restoreResult.restoredTables.join(", ")}\nRegistros: ${restoreResult.recordsRestored}`
+          `Backup importado e restaurado!\n\nTabelas: ${restoreResult.restoredTables.join(", ")}\nRegistros: ${restoreResult.recordsRestored}`,
+          { variant: "success" }
         );
         await loadData();
       } else {
-        Alert.alert("Erro", restoreResult.error || "Falha ao importar backup");
+        alert("Erro", restoreResult.error || "Falha ao importar backup", { variant: "danger" });
       }
     } catch (error) {
       console.error("[Backup] Error importing backup:", error);
-      Alert.alert("Erro", "Falha ao importar backup");
+      alert("Erro", "Falha ao importar backup", { variant: "danger" });
     }
   };
 
@@ -341,11 +332,11 @@ export default function BackupScreen() {
           dialogTitle: "Compartilhar Backup",
         });
       } else {
-        Alert.alert("Erro", "Arquivo de backup não encontrado");
+        alert("Erro", "Arquivo de backup não encontrado", { variant: "danger" });
       }
     } catch (error) {
       console.error("[Backup] Error exporting backup:", error);
-      Alert.alert("Erro", "Falha ao exportar backup");
+      alert("Erro", "Falha ao exportar backup", { variant: "danger" });
     }
   };
 
@@ -355,13 +346,13 @@ export default function BackupScreen() {
       setSchedulerConfig(prev => ({ ...prev, enabled: !prev.enabled }));
     } catch (error) {
       console.error("[Backup] Error toggling scheduler:", error);
-      Alert.alert("Erro", "Falha ao alterar configuração");
+      alert("Erro", "Falha ao alterar configuração", { variant: "danger" });
     }
   };
 
   const saveBackupTime = async () => {
     if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(editingTime)) {
-      Alert.alert("Erro", "Formato de hora inválido. Use HH:MM");
+      alert("Erro", "Formato de hora inválido. Use HH:MM", { variant: "danger" });
       return;
     }
 
@@ -370,10 +361,10 @@ export default function BackupScreen() {
       setSchedulerConfig(prev => ({ ...prev, backupTime: editingTime }));
       setShowTimeModal(false);
       setEditingTime("");
-      Alert.alert("Sucesso", "Horário de backup atualizado");
+      alert("Sucesso", "Horário de backup atualizado", { variant: "success" });
     } catch (error) {
       console.error("[Backup] Error saving backup time:", error);
-      Alert.alert("Erro", "Falha ao salvar horário");
+      alert("Erro", "Falha ao salvar horário", { variant: "danger" });
     }
   };
 
@@ -553,32 +544,29 @@ export default function BackupScreen() {
                     <Pressable
                       style={styles.backupActionButton}
                       onPress={() => {
-                        Alert.alert(
+                        confirm(
                           "Restaurar",
                           `Restaurar o backup "${item.filename}"?\nIsso substituirá todos os dados atuais.`,
-                          [
-                            { text: "Cancelar", style: "cancel" },
-                            {
-                              text: "Restaurar",
-                              style: "destructive",
-                              onPress: async () => {
-                                try {
-                                  setRestoringCloud(true);
-                                  const result = await BackupSystem.downloadAndRestoreByFilename(item.filename);
-                                  if (result.success) {
-                                    Alert.alert("Sucesso", `Dados restaurados!\n\nRegistros: ${result.recordsRestored}`);
-                                    await loadData();
-                                  } else {
-                                    Alert.alert("Erro", result.error || "Falha ao restaurar");
-                                  }
-                                } catch {
-                                  Alert.alert("Erro", "Falha ao restaurar da nuvem");
-                                } finally {
-                                  setRestoringCloud(false);
+                          {
+                            variant: "warning",
+                            confirmText: "Restaurar",
+                            onConfirm: async () => {
+                              try {
+                                setRestoringCloud(true);
+                                const result = await BackupSystem.downloadAndRestoreByFilename(item.filename);
+                                if (result.success) {
+                                  alert("Sucesso", `Dados restaurados!\n\nRegistros: ${result.recordsRestored}`, { variant: "success" });
+                                  await loadData();
+                                } else {
+                                  alert("Erro", result.error || "Falha ao restaurar", { variant: "danger" });
                                 }
-                              },
+                              } catch {
+                                alert("Erro", "Falha ao restaurar da nuvem", { variant: "danger" });
+                              } finally {
+                                setRestoringCloud(false);
+                              }
                             },
-                          ]
+                          }
                         );
                       }}
                     >
@@ -730,6 +718,7 @@ export default function BackupScreen() {
           </View>
         </View>
       </Modal>
+      {dialog}
     </SafeAreaView>
   );
 }

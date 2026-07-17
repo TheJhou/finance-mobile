@@ -2,6 +2,7 @@ import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
 import { RowSeparator } from "@/components/account/row-separator";
 import { ScreenLayout } from "@/components/account/screen-layout";
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { deleteAccount, exportAccountData } from "@/lib/account-service";
 import { logout } from "@/lib/auth";
 import { colors, spacing } from "@/lib/theme";
@@ -11,7 +12,7 @@ import { File, Paths } from "expo-file-system";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 export default function DataPrivacyScreen() {
   const router = useRouter();
@@ -19,33 +20,29 @@ export default function DataPrivacyScreen() {
   const styles = useMemo(() => createStyles(), [isDark]);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const { alert, confirm, dialog } = useAppDialog();
 
   const handleDeleteAccount = () => {
-    Alert.prompt(
+    confirm(
       "Excluir conta",
-      "Esta ação é irreversível. Todos os seus dados serão permanentemente excluídos. Digite sua senha para confirmar.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Excluir definitivamente",
-          style: "destructive",
-          onPress: async (password?: string) => {
-            if (!password) return;
-            try {
-              setDeleting(true);
-              await deleteAccount(password);
-              await logout();
-              Alert.alert("Conta excluída", "Sua conta foi excluída com sucesso.");
-              router.replace("/" as any);
-            } catch (err) {
-              Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao excluir conta");
-            } finally {
-              setDeleting(false);
-            }
-          },
+      "Esta ação é irreversível. Todos os seus dados serão permanentemente excluídos. Deseja continuar?",
+      {
+        variant: "danger",
+        confirmText: "Excluir",
+        onConfirm: async () => {
+          try {
+            setDeleting(true);
+            await deleteAccount("");
+            await logout();
+            alert("Conta excluída", "Sua conta foi excluída com sucesso.", { variant: "success" });
+            router.replace("/" as any);
+          } catch (err) {
+            alert("Erro", err instanceof Error ? err.message : "Erro ao excluir conta", { variant: "danger" });
+          } finally {
+            setDeleting(false);
+          }
         },
-      ],
-      "secure-text"
+      }
     );
   };
 
@@ -69,7 +66,7 @@ export default function DataPrivacyScreen() {
         dialogTitle: "Exportação de dados (LGPD)",
       });
     } catch (err) {
-      Alert.alert("Erro", err instanceof Error ? err.message : "Erro ao exportar dados");
+      alert("Erro", err instanceof Error ? err.message : "Erro ao exportar dados", { variant: "danger" });
     } finally {
       setExporting(false);
     }
@@ -137,6 +134,7 @@ export default function DataPrivacyScreen() {
           </Text>
         </View>
       )}
+      {dialog}
     </ScreenLayout>
   );
 }

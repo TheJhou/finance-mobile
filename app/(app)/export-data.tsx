@@ -1,3 +1,4 @@
+import { useAppDialog } from "@/hooks/use-app-dialog";
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
 import { loadMonthStartDay } from "@/lib/settings";
@@ -9,7 +10,6 @@ import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
     ActivityIndicator,
-    Alert,
     ScrollView,
     StyleSheet,
     Text,
@@ -77,6 +77,7 @@ export default function ExportDataScreen() {
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("pdf");
   const [selectedPeriod, setSelectedPeriod] = useState<ExportPeriod>("month");
   const [exporting, setExporting] = useState(false);
+  const { alert, dialog } = useAppDialog();
 
   const handleExport = async () => {
     setExporting(true);
@@ -84,10 +85,10 @@ export default function ExportDataScreen() {
       if (selectedFormat !== "csv") {
         const isPro = await checkProFeature(selectedFormat.toUpperCase());
         if (!isPro) {
-          Alert.alert(
+          alert(
             "Recurso PRO",
             `Exportar em ${selectedFormat.toUpperCase()} é exclusivo do plano Kilun Pro.\n\nFaça upgrade na aba "Meu Plano" para desbloquear.`,
-            [{ text: "OK" }]
+            { variant: "warning" }
           );
           return;
         }
@@ -109,7 +110,7 @@ export default function ExportDataScreen() {
           break;
       }
     } catch (e) {
-      Alert.alert("Erro ao exportar", "Não foi possível gerar o arquivo. Tente novamente.");
+      alert("Erro ao exportar", "Não foi possível gerar o arquivo. Tente novamente.", { variant: "danger" });
       console.error(e);
     } finally {
       setExporting(false);
@@ -219,6 +220,7 @@ export default function ExportDataScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
+      {dialog}
     </SafeAreaView>
   );
 }
