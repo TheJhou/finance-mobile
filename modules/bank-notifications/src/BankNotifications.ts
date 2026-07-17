@@ -6,6 +6,8 @@ declare class BankNotificationsModule extends NativeModule<BankNotificationsModu
   isListenerConnected(): boolean;
   requestRebind(): void;
   openPermissionSettings(): void;
+  isBatteryOptimizationIgnored(): boolean;
+  requestIgnoreBatteryOptimizations(): boolean;
 }
 
 let mod: BankNotificationsModule | null = null;

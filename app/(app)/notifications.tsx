@@ -574,6 +574,30 @@ export default function NotificationsScreen() {
           )}
         </View>
 
+        {granted && connected && moduleAvailable && BankNotifications && !BankNotifications.isBatteryOptimizationIgnored() && (
+          <View style={[styles.statusCard, { borderColor: colors.warning }]}>
+            <Ionicons name="battery-charging-outline" size={20} color={colors.warning} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.statusTitle}>Otimização de bateria ativa</Text>
+              <Text style={styles.statusText}>
+                O Android pode encerrar o serviço em segundo plano. Desative a otimização para manter a captura estável.
+              </Text>
+            </View>
+            <Pressable
+              style={[styles.statusBtn, { backgroundColor: colors.warning }]}
+              onPress={() => {
+                try {
+                  BankNotifications?.requestIgnoreBatteryOptimizations();
+                } catch {
+                  showToast("error", "Falha ao solicitar isenção de bateria");
+                }
+              }}
+            >
+              <Text style={styles.statusBtnText}>Isentar</Text>
+            </Pressable>
+          </View>
+        )}
+
         {granted && !connected && moduleAvailable && (
           <View style={[styles.statusCard, { borderColor: colors.danger }]}>
             <Ionicons name="alert-circle" size={20} color={colors.danger} />

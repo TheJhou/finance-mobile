@@ -2,6 +2,7 @@ package expo.modules.banknotifications
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.service.notification.NotificationListenerService
@@ -34,15 +35,27 @@ class BankNotificationListenerService : NotificationListenerService() {
     Log.w(TAG, "Notification listener disconnected — scheduling rebind in 3s")
     isConnected = false
     connectionCallback?.invoke(false)
-    // Schedule a delayed rebind to avoid immediate disconnect-rebind loop.
-    // The 3s delay gives Android time to settle before requesting rebind.
+    // Schedule a delayed rebind: first re-enable the component (in case the
+    // system disabled it), then call requestRebind. This two-step approach
+    // handles the case where Android kills AND disables the service.
     Handler(Looper.getMainLooper()).postDelayed({
       try {
+        val pm = getSystemService(Context.PACKAGE_SERVICE) as PackageManager
         val component = ComponentName(this, BankNotificationListenerService::class.java)
+        val enabledState = pm.getComponentEnabledSetting(component)
+        Log.i(TAG, "Component enabled state: $enabledState")
+        if (enabledState != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+          Log.w(TAG, "Component was disabled by system — re-enabling")
+          pm.setComponentEnabledSetting(
+            component,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+          )
+        }
         NotificationListenerService.requestRebind(component)
-        Log.i(TAG, "Delayed requestRebind: official API called successfully")
+        Log.i(TAG, "requestRebind called successfully after component check")
       } catch (e: Throwable) {
-        Log.e(TAG, "Delayed requestRebind failed", e)
+        Log.e(TAG, "Delayed rebind failed", e)
       }
     }, 3000)
   }
@@ -133,12 +146,33 @@ class BankNotificationListenerService : NotificationListenerService() {
 
     fun requestRebind(context: Context) {
       try {
+        val pm = context.packageManager
         val component = ComponentName(context, BankNotificationListenerService::class.java)
-        // Use the official NotificationListenerService.requestRebind (API 24+)
-        // This is the correct way to request a rebind — it does NOT disable/enable
-        // the component, so it won't revoke the notification listener permission.
-        NotificationListenerService.requestRebind(component)
-        Log.i(TAG, "requestRebind: official API called successfully")
+        // Step 1: Check if the system disabled our component. If so, re-enable it.
+        // This is critical — requestRebind silently fails if the component is disabled.
+        val enabledState = pm.getComponentEnabledSetting(component)
+        Log.i(TAG, "requestRebind: component enabled state = $enabledState")
+        if (enabledState != PackageManager.COMPONENT_ENABLED_STATE_ENABLED) {
+          Log.w(TAG, "requestRebind: component was disabled — re-enabling via PackageManager")
+          pm.setComponentEnabledSetting(
+            component,
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED,
+            PackageManager.DONT_KILL_APP
+          )
+          // Give the system a moment to process the component re-enable
+          Handler(Looper.getMainLooper()).postDelayed({
+            try {
+              NotificationListenerService.requestRebind(component)
+              Log.i(TAG, "requestRebind: called after component re-enable")
+            } catch (e: Throwable) {
+              Log.e(TAG, "requestRebind: failed after re-enable", e)
+            }
+          }, 1000)
+        } else {
+          // Component is enabled — just request rebind directly
+          NotificationListenerService.requestRebind(component)
+          Log.i(TAG, "requestRebind: called directly (component already enabled)")
+        }
       } catch (e: Throwable) {
         Log.e(TAG, "requestRebind failed", e)
       }

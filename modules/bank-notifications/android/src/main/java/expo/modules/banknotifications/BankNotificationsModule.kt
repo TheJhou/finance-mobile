@@ -1,7 +1,11 @@
 package expo.modules.banknotifications
 
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import java.lang.ref.WeakReference
@@ -39,6 +43,26 @@ class BankNotificationsModule : Module() {
         val intent = Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         context.startActivity(intent)
+      }
+    }
+
+    Function("isBatteryOptimizationIgnored") {
+      val context = appContext.reactContext ?: return@Function false
+      val pm = context.getSystemService(android.content.Context.POWER_SERVICE) as PowerManager
+      pm.isIgnoringBatteryOptimizations(context.packageName)
+    }
+
+    Function("requestIgnoreBatteryOptimizations") {
+      val context = appContext.reactContext ?: return@Function false
+      try {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+        intent.data = Uri.parse("package:${context.packageName}")
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
+        true
+      } catch (e: Throwable) {
+        Log.e("BankNotifications", "requestIgnoreBatteryOptimizations failed", e)
+        false
       }
     }
 
