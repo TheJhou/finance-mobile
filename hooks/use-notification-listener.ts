@@ -31,6 +31,7 @@ const REBIND_IMMEDIATE_THRESHOLD_MS = 60_000;
 const MAX_CONCURRENT_PROCESSING = 1;
 const QUEUE_BACKPRESSURE_THRESHOLD = 50;
 const SYNC_INTERVAL_MS = 120_000;
+const STARTUP_CHECK_DELAYS_MS = [3_000, 7_000, 12_000];
 
 export function useNotificationListener() {
   const isOnlineRef = useRef(true);
@@ -340,32 +341,40 @@ export function useNotificationListener() {
       }
     );
 
-    // ── Health check periódico ─────────────────────────────────────────
-    const healthCheck = setInterval(() => {
-      if (BankNotifications) {
-        const connected = BankNotifications.isListenerConnected();
-        const granted = BankNotifications.isPermissionGranted();
-        if (!granted) {
-          console.warn("[AutoImport] Permissão de notificação revogada");
-        } else if (!connected) {
-          const now = Date.now();
-          if (now - lastRebindRef.current >= REBIND_BACKOFF_MS) {
-            lastRebindRef.current = now;
-            console.warn(
-              "[AutoImport] Listener desconectado — tentando rebind automático"
-            );
-            try {
-              BankNotifications?.requestRebind();
-            } catch (e) {
-              console.warn("[AutoImport] requestRebind falhou:", e);
-            }
+    // ── Health check: progressivo na inicialização, depois fixo ────────
+    function runHealthCheck(): void {
+      if (!BankNotifications) return;
+      const connected = BankNotifications.isListenerConnected();
+      const granted = BankNotifications.isPermissionGranted();
+      if (!granted) {
+        console.warn("[AutoImport] Permissão de notificação revogada");
+      } else if (!connected) {
+        const now = Date.now();
+        if (now - lastRebindRef.current >= REBIND_BACKOFF_MS) {
+          lastRebindRef.current = now;
+          console.warn(
+            "[AutoImport] Listener desconectado — tentando rebind automático"
+          );
+          try {
+            BankNotifications?.requestRebind();
+          } catch (e) {
+            console.warn("[AutoImport] requestRebind falhou:", e);
           }
-        } else {
-          // Listener is connected — drain any pending AI enrichments
-          void retryPendingAiEnrichment();
         }
+      } else {
+        // Listener is connected — drain any pending AI enrichments
+        void retryPendingAiEnrichment();
       }
-    }, HEALTH_CHECK_INTERVAL_MS);
+    }
+
+    // Checks agressivos na inicialização (3s, 7s, 12s) para estabilizar rápido
+    const startupTimers: ReturnType<typeof setTimeout>[] = [];
+    for (const delay of STARTUP_CHECK_DELAYS_MS) {
+      startupTimers.push(setTimeout(runHealthCheck, delay));
+    }
+
+    // Health check fixo após os checks de inicialização
+    const healthCheck = setInterval(runHealthCheck, HEALTH_CHECK_INTERVAL_MS);
 
     // ── Retry periódico de IA (caso NetInfo não dispare) ───────────────
     const aiRetryInterval = setInterval(() => {
@@ -381,7 +390,20 @@ export function useNotificationListener() {
       }
     }, SYNC_INTERVAL_MS);
 
-    // ── Startup: limpa notificações antigas e reprocessa pendentes ─────
+    // ── Startup: check imediato de conexão + limpeza + reprocessamento ──
+    if (BankNotifications) {
+      const granted = BankNotifications.isPermissionGranted();
+      const connected = BankNotifications.isListenerConnected();
+      if (granted && !connected) {
+        console.warn("[AutoImport] Listener não conectado na inicialização — rebind imediato");
+        lastRebindRef.current = Date.now();
+        try {
+          BankNotifications.requestRebind();
+        } catch (e) {
+          console.warn("[AutoImport] requestRebind inicial falhou:", e);
+        }
+      }
+    }
     runDbExclusive(() => cleanupOldQueueItems());
     void retryPendingAiEnrichment();
     runDbExclusive(() => processSyncQueue());
@@ -390,6 +412,7 @@ export function useNotificationListener() {
       netInfoSub();
       notifSub.remove();
       connSub.remove();
+      startupTimers.forEach(clearTimeout);
       clearInterval(healthCheck);
       clearInterval(aiRetryInterval);
       clearInterval(syncInterval);

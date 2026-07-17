@@ -32,7 +32,7 @@ class BankNotificationListenerService : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    Log.w(TAG, "Notification listener disconnected — scheduling rebind in 3s")
+    Log.w(TAG, "Notification listener disconnected — scheduling rebind in 1s")
     isConnected = false
     connectionCallback?.invoke(false)
     // Schedule a delayed rebind: first re-enable the component (in case the
@@ -57,7 +57,7 @@ class BankNotificationListenerService : NotificationListenerService() {
       } catch (e: Throwable) {
         Log.e(TAG, "Delayed rebind failed", e)
       }
-    }, 3000)
+    }, 1000)
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {

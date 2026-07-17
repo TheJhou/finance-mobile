@@ -80,6 +80,12 @@ class BankNotificationsModule : Module() {
       for (payload in buffered) {
         weakModule.get()?.sendEvent("onNotification", payload)
       }
+
+      // If the service is already connected, notify JS immediately so it
+      // doesn't wait for the first health check to discover the state.
+      if (BankNotificationListenerService.isConnected) {
+        weakModule.get()?.sendEvent("onConnectionChange", mapOf("connected" to true))
+      }
     }
 
     OnStopObserving {
