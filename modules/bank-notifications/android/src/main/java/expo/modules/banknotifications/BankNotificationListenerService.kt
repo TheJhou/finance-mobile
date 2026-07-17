@@ -40,7 +40,7 @@ class BankNotificationListenerService : NotificationListenerService() {
     // handles the case where Android kills AND disables the service.
     Handler(Looper.getMainLooper()).postDelayed({
       try {
-        val pm = getSystemService(Context.PACKAGE_SERVICE) as PackageManager
+        val pm = packageManager
         val component = ComponentName(this, BankNotificationListenerService::class.java)
         val enabledState = pm.getComponentEnabledSetting(component)
         Log.i(TAG, "Component enabled state: $enabledState")
