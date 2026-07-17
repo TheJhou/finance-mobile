@@ -26,12 +26,16 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# macOS
+# macOS / OS
 .DS_Store
+Thumbs.db
 *.pem
 
 # local env files
+.env
 .env*.local
+.env.production
+.env.staging
 
 # typescript
 *.tsbuildinfo
@@ -42,14 +46,29 @@ app-example
 /ios
 /android
 
-# backend repository (separate repo)
-backend-repo/
-backend-final/
-.env
-.env
-
 # EAS build logs
 build-output.json
 
 # legal pages (separate repo)
 finance-app-legal/
+
+# separate repos
+backend-repo/
+backend-final/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# logs
+logs/
+*.log
+
+# coverage
+coverage/
+
+# misc
+config-err.txt
+config-out.txt
