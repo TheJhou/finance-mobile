@@ -684,7 +684,7 @@ export default function TransactionsScreen() {
               </Pressable>
             )}
           </ScrollView>
-          <ScrollFade height={16} fadeColor={colors.surface} />
+          <ScrollFade fadeColor={colors.surface} />
         </View>
       )}
 

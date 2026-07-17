@@ -495,7 +495,6 @@ export default function DashboardScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ gap: spacing.lg }}
                 fadeColor={colors.surface}
-                fadeWidth={20}
               >
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>

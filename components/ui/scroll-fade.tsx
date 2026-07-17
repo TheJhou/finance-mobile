@@ -9,14 +9,15 @@ interface ScrollFadeProps {
   fadeColor?: string;
 }
 
-export function ScrollFade({ height = 24, fadeColor }: Readonly<ScrollFadeProps>) {
+export function ScrollFade({ height = 40, fadeColor }: Readonly<ScrollFadeProps>) {
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
   const bg = fadeColor ?? colors.background;
   return (
     <View style={styles.container} pointerEvents="none">
       <LinearGradient
-        colors={[bg + "00", bg]}
+        colors={[bg + "00", bg + "80", bg]}
+        locations={[0, 0.5, 1]}
         style={[styles.gradient, { height }]}
       />
     </View>
@@ -31,7 +32,7 @@ interface HorizontalScrollFadeProps extends ScrollViewProps {
 
 export function HorizontalScrollFade({
   fadeColor,
-  fadeWidth = 16,
+  fadeWidth = 40,
   children,
   ...scrollViewProps
 }: Readonly<HorizontalScrollFadeProps>) {
@@ -59,7 +60,8 @@ export function HorizontalScrollFade({
       </ScrollView>
       {showLeft && (
         <LinearGradient
-          colors={[bg, bg + "00"]}
+          colors={[bg, bg + "80", bg + "00"]}
+          locations={[0, 0.5, 1]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={[styles.hFade, { left: 0, width: fadeWidth }]}
@@ -68,7 +70,8 @@ export function HorizontalScrollFade({
       )}
       {showRight && (
         <LinearGradient
-          colors={[bg + "00", bg]}
+          colors={[bg + "00", bg + "80", bg]}
+          locations={[0, 0.5, 1]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={[styles.hFade, { right: 0, width: fadeWidth }]}
