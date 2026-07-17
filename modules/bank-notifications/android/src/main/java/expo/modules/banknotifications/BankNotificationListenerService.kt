@@ -29,19 +29,11 @@ class BankNotificationListenerService : NotificationListenerService() {
   }
 
   override fun onListenerDisconnected() {
-    Log.w(TAG, "Notification listener disconnected — requesting rebind via official API")
+    Log.w(TAG, "Notification listener disconnected")
     isConnected = false
     connectionCallback?.invoke(false)
-    try {
-      // Use the official NotificationListenerService.requestRebind (API 24+)
-      // This asks Android to rebind without disabling/enabling the component,
-      // which avoids revoking the notification listener permission.
-      val component = ComponentName(this, BankNotificationListenerService::class.java)
-      NotificationListenerService.requestRebind(component)
-      Log.i(TAG, "requestRebind: official API called successfully")
-    } catch (e: Throwable) {
-      Log.e(TAG, "requestRebind failed", e)
-    }
+    // Do NOT auto-requestRebind here — it causes a disconnect-rebind loop.
+    // JS health check handles reconnection with proper backoff.
   }
 
   override fun onNotificationPosted(sbn: StatusBarNotification) {

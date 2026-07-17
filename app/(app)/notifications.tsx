@@ -586,11 +586,29 @@ export default function NotificationsScreen() {
             </View>
             <Pressable
               style={[styles.statusBtn, { backgroundColor: colors.primary }]}
-              onPress={() => {
+              onPress={async () => {
                 try {
                   BankNotifications?.requestRebind();
                   showToast("success", "Tentando reconectar...");
-                  setTimeout(() => checkPermission(), 2000);
+                  let reconnected = false;
+                  for (let i = 0; i < 3; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    const isGranted = BankNotifications?.isPermissionGranted() ?? false;
+                    const isConnected = BankNotifications?.isListenerConnected() ?? false;
+                    setGranted(isGranted);
+                    setConnected(isConnected);
+                    if (isConnected) {
+                      reconnected = true;
+                      showToast("success", "Listener reconectado com sucesso!");
+                      break;
+                    }
+                    if (i < 2) {
+                      BankNotifications?.requestRebind();
+                    }
+                  }
+                  if (!reconnected) {
+                    showToast("warning", "Não foi possível reconectar. Tente nas configurações do Android.");
+                  }
                 } catch {
                   showToast("error", "Falha ao reativar listener");
                 }
