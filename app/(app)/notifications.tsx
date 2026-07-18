@@ -106,6 +106,9 @@ export default function NotificationsScreen() {
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [recording, setRecording] = useState(false);
   const recordingRef = useRef(false);
+  // Enquanto o fluxo de áudio estiver ativo (permissão → gravação → processamento),
+  // nenhuma verificação de auth pode deslogar o usuário.
+  const audioInProgressRef = useRef(false);
   const [toast, setToast] = useState<{ type: "success" | "error" | "warning"; message: string } | null>(null);
   const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -152,17 +155,13 @@ export default function NotificationsScreen() {
   }, []);
 
   const checkAuth = useCallback(async () => {
+    // Nunca desloga enquanto o fluxo de áudio estiver ativo.
+    // O dialog de permissão e a gravação podem causar pausas na Activity do Android
+    // que tornam o SecureStore temporariamente inacessível — não é logout real.
+    if (audioInProgressRef.current) return;
     const authed = await isAuthenticated();
-    // Só marca como deslogado se a falha for confirmada: aguarda 600ms e tenta de novo.
-    // Evita falsos negativos quando o SecureStore fica brevemente indisponível durante
-    // o dialog de permissão de microfone (pausa/retomada da Activity no Android).
-    if (!authed) {
-      await new Promise((r) => setTimeout(r, 600));
-      const retry = await isAuthenticated();
-      setLoggedIn(retry);
-    } else {
-      setLoggedIn(true);
-    }
+    if (!authed && audioInProgressRef.current) return; // checagem dupla pós-await
+    setLoggedIn(authed);
   }, []);
 
   useFocusEffect(
@@ -483,9 +482,13 @@ export default function NotificationsScreen() {
       showToast("warning", "Faça login para usar transcrição de áudio.");
       return;
     }
+    // Ativa a guarda ANTES do dialog de permissão — é exatamente aí que a
+    // Activity pausa/retoma no Android e pode disparar um checkAuth falso.
+    audioInProgressRef.current = true;
     try {
       const { granted } = await AudioModule.requestRecordingPermissionsAsync();
       if (!granted) {
+        audioInProgressRef.current = false;
         showToast("error", "Permissão de microfone negada");
         return;
       }
@@ -499,6 +502,7 @@ export default function NotificationsScreen() {
       setRecording(true);
       recordingRef.current = true;
     } catch (err) {
+      audioInProgressRef.current = false;
       await resetAudioMode();
       showToast("error", err instanceof Error ? err.message : "Falha ao iniciar gravação");
     }
@@ -563,6 +567,8 @@ export default function NotificationsScreen() {
       }
     } finally {
       setProcessingAudio(false);
+      // Libera a guarda — checkAuth volta a funcionar normalmente
+      audioInProgressRef.current = false;
     }
   };
 
