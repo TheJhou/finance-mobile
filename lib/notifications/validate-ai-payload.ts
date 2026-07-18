@@ -27,7 +27,7 @@ export interface ValidationResult {
 export function validateNotificationAiPayload(
   rawText: string,
   categories: Array<{ id: string; name: string }>,
-  context: { bank?: string; paymentMethod?: string },
+  context: { bank?: string; paymentMethod?: string; type?: string },
   origin: ValidateOrigin
 ): ValidationResult {
   const tag = `[AutoImport][ValidatePayload][${origin}]`;
@@ -88,6 +88,7 @@ export function validateNotificationAiPayload(
     categoryNames: categories.map((c) => c.name).join(", "),
     contextBank: context.bank ?? "(ausente)",
     contextPaymentMethod: context.paymentMethod ?? "(ausente)",
+    contextType: context.type ?? "(ausente)",
   };
 
   const valid = errors.length === 0;

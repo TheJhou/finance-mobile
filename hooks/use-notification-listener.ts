@@ -117,9 +117,15 @@ export function useNotificationListener() {
       if (typeof draft.amount === "number" && draft.amount > 0 && draft.amount <= 999_999_999.99) {
         aiAmount = Math.round(draft.amount * 100) / 100;
       } else if (typeof draft.amount === "string") {
-        const parsed = parseFloat(draft.amount.replace(/[^0-9.,]/g, "").replace(".", "").replace(",", "."));
-        if (!isNaN(parsed) && parsed > 0 && parsed <= 999_999_999.99) {
-          aiAmount = Math.round(parsed * 100) / 100;
+        const raw = draft.amount.replace(/[^0-9.,]/g, "");
+        // Detecta formato: se termina com ,XX → brasileiro (1.234,56); senão → americano (1,234.56)
+        const isBrazilian = /,\d{2}$/.test(raw);
+        const normalized = isBrazilian
+          ? raw.replace(/\./g, "").replace(",", ".")   // 1.234,56 → 1234.56
+          : raw.replace(/,/g, "");                      // 1,234.56 → 1234.56
+        const parsedAmt = parseFloat(normalized);
+        if (!isNaN(parsedAmt) && parsedAmt > 0 && parsedAmt <= 999_999_999.99) {
+          aiAmount = Math.round(parsedAmt * 100) / 100;
         }
       }
       if (aiAmount === null) warnings.push("IA: amount ausente ou inválido");
@@ -156,6 +162,21 @@ export function useNotificationListener() {
         }
       }
       if (!aiCategoryId) warnings.push("IA: categoria não encontrada");
+
+      // Guard: categorias de consumo não fazem sentido para receitas (INCOME)
+      // Ex: Pix recebido não deve ser categorizado como Alimentação ou Transporte
+      const EXPENSE_ONLY_CATEGORIES = ["alimentação", "transporte", "lazer", "compras", "moradia", "saúde", "educação", "assinaturas"];
+      const incomingType = typeof draft.type === "string" ? draft.type : null;
+      if (
+        aiCategoryId &&
+        aiCategoryName &&
+        incomingType === "INCOME" &&
+        EXPENSE_ONLY_CATEGORIES.includes(aiCategoryName.toLowerCase())
+      ) {
+        warnings.push(`IA: categoria "${aiCategoryName}" incoerente com tipo INCOME — ignorando categoria da IA`);
+        aiCategoryId = null;
+        aiCategoryName = null;
+      }
 
       // Pelo menos description e amount devem ser válidos para considerar a resposta útil
       const valid = aiDescription !== null && aiAmount !== null;
@@ -270,7 +291,7 @@ export function useNotificationListener() {
 
         try {
           const aiCategories = categories.map((c) => ({ id: c.id, name: c.name }));
-          const aiContext = { bank: parsed.bank, paymentMethod: parsed.paymentMethod };
+          const aiContext = { bank: parsed.bank, paymentMethod: parsed.paymentMethod, type: parsed.type };
           const payloadOk = validateNotificationAiPayload(text, aiCategories, aiContext, "processNotification");
           if (!payloadOk.valid) return;
 
@@ -382,7 +403,7 @@ export function useNotificationListener() {
 
           try {
             const retryCategories = categories.map((c) => ({ id: c.id, name: c.name }));
-            const retryContext = { bank: item.bank ?? undefined, paymentMethod: item.paymentMethod ?? undefined };
+            const retryContext = { bank: item.bank ?? undefined, paymentMethod: item.paymentMethod ?? undefined, type: item.type ?? undefined };
             const retryPayloadOk = validateNotificationAiPayload(item.rawText, retryCategories, retryContext, "retryPendingAiEnrichment");
             if (!retryPayloadOk.valid) {
               await incrementRetryCount(item.id);
