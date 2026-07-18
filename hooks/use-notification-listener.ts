@@ -12,6 +12,7 @@ import {
     updateWithAiResult,
 } from "@/lib/notification-queue";
 import {
+    BANK_APPS,
     inferCategoryFromText,
     parseNotification,
 } from "@/lib/notifications/parsers";
