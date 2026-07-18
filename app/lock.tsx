@@ -13,29 +13,43 @@ export default function LockScreen() {
   const styles = useMemo(() => createStyles(), [isDark]);
   const [error, setError] = useState<string | null>(null);
   const [authenticating, setAuthenticating] = useState(false);
+
+  // Refs para evitar stale closures e re-disparos indesejados
   const mountedRef = useRef(true);
+  const isAuthenticatingRef = useRef(false); // guarda ref (não state) para o guard
 
   const tryAuthenticate = useCallback(async () => {
-    if (authenticating) return;
+    // Guard via ref: seguro mesmo dentro de closures stale
+    if (isAuthenticatingRef.current) return;
+    isAuthenticatingRef.current = true;
     setAuthenticating(true);
     setError(null);
+
     const result = await authenticateWithBiometrics("Autentique-se para acessar o app");
+
+    // Componente pode ter desmontado durante o await
     if (!mountedRef.current) return;
+
     if (result.success) {
       await setBiometricUnlocked(true);
-      // Replace to root — RootNavigator will re-evaluate and show the app
+      // RootNavigator reage via onBiometricUnlockChange e remove a lock screen
       router.replace("/" as any);
     } else {
+      isAuthenticatingRef.current = false;
+      setAuthenticating(false);
       setError(result.error ?? "Falha na autenticação");
     }
-    setAuthenticating(false);
-  }, [authenticating, router]);
+  }, [router]);
 
+  // Dispara biometria IMEDIATAMENTE na montagem — sem deps que causem re-disparo
   useEffect(() => {
     mountedRef.current = true;
-    tryAuthenticate();
-    return () => { mountedRef.current = false; };
-  }, [tryAuthenticate]);
+    void tryAuthenticate();
+    return () => {
+      mountedRef.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Intencional: só na montagem. Retry é via botão manual.
 
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom", "left", "right"]}>

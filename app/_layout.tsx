@@ -6,7 +6,7 @@ import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { isAuthenticated } from "@/lib/auth";
-import { isBiometricEnabled, isBiometricUnlocked, onBiometricUnlockChange, setBiometricUnlocked } from "@/lib/biometric";
+import { isBiometricEnabled, onBiometricUnlockChange, setBiometricUnlocked } from "@/lib/biometric";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
 import { ThemeProvider, useTheme } from "@/lib/theme-context";
@@ -14,63 +14,71 @@ import { ThemeProvider, useTheme } from "@/lib/theme-context";
 function RootNavigator() {
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [isAuth, setIsAuth] = useState<boolean | null>(null);
+
+  // ── Fase 1: checagem de biometria (AsyncStorage, ~5 ms) ──────────────
+  // Começa com locked=false; se biometria estiver ativa, vira true assim
+  // que a leitura terminar — antes de qualquer frame do app ser exibido.
+  const [biometricChecked, setBiometricChecked] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [locked, setLocked] = useState(false);
-  const [checkingLock, setCheckingLock] = useState(true);
 
-  // Single parallel init: DB + auth + biometric settings — eliminates sequential useEffect chain
+  // ── Fase 2: inicialização do DB + auth (pode demorar mais) ───────────
+  const [appReady, setAppReady] = useState(false);
+  const [isAuth, setIsAuth] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fase 1 — roda isolada e primeiro para não bloquear a lock screen
   useEffect(() => {
     let cancelled = false;
-    Promise.all([
-      getDb(),
-      isAuthenticated(),
-      isBiometricEnabled(),
-    ])
-      .then(([, authenticated, bioEnabled]) => {
+    isBiometricEnabled().then((bioEnabled) => {
+      if (cancelled) return;
+      setBiometricEnabled(bioEnabled);
+      // Se habilitada: trava imediatamente, lock screen aparece sem delay
+      setLocked(bioEnabled);
+      setBiometricChecked(true);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Fase 2 — roda em paralelo com a fase 1 (e com a autenticação biométrica)
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getDb(), isAuthenticated()])
+      .then(([, authenticated]) => {
         if (cancelled) return;
-        setReady(true);
         setIsAuth(authenticated);
-        setBiometricEnabled(authenticated && bioEnabled);
-        if (!authenticated || !bioEnabled) {
+        setAppReady(true);
+        // Sem sessão ativa → biometria não faz sentido, libera o acesso
+        if (!authenticated) {
           setLocked(false);
-          setCheckingLock(false);
-        } else {
-          // Biometric enabled — always lock on startup, never trust persisted unlocked state
-          setLocked(true);
-          setCheckingLock(false);
+          setBiometricEnabled(false);
         }
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setError(e instanceof Error ? e.message : "Erro ao inicializar DB");
+        setError(e instanceof Error ? e.message : "Erro ao inicializar");
+        // Em caso de erro de DB, não travar o usuário indefinidamente
+        setLocked(false);
+        setBiometricChecked(true);
+        setAppReady(true);
       });
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
-  // Clear unlocked flag when app goes to background so it re-prompts on return
+  // Background → trava; foreground → a lock screen re-dispara a biometria
   useEffect(() => {
-    if (!isAuth || !biometricEnabled) return;
+    if (!biometricEnabled) return;
     const handler = (nextState: AppStateStatus) => {
       if (nextState === "background" || nextState === "inactive") {
         void setBiometricUnlocked(false);
         setLocked(true);
-      } else if (nextState === "active") {
-        // Re-check lock when returning from background
-        isBiometricUnlocked().then((unlocked) => {
-          setLocked(!unlocked);
-        });
       }
     };
     const sub = AppState.addEventListener("change", handler);
     return () => sub.remove();
-  }, [isAuth, biometricEnabled]);
+  }, [biometricEnabled]);
 
-  // Subscribe to unlock events from lock screen — instant reaction, no polling
+  // Reage ao desbloqueio vindo da lock screen (sem polling)
   useEffect(() => {
     if (!biometricEnabled) return;
     return onBiometricUnlockChange((unlocked) => {
@@ -78,6 +86,22 @@ function RootNavigator() {
     });
   }, [biometricEnabled]);
 
+  // ── Antes da checagem de biometria: tela sólida (sem flash de conteúdo) ──
+  // Dura apenas ~5 ms (leitura de AsyncStorage) — imperceptível ao usuário.
+  if (!biometricChecked) {
+    return <View style={{ flex: 1, backgroundColor: colors.background }} />;
+  }
+
+  // ── Lock screen: aparece imediatamente após a checagem ────────────────
+  if (locked) {
+    return (
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="lock" />
+      </Stack>
+    );
+  }
+
+  // ── Erro de inicialização ─────────────────────────────────────────────
   if (error) {
     return (
       <View style={styles.center}>
@@ -87,19 +111,12 @@ function RootNavigator() {
     );
   }
 
-  if (!ready || isAuth === null || checkingLock) {
+  // ── Spinner apenas para usuários SEM biometria (DB ainda carregando) ──
+  if (!appReady || isAuth === null) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
-    );
-  }
-
-  if (locked) {
-    return (
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="lock" />
-      </Stack>
     );
   }
 
