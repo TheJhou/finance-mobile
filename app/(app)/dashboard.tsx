@@ -13,6 +13,10 @@ import { getTokenLimitStatus, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { DashboardData, HealthScoreResult } from "@/lib/types";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
+import { AlertIcon } from "@/components/icons/AlertIcon";
+import { CalendarIcon } from "@/components/icons/CalendarIcon";
+import { CreditCardIcon } from "@/components/icons/CreditCardIcon";
+import { HourglassDoneIcon } from "@/components/icons/HourglassDoneIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -498,7 +502,7 @@ export default function DashboardScreen() {
               >
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="alert-circle" size={24} color={colors.danger} />
+                    <AlertIcon size={24} />
                     {data.overdueAmount > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.danger }]}><Text style={styles.radarBadgeText}>!</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Contas{"\n"}vencidas</Text>
@@ -506,14 +510,14 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="card" size={24} color={colors.primary} />
+                    <CreditCardIcon size={24} />
                     {data.activeRecurring > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.primary }]}><Text style={styles.radarBadgeText}>{data.activeRecurring}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Assinaturas{"\n"}ativas</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="calendar" size={24} color={colors.warning} />
+                    <CalendarIcon size={24} />
                     {bills.length > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.warning }]}><Text style={styles.radarBadgeText}>{bills.length}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Contas próximas{"\n"}do vencimento</Text>
@@ -521,7 +525,7 @@ export default function DashboardScreen() {
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
-                    <Ionicons name="time" size={24} color={colors.success} />
+                    <HourglassDoneIcon size={24} />
                     {data.pendingCount > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.success }]}><Text style={styles.radarBadgeText}>{data.pendingCount}</Text></View>}
                   </View>
                   <Text style={styles.radarLabel}>Transações{"\n"}pendentes</Text>
