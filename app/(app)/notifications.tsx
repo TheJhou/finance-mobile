@@ -153,7 +153,16 @@ export default function NotificationsScreen() {
 
   const checkAuth = useCallback(async () => {
     const authed = await isAuthenticated();
-    setLoggedIn(authed);
+    // Só marca como deslogado se a falha for confirmada: aguarda 600ms e tenta de novo.
+    // Evita falsos negativos quando o SecureStore fica brevemente indisponível durante
+    // o dialog de permissão de microfone (pausa/retomada da Activity no Android).
+    if (!authed) {
+      await new Promise((r) => setTimeout(r, 600));
+      const retry = await isAuthenticated();
+      setLoggedIn(retry);
+    } else {
+      setLoggedIn(true);
+    }
   }, []);
 
   useFocusEffect(
@@ -249,6 +258,8 @@ export default function NotificationsScreen() {
       if (recordingRef.current && audioRecorder.isRecording) {
         audioRecorder.stop().catch(() => {});
       }
+      // Garante que o modo de áudio é restaurado ao sair da tela
+      setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false }).catch(() => {});
     };
   }, [audioRecorder]);
 
@@ -459,6 +470,14 @@ export default function NotificationsScreen() {
     }
   };
 
+  const resetAudioMode = async () => {
+    try {
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: false });
+    } catch {
+      // Ignora falhas ao resetar — não deve bloquear o fluxo
+    }
+  };
+
   const handleStartRecording = async () => {
     if (!loggedIn) {
       showToast("warning", "Faça login para usar transcrição de áudio.");
@@ -480,6 +499,7 @@ export default function NotificationsScreen() {
       setRecording(true);
       recordingRef.current = true;
     } catch (err) {
+      await resetAudioMode();
       showToast("error", err instanceof Error ? err.message : "Falha ao iniciar gravação");
     }
   };
@@ -491,10 +511,20 @@ export default function NotificationsScreen() {
     try {
       setProcessingAudio(true);
       await audioRecorder.stop();
+      // Restaura o modo de áudio imediatamente após parar a gravação
+      await resetAudioMode();
       const uri = audioRecorder.uri;
       if (!uri) throw new Error("Falha ao obter URI do áudio");
 
-      const transcribedText = await transcribeAudio(uri, "audio/webm");
+      // Detecta o MIME type pelo URI — expo-audio grava .m4a no Android e iOS
+      const ext = uri.split(".").pop()?.toLowerCase() ?? "";
+      const mimeType =
+        ext === "m4a" ? "audio/m4a" :
+        ext === "aac" ? "audio/aac" :
+        ext === "wav" ? "audio/wav" :
+        ext === "webm" ? "audio/webm" : "audio/m4a";
+
+      const transcribedText = await transcribeAudio(uri, mimeType);
       const analysis = await analyzeText(transcribedText, "AUDIO", categories.map((c) => ({ id: c.id, name: c.name })));
       const draft = analysis.draft;
       if (!draft || !draft.amount || Number(draft.amount) <= 0) {
