@@ -63,7 +63,8 @@ export async function transcribeAudio(fileUri: string, mimeType: string): Promis
 export async function ocrDocument(
   fileUri: string,
   mimeType: string,
-  categories: Array<{ id: string; name: string }> = []
+  categories: Array<{ id: string; name: string }> = [],
+  maxPages = 2
 ): Promise<{ text: string; draft?: Record<string, unknown> }> {
   const formData = new FormData();
   formData.append("document", {
@@ -72,6 +73,7 @@ export async function ocrDocument(
     name: `document.${mimeType === "application/pdf" ? "pdf" : mimeType === "image/png" ? "png" : "jpg"}`,
   } as any);
   formData.append("categories", JSON.stringify(categories));
+  formData.append("maxPages", String(maxPages));
 
   const response = await authFetch(`${BACKEND_URL}/imports/ocr`, {
     method: "POST",
