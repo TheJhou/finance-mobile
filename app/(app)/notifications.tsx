@@ -42,6 +42,36 @@ function normalizeType(type: unknown): "INCOME" | "EXPENSE" {
   return "EXPENSE";
 }
 
+/**
+ * Resolve categoryId contra a lista local de categorias.
+ * Tenta por ID, depois por nome (case-insensitive), depois usa a primeira categoria disponível.
+ * Nunca retorna string vazia — evita FOREIGN KEY constraint failed no SQLite.
+ */
+function resolveCategory(
+  categoryId: unknown,
+  categoryName: unknown,
+  categories: Category[]
+): string {
+  if (categories.length === 0) throw new Error("Nenhuma categoria disponível");
+
+  // 1. Tenta por ID exato
+  if (typeof categoryId === "string" && categoryId.trim().length > 0) {
+    const byId = categories.find((c) => c.id === categoryId.trim());
+    if (byId) return byId.id;
+  }
+
+  // 2. Tenta por nome (IA pode retornar nome em vez de ID)
+  if (typeof categoryName === "string" && categoryName.trim().length > 0) {
+    const byName = categories.find(
+      (c) => c.name.toLowerCase() === categoryName.trim().toLowerCase()
+    );
+    if (byName) return byName.id;
+  }
+
+  // 3. Fallback: primeira categoria cadastrada
+  return categories[0].id;
+}
+
 function normalizeDocumentType(value: unknown): DocumentType {
   const allowed: DocumentType[] = ["NORMAL", "BOLETO", "NOTA_FISCAL", "COMPROVANTE_PIX", "COMPROVANTE_BANCARIO", "OUTRO"];
   return typeof value === "string" && allowed.includes(value as DocumentType) ? (value as DocumentType) : "NORMAL";
@@ -144,7 +174,7 @@ export default function NotificationsScreen() {
         type: (item.type || "EXPENSE") as "INCOME" | "EXPENSE",
         paymentMethod: (item.paymentMethod || "OTHER") as any,
         date: toDateInputValue(new Date(item.postTime)),
-        categoryId: item.categoryId || "",
+        categoryId: resolveCategory(item.categoryId, item.categoryName, categories),
         notes: `Auto-importado de ${item.bank || "Banco"}`,
         status: 'PAID' as TransactionStatus,
         source: "BANK_NOTIFICATION" as const,
@@ -336,7 +366,7 @@ export default function NotificationsScreen() {
         type: draft.type || "EXPENSE",
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: resolvedDate,
-        categoryId: draft.categoryId || "",
+        categoryId: resolveCategory(draft.categoryId, draft.categoryName, categories),
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: draft.boletoNumber || null,
         cnpj: draft.cnpj || null,
@@ -407,7 +437,7 @@ export default function NotificationsScreen() {
         type: normalizeType(draft.type),
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: ocrDate,
-        categoryId: (draft.categoryId as string) || "",
+        categoryId: resolveCategory(draft.categoryId, draft.categoryName, categories),
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: (draft.boletoNumber as string) || null,
         cnpj: (draft.cnpj as string) || null,
@@ -484,7 +514,7 @@ export default function NotificationsScreen() {
         type: normalizeType(draft.type),
         paymentMethod: normalizePaymentMethod(draft.paymentMethod, "OTHER"),
         date: audioDate,
-        categoryId: draft.categoryId || "",
+        categoryId: resolveCategory(draft.categoryId, draft.categoryName, categories),
         documentType: normalizeDocumentType(draft.documentType),
         boletoNumber: draft.boletoNumber || null,
         cnpj: draft.cnpj || null,
