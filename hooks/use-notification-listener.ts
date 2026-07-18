@@ -12,86 +12,10 @@ import {
     updateWithAiResult,
 } from "@/lib/notification-queue";
 import {
-    BANK_APPS,
     inferCategoryFromText,
     parseNotification,
 } from "@/lib/notifications/parsers";
-
-// ── Validação do payload enviado à IA (notificações) ──────────────────
-const VALID_PAYMENT_METHODS = [
-  "CASH", "CREDIT_CARD", "DEBIT_CARD", "PIX",
-  "BANK_TRANSFER", "BOLETO", "MERCADO_PAGO", "OTHER",
-] as const;
-
-function validateNotificationAiPayload(
-  rawText: string,
-  categories: Array<{ id: string; name: string }>,
-  context: { bank?: string; paymentMethod?: string },
-  origin: "processNotification" | "retryPendingAiEnrichment"
-): boolean {
-  const tag = `[AutoImport][ValidatePayload][${origin}]`;
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  // ── rawText ───────────────────────────────────────────────────────
-  if (!rawText || rawText.trim().length === 0) {
-    errors.push("rawText está vazio — a IA não terá texto para processar");
-  } else if (rawText.trim().length < 10) {
-    warnings.push(`rawText muito curto (${rawText.trim().length} chars): "${rawText.trim()}"`);
-  }
-
-  // ── categories ───────────────────────────────────────────────────
-  if (!categories || categories.length === 0) {
-    errors.push("categories está vazio — a IA não conseguirá categorizar");
-  } else {
-    const invalid = categories.filter((c) => !c.id || !c.name);
-    if (invalid.length > 0) {
-      errors.push(`${invalid.length} categoria(s) com id ou name ausente`);
-    }
-  }
-
-  // ── context.bank ─────────────────────────────────────────────────
-  if (!context.bank || context.bank.trim().length === 0) {
-    warnings.push("context.bank ausente — IA processará sem contexto de banco");
-  } else {
-    const knownBanks = Object.values(BANK_APPS);
-    if (!knownBanks.includes(context.bank)) {
-      warnings.push(`context.bank desconhecido: "${context.bank}" (esperado: ${knownBanks.join(", ")})`);
-    }
-  }
-
-  // ── context.paymentMethod ────────────────────────────────────────
-  if (!context.paymentMethod || context.paymentMethod.trim().length === 0) {
-    warnings.push("context.paymentMethod ausente — IA inferirá sem contexto");
-  } else if (!VALID_PAYMENT_METHODS.includes(context.paymentMethod as typeof VALID_PAYMENT_METHODS[number])) {
-    errors.push(`context.paymentMethod inválido: "${context.paymentMethod}" (válidos: ${VALID_PAYMENT_METHODS.join(", ")})`);
-  }
-
-  // ── Log ──────────────────────────────────────────────────────────
-  const payloadLog = {
-    rawText: rawText.length > 120 ? rawText.slice(0, 120) + "…" : rawText,
-    source: "TEXT",
-    categoriesCount: categories.length,
-    categoryNames: categories.map((c) => c.name).join(", "),
-    contextBank: context.bank ?? "(ausente)",
-    contextPaymentMethod: context.paymentMethod ?? "(ausente)",
-  };
-
-  if (errors.length > 0) {
-    console.error(`${tag} PAYLOAD INVÁLIDO — chamada à IA será abortada`, payloadLog);
-    errors.forEach((e) => console.error(`${tag} ✗ ${e}`));
-    return false;
-  }
-
-  if (warnings.length > 0) {
-    console.warn(`${tag} Payload com avisos`, payloadLog);
-    warnings.forEach((w) => console.warn(`${tag} ⚠ ${w}`));
-  } else {
-    console.log(`${tag} Payload OK`, payloadLog);
-  }
-
-  return true;
-}
+import { validateNotificationAiPayload } from "@/lib/notifications/validate-ai-payload";
 import { listCategories } from "@/lib/repositories/categories";
 import { processSyncQueue } from "@/lib/sync-queue";
 import type { Category, PaymentMethod, TransactionType } from "@/lib/types";
