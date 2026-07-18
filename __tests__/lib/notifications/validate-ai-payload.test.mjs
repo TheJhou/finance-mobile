@@ -52,13 +52,13 @@ function validateNotificationAiPayload(rawText, categories, context, origin) {
     warnings.push(`rawText muito curto (${rawText.trim().length} chars): "${rawText.trim()}"`);
   }
 
-  // categories
+  // categories — backend aceita default([]), apenas avisa
   if (!categories || categories.length === 0) {
-    errors.push("categories está vazio — a IA não conseguirá categorizar");
+    warnings.push("categories está vazio — IA categorizará sem sugestões");
   } else {
     const invalid = categories.filter((c) => !c.id || !c.name);
     if (invalid.length > 0) {
-      errors.push(`${invalid.length} categoria(s) com id ou name ausente`);
+      warnings.push(`${invalid.length} categoria(s) com id ou name ausente`);
     }
   }
 
@@ -76,7 +76,8 @@ function validateNotificationAiPayload(rawText, categories, context, origin) {
   if (!context.paymentMethod || context.paymentMethod.trim().length === 0) {
     warnings.push("context.paymentMethod ausente — IA inferirá sem contexto");
   } else if (!VALID_PAYMENT_METHODS.includes(context.paymentMethod)) {
-    errors.push(`context.paymentMethod inválido: "${context.paymentMethod}"`);
+    // context é opcional no backend — vira aviso, não bloqueia
+    warnings.push(`context.paymentMethod desconhecido: "${context.paymentMethod}"`);
   }
 
   return { valid: errors.length === 0, errors, warnings };
@@ -171,25 +172,28 @@ describe("rawText", () => {
 });
 
 describe("categories", () => {
-  it("erro: categories vazio", () => {
+  it("warning (não erro): categories vazio — backend aceita default([])", () => {
     const r = validate({ categories: [] });
-    assert.equal(r.valid, false);
-    assert.ok(r.errors.some((e) => e.includes("categories está vazio")));
+    assert.equal(r.valid, true);
+    assert.equal(r.errors.length, 0);
+    assert.ok(r.warnings.some((w) => w.includes("categories está vazio")));
   });
 
-  it("erro: categoria sem id", () => {
+  it("warning (não erro): categoria sem id", () => {
     const r = validate({ categories: [{ id: "", name: "Alimentação" }] });
-    assert.equal(r.valid, false);
-    assert.ok(r.errors.some((e) => e.includes("categoria(s) com id ou name ausente")));
+    assert.equal(r.valid, true);
+    assert.equal(r.errors.length, 0);
+    assert.ok(r.warnings.some((w) => w.includes("categoria(s) com id ou name ausente")));
   });
 
-  it("erro: categoria sem name", () => {
+  it("warning (não erro): categoria sem name", () => {
     const r = validate({ categories: [{ id: "cat-1", name: "" }] });
-    assert.equal(r.valid, false);
-    assert.ok(r.errors.some((e) => e.includes("categoria(s) com id ou name ausente")));
+    assert.equal(r.valid, true);
+    assert.equal(r.errors.length, 0);
+    assert.ok(r.warnings.some((w) => w.includes("categoria(s) com id ou name ausente")));
   });
 
-  it("conta corretamente 2 categorias inválidas", () => {
+  it("conta corretamente 2 categorias inválidas no warning", () => {
     const r = validate({
       categories: [
         { id: "", name: "Ok" },
@@ -197,18 +201,19 @@ describe("categories", () => {
         { id: "cat-3", name: "Válida" },
       ],
     });
-    assert.equal(r.valid, false);
-    assert.ok(r.errors.some((e) => e.includes("2 categoria(s)")));
+    assert.equal(r.valid, true);
+    assert.ok(r.warnings.some((w) => w.includes("2 categoria(s)")));
   });
 
-  it("erro se ao menos uma categoria for inválida", () => {
+  it("warning mesmo com mistura de válidas e inválidas", () => {
     const r = validate({
       categories: [
         { id: "cat-1", name: "Válida" },
         { id: "", name: "" },
       ],
     });
-    assert.equal(r.valid, false);
+    assert.equal(r.valid, true);
+    assert.ok(r.warnings.some((w) => w.includes("categoria(s) com id ou name ausente")));
   });
 });
 
@@ -246,38 +251,47 @@ describe("context.paymentMethod", () => {
     assert.ok(r.warnings.some((w) => w.includes("context.paymentMethod ausente")));
   });
 
-  it("erro: paymentMethod fora do enum", () => {
+  it("warning (não erro): paymentMethod fora do enum — context é opcional no backend", () => {
     const r = validate({ context: { bank: "Nubank", paymentMethod: "CARTAO_INVALIDO" } });
-    assert.equal(r.valid, false);
-    assert.ok(r.errors.some((e) => e.includes("context.paymentMethod inválido")));
+    assert.equal(r.valid, true);
+    assert.equal(r.errors.length, 0);
+    assert.ok(r.warnings.some((w) => w.includes("context.paymentMethod desconhecido")));
   });
 
-  it("erro: paymentMethod em lowercase (enum é case-sensitive)", () => {
+  it("warning (não erro): paymentMethod em lowercase (enum é case-sensitive)", () => {
     const r = validate({ context: { bank: "Nubank", paymentMethod: "pix" } });
-    assert.equal(r.valid, false);
-    assert.ok(r.errors.some((e) => e.includes("context.paymentMethod inválido")));
+    assert.equal(r.valid, true);
+    assert.equal(r.errors.length, 0);
+    assert.ok(r.warnings.some((w) => w.includes("context.paymentMethod desconhecido")));
   });
 });
 
-describe("múltiplos erros simultâneos", () => {
-  it("acumula todos os erros sem curto-circuito", () => {
+describe("múltiplos avisos simultâneos", () => {
+  it("rawText vazio é o único erro real — categories e paymentMethod inválido viram warnings", () => {
     const r = validate({
       rawText: "",
       categories: [],
       context: { paymentMethod: "INVALIDO" },
     });
     assert.equal(r.valid, false);
-    assert.ok(r.errors.length >= 3, `Esperado >= 3 erros, recebido: ${r.errors.length}`);
+    assert.ok(r.errors.length >= 1, `Esperado >= 1 erro (rawText), recebido: ${r.errors.length}`);
+    assert.ok(r.warnings.length >= 2, `Esperado >= 2 warnings (categories + paymentMethod), recebido: ${r.warnings.length}`);
   });
 
-  it("acumula erros e warnings ao mesmo tempo", () => {
+  it("rawText curto + categories vazio acumula warning e outro warning", () => {
     const r = validate({
-      rawText: "curto", // warning
-      categories: [],   // erro
+      rawText: "curto", // warning (< 10 chars)
+      categories: [],   // warning (não mais erro)
       context: { bank: "Nubank", paymentMethod: "PIX" },
     });
+    assert.equal(r.valid, true);   // rawText não está vazio, só curto
+    assert.equal(r.errors.length, 0);
+    assert.ok(r.warnings.length >= 2);
+  });
+
+  it("sem rawText bloqueia mesmo que tudo mais esteja ok", () => {
+    const r = validate({ rawText: "" });
     assert.equal(r.valid, false);
-    assert.ok(r.errors.length >= 1);
-    assert.ok(r.warnings.length >= 1);
+    assert.ok(r.errors.some((e) => e.includes("rawText está vazio")));
   });
 });

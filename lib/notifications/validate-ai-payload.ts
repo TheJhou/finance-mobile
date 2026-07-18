@@ -44,12 +44,13 @@ export function validateNotificationAiPayload(
   }
 
   // ── categories ───────────────────────────────────────────────────
+  // O backend aceita categories vazio (default: []) — apenas avisa, não bloqueia.
   if (!categories || categories.length === 0) {
-    errors.push("categories está vazio — a IA não conseguirá categorizar");
+    warnings.push("categories está vazio — IA categorizará sem sugestões");
   } else {
     const invalid = categories.filter((c) => !c.id || !c.name);
     if (invalid.length > 0) {
-      errors.push(`${invalid.length} categoria(s) com id ou name ausente`);
+      warnings.push(`${invalid.length} categoria(s) com id ou name ausente`);
     }
   }
 
@@ -73,8 +74,9 @@ export function validateNotificationAiPayload(
       context.paymentMethod as (typeof VALID_PAYMENT_METHODS)[number]
     )
   ) {
-    errors.push(
-      `context.paymentMethod inválido: "${context.paymentMethod}" (válidos: ${VALID_PAYMENT_METHODS.join(", ")})`
+    // context é opcional no backend — paymentMethod desconhecido vira aviso, não bloqueia.
+    warnings.push(
+      `context.paymentMethod desconhecido: "${context.paymentMethod}" (válidos: ${VALID_PAYMENT_METHODS.join(", ")})`
     );
   }
 
