@@ -14,6 +14,7 @@ import { enqueueSync, processSyncQueue, type SyncPayload } from "@/lib/sync-queu
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Category, DocumentType, TransactionStatus } from "@/lib/types";
+import { onNotificationQueued } from "@/lib/notification-events";
 import { formatCurrency, normalizePaymentMethod, toDateInputValue } from "@/lib/utils";
 import BankNotifications from "@/modules/bank-notifications";
 import { Ionicons } from "@expo/vector-icons";
@@ -200,6 +201,14 @@ export default function NotificationsScreen() {
     }, 15_000);
     return () => clearInterval(interval);
   }, [moduleAvailable]);
+
+  // Atualiza a lista em tempo real quando o listener registra uma nova notificação
+  useEffect(() => {
+    const unsub = onNotificationQueued(() => {
+      void loadPending();
+    });
+    return unsub;
+  }, [loadPending]);
 
   useEffect(() => {
     recordingRef.current = recording;

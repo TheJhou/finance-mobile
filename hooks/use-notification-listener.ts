@@ -1,4 +1,5 @@
 import { analyzeText } from "@/lib/backend";
+import { emitNotificationQueued } from "@/lib/notification-events";
 import {
     acquireLock,
     cleanupOldQueueItems,
@@ -248,8 +249,11 @@ export function useNotificationListener() {
           return;
         }
 
+        // Notifica a aba de importação para atualizar em tempo real
+        emitNotificationQueued();
+
         console.log(
-          `[AutoImport] Salvo no SQLite (fallback): ${description} R$${parsed.amount} [${parsed.type}] cat=${categoryName}`
+          `[AutoImport] Salvo no SQLite (fallback): ${description} R${parsed.amount} [${parsed.type}] cat=${categoryName}`
         );
 
         // ── Etapa 7: Enriquecimento com IA (backend) ──────────────────

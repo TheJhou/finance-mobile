@@ -98,7 +98,18 @@ export async function analyzeText(
   });
 
   if (!response.ok) await handleError(response, "Erro ao analisar texto");
-  return response.json();
+
+  const data = await response.json();
+
+  // Normaliza o shape: o frontend sempre acessa `result.draft`.
+  // Se o backend retornar os campos na raiz (sem wrapper "draft"),
+  // encapsula aqui para não quebrar silenciosamente.
+  if (data && typeof data === "object" && !("draft" in data)) {
+    console.warn("[analyzeText] Resposta sem wrapper 'draft' — normalizando shape");
+    return { draft: data };
+  }
+
+  return data;
 }
 
 // ── Extração de foto (via backend, sem API key no client) ──────────────
