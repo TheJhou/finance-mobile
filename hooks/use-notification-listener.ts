@@ -164,9 +164,8 @@ export function useNotificationListener() {
 
     // ── Processa notificação bruta: parse → valida → SQLite → backend → valida resposta ──
     async function processNotification(event: BankNotificationEvent) {
-      const isBankApp = event.packageName in BANK_APPS;
       console.log(
-        `[AutoImport] Notificação recebida: pkg=${event.packageName} bank=${isBankApp} title=${event.title}`
+        `[AutoImport] Notificação recebida: pkg=${event.packageName} bank=${event.packageName in BANK_APPS} title=${event.title}`
       );
 
       try {
@@ -272,7 +271,7 @@ export function useNotificationListener() {
           const aiCategories = categories.map((c) => ({ id: c.id, name: c.name }));
           const aiContext = { bank: parsed.bank, paymentMethod: parsed.paymentMethod };
           const payloadOk = validateNotificationAiPayload(text, aiCategories, aiContext, "processNotification");
-          if (!payloadOk) return;
+          if (!payloadOk.valid) return;
 
           const aiResult = await Promise.race([
             analyzeText(text, "TEXT", aiCategories, aiContext),
@@ -384,7 +383,7 @@ export function useNotificationListener() {
             const retryCategories = categories.map((c) => ({ id: c.id, name: c.name }));
             const retryContext = { bank: item.bank ?? undefined, paymentMethod: item.paymentMethod ?? undefined };
             const retryPayloadOk = validateNotificationAiPayload(item.rawText, retryCategories, retryContext, "retryPendingAiEnrichment");
-            if (!retryPayloadOk) {
+            if (!retryPayloadOk.valid) {
               await incrementRetryCount(item.id);
               continue;
             }
@@ -397,28 +396,31 @@ export function useNotificationListener() {
             ]);
             const draft = aiResult?.draft;
             if (draft) {
-              let description = item.description || "";
-              let categoryId = item.categoryId || categories[0].id;
-              let categoryName = item.categoryName || categories[0].name;
-
-              if (draft.description) description = draft.description;
-              if (draft.categoryId) {
-                const matched = categories.find((c) => c.id === draft.categoryId);
-                if (matched) {
-                  categoryId = matched.id;
-                  categoryName = matched.name;
-                }
+              // Valida a resposta da IA antes de persistir (mesmo critério do fluxo principal)
+              const validated = validateAiDraft(draft as Record<string, unknown>, categories);
+              if (validated.warnings.length > 0) {
+                console.warn(`[AutoImport][Retry] Validação IA: ${validated.warnings.join(", ")}`);
+              }
+              if (!validated.valid) {
+                console.warn("[AutoImport][Retry] Resposta da IA inválida — incrementando retry");
+                await incrementRetryCount(item.id);
+                continue;
               }
 
+              const finalDescription = validated.description ?? item.description ?? "";
+              const finalCategoryId   = validated.categoryId   ?? item.categoryId   ?? categories[0].id;
+              const finalCategoryName = validated.categoryName ?? item.categoryName ?? categories[0].name;
+
               await updateWithAiResult(item.id, {
-                description,
-                categoryId,
-                categoryName,
-                amount: draft.amount ?? undefined,
-                type: (draft.type as TransactionType) ?? undefined,
-                paymentMethod: (draft.paymentMethod as PaymentMethod) ?? undefined,
+                description:   finalDescription,
+                categoryId:    finalCategoryId,
+                categoryName:  finalCategoryName,
+                amount:        validated.amount        ?? undefined,
+                type:          validated.type          ?? undefined,
+                paymentMethod: validated.paymentMethod ?? undefined,
               });
-              console.log(`[AutoImport] IA reprocessou: ${description}`);
+              emitNotificationQueued();
+              console.log(`[AutoImport][Retry] IA reprocessou: ${finalDescription}`);
             } else {
               await incrementRetryCount(item.id);
             }
