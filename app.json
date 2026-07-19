@@ -17,7 +17,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.kilun",
-      "versionCode": 17,
+      "versionCode": 18,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO",
@@ -27,7 +27,9 @@
         "android.permission.USE_EXACT_ALARM",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.USE_BIOMETRIC",
+        "android.permission.USE_FINGERPRINT"
       ]
     },
     "platforms": [
@@ -49,6 +51,7 @@
         }
       ],
       "expo-secure-store",
+      "expo-local-authentication",
       [
         "expo-sqlite",
         {

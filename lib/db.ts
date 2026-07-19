@@ -60,7 +60,7 @@ async function isPlaintextDatabase(): Promise<boolean> {
   try {
     const db = await SQLite.openDatabaseAsync(DB_NAME, { useNewConnection: true });
     try {
-      await db.getFirstAsync<{ c: number }>("SELECT 1 as c");
+      await db.getFirstAsync<{ c: number }>("SELECT count(*) as c FROM sqlite_master");
       return true;
     } catch {
       return false;
@@ -103,6 +103,9 @@ async function migrateToEncrypted(encryptionKey: string): Promise<SQLite.SQLiteD
   }
 
   // Move o banco criptografado temp para o nome final (sobrescreve o antigo)
+  // Deleta antes via API do SQLite para remover também os arquivos -wal/-shm
+  // do banco plaintext antigo (WAL órfão corrompe o banco criptografado)
+  await SQLite.deleteDatabaseAsync(DB_NAME);
   // Constrói URI file:// absoluta a partir do diretório do SQLite
   new File(`file://${dbDir}/${tempDbName}`).move(new File(`file://${dbDir}/${DB_NAME}`));
 
@@ -145,6 +148,7 @@ export function getDb(): Promise<SQLite.SQLiteDatabase> {
       await migrate(db);
       return db;
     })().catch((err) => {
+      console.error("[DB] Falha na inicialização do banco:", err);
       // Reset cache em caso de falha para permitir retry na próxima chamada
       dbPromise = null;
       throw err;

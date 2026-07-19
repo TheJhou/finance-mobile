@@ -32,9 +32,9 @@ describe("subscription-plans — PLANS", () => {
     expect(PLANS.PRO.tokenLimit).toBeGreaterThan(PLANS.FREE.tokenLimit);
   });
 
-  it("PRO tem price 14.99 e priceDisplay R$ 14,99", () => {
-    expect(PLANS.PRO.price).toBe(14.99);
-    expect(PLANS.PRO.priceDisplay).toContain("14,99");
+  it("PRO tem price 3.00 e priceDisplay R$ 3,00", () => {
+    expect(PLANS.PRO.price).toBe(3.00);
+    expect(PLANS.PRO.priceDisplay).toContain("3,00");
   });
 
   it("FREE tem price 0", () => {
@@ -80,10 +80,10 @@ describe("subscription-plans — getPlanByCode", () => {
 });
 
 describe("subscription-plans — formatPrice", () => {
-  it("formata 14.99 como R$ 14,99", () => {
-    const result = formatPrice(14.99);
+  it("formata 3.00 como R$ 3,00", () => {
+    const result = formatPrice(3.00);
     expect(result).toContain("R$");
-    expect(result).toContain("14,99");
+    expect(result).toContain("3,00");
   });
 
   it("formata 0 como R$ 0,00", () => {
@@ -152,8 +152,8 @@ describe("subscription-plans — PLAY_STORE_TEXTS", () => {
     );
   });
 
-  it("inclui preço R$ 14,99/mês", () => {
-    expect(PLAY_STORE_TEXTS.subscriptionPrice).toContain("14,99");
+  it("inclui preço R$ 3,00/mês", () => {
+    expect(PLAY_STORE_TEXTS.subscriptionPrice).toContain("3,00");
   });
 
   it("inclui info de cancelamento", () => {

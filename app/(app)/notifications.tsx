@@ -207,12 +207,13 @@ export default function NotificationsScreen() {
       };
       await enqueueSync(created.id, syncPayload);
       void processSyncQueue();
-    } catch {
-      showToast('error', 'Falha ao salvar transação');
+    } catch (err) {
+      console.error('[Notifications] Erro ao aprovar transação:', err);
+      showToast('error', err instanceof Error ? err.message : 'Falha ao salvar transação');
     } finally {
       setApprovingId(null);
     }
-  }, [loadPending, showToast]);
+  }, [loadPending, showToast, categories]);
 
   const handleReject = useCallback(async (id: string) => {
     await markRejected(id);
