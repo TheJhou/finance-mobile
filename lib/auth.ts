@@ -117,7 +117,10 @@ export async function register(name: string, email: string, password: string): P
 export async function login(email: string, password: string): Promise<void> {
   const response = await fetch(`${BACKEND_URL}/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-App-Secret": APP_SECRET,
+    },
     body: JSON.stringify({ email, password }),
   });
 
@@ -140,7 +143,10 @@ export async function login(email: string, password: string): Promise<void> {
 export async function forgotPassword(email: string): Promise<{ message: string }> {
   const response = await fetch(`${BACKEND_URL}/auth/forgot-password`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-App-Secret": APP_SECRET,
+    },
     body: JSON.stringify({ email }),
   });
 
@@ -164,7 +170,10 @@ export async function resetPassword(
 ): Promise<{ message: string }> {
   const response = await fetch(`${BACKEND_URL}/auth/reset-password`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-App-Secret": APP_SECRET,
+    },
     body: JSON.stringify({ email, code, password, confirmPassword }),
   });
 
@@ -231,7 +240,10 @@ async function refreshAccessToken(): Promise<string | null> {
     try {
       const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-App-Secret": APP_SECRET,
+        },
         body: JSON.stringify({ refreshToken }),
       });
 
