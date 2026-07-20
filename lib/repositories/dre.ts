@@ -108,7 +108,11 @@ export function buildPeriodRange(
 // ─── Main query ───────────────────────────────────────────────────────────────
 
 export async function getDreData(period: DrePeriodRange): Promise<DreData> {
-  void processRecurringDue().catch((err) => console.warn("[DRE] processRecurringDue failed:", err));
+  try {
+    await processRecurringDue();
+  } catch (err) {
+    console.warn("[DRE] processRecurringDue failed:", err);
+  }
   const db = await getDb();
   const { from, to } = period;
 

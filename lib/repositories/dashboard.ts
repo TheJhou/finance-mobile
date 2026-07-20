@@ -37,7 +37,11 @@ function monthRange(year?: number, month?: number, monthStartDay?: number): { fi
 }
 
 export async function getDashboard(opts?: { year?: number; month?: number; monthStartDay?: number }): Promise<DashboardData> {
-  void processRecurringDue().catch((err) => console.warn("[Dashboard] processRecurringDue failed:", err));
+  try {
+    await processRecurringDue();
+  } catch (err) {
+    console.warn("[Dashboard] processRecurringDue failed:", err);
+  }
   const db = await getDb();
   const startDay = opts?.monthStartDay ?? getCachedMonthStartDay();
   const { first, last } = monthRange(opts?.year, opts?.month, startDay);
