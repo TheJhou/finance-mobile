@@ -1,4 +1,4 @@
-import { BACKEND_URL } from "@/lib/config";
+import { APP_SECRET, BACKEND_URL } from "@/lib/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
@@ -91,7 +91,10 @@ export async function hasStoredSession(): Promise<boolean> {
 export async function register(name: string, email: string, password: string): Promise<void> {
   const response = await fetch(`${BACKEND_URL}/auth/register`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-App-Secret": APP_SECRET,
+    },
     body: JSON.stringify({ name, email, password }),
   });
 
