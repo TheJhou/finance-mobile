@@ -276,6 +276,12 @@ export default function DashboardScreen() {
   const balanceChange = currentMonthTrend && prevMonth
     ? (() => { const recentNet = currentMonthTrend.income - currentMonthTrend.expense; const prevNet = prevMonth.income - prevMonth.expense; return prevNet !== 0 ? Math.round(((recentNet - prevNet) / Math.abs(prevNet)) * 100) : null; })()
     : null;
+  const receivablesChange = data && data.prevPendingReceivables > 0
+    ? Math.round(((data.pendingReceivables - data.prevPendingReceivables) / data.prevPendingReceivables) * 100)
+    : null;
+  const payablesChange = data && data.prevPendingPayables > 0
+    ? Math.round(((data.pendingPayables - data.prevPendingPayables) / data.prevPendingPayables) * 100)
+    : null;
   const totalExpense = data ? data.monthlyExpense || 1 : 1;
   const dailyExpenseChartData = data && data.expenseTrend.length > 0
     ? data.expenseTrend.map((item: { label: string; value: number }) => ({ label: item.label, value: item.value, frontColor: colors.chartBar1 }))
@@ -373,6 +379,16 @@ export default function DashboardScreen() {
                   <Text style={[styles.balanceSubValue, { color: colors.danger }]}>{formatCurrency(data.monthlyExpense)}</Text>
                 </View>
               </View>
+              <View style={[styles.balanceSubRow, { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }]}>
+                <View>
+                  <Text style={styles.balanceSubLabel}>A receber</Text>
+                  <Text style={[styles.balanceSubValue, { color: colors.success }]}>{formatCurrency(data.pendingReceivables)}</Text>
+                </View>
+                <View>
+                  <Text style={styles.balanceSubLabel}>A pagar</Text>
+                  <Text style={[styles.balanceSubValue, { color: colors.danger }]}>{formatCurrency(data.pendingPayables)}</Text>
+                </View>
+              </View>
             </View>
 
             {/* ── 4 Summary Mini-Cards (horizontal scroll) ── */}
@@ -431,6 +447,36 @@ export default function DashboardScreen() {
                   <Text style={styles.miniCardNote}>vs mês anterior</Text></>
                 ) : (
                   <Text style={styles.miniCardNote}>Acumulado total</Text>
+                )}
+              </View>
+              {/* Contas a receber */}
+              <View style={styles.miniCard}>
+                <View style={[styles.miniCardIcon, { backgroundColor: colors.incomeBg }]}>
+                  <Ionicons name="download-outline" size={16} color={colors.success} />
+                </View>
+                <Text style={styles.miniCardLabel}>A receber</Text>
+                <Text style={styles.miniCardValue}>{formatCurrency(data.pendingReceivables)}</Text>
+                <Text style={styles.miniCardSub}>Pendente</Text>
+                {receivablesChange !== null ? (
+                  <><Text style={[styles.miniCardChange, { color: receivablesChange >= 0 ? colors.success : colors.danger }]}>{receivablesChange >= 0 ? "↑" : "↓"} {Math.abs(receivablesChange)}%</Text>
+                  <Text style={styles.miniCardNote}>vs mês anterior</Text></>
+                ) : (
+                  <Text style={styles.miniCardNote}>Sem dados anteriores</Text>
+                )}
+              </View>
+              {/* Contas a pagar */}
+              <View style={styles.miniCard}>
+                <View style={[styles.miniCardIcon, { backgroundColor: colors.expenseBg }]}>
+                  <Ionicons name="arrow-up" size={16} color={colors.danger} />
+                </View>
+                <Text style={styles.miniCardLabel}>A pagar</Text>
+                <Text style={styles.miniCardValue}>{formatCurrency(data.pendingPayables)}</Text>
+                <Text style={styles.miniCardSub}>Pendente</Text>
+                {payablesChange !== null ? (
+                  <><Text style={[styles.miniCardChange, { color: payablesChange > 0 ? colors.danger : colors.success }]}>{payablesChange > 0 ? "↑" : "↓"} {Math.abs(payablesChange)}%</Text>
+                  <Text style={styles.miniCardNote}>vs mês anterior</Text></>
+                ) : (
+                  <Text style={styles.miniCardNote}>Sem dados anteriores</Text>
                 )}
               </View>
             </HorizontalScrollFade>

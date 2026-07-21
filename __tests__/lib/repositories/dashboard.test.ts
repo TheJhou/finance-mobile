@@ -20,7 +20,7 @@ async function seedTransaction(data: {
   description: string;
   amount: number;
   type: "INCOME" | "EXPENSE";
-  status: "PAID" | "PENDING";
+  status: "PAID" | "PENDING" | "OVERDUE";
   date: string;
   categoryId: string;
 }) {
@@ -135,6 +135,29 @@ describe("dashboard repository", () => {
       const data = await getDashboard();
       expect(data.pendingCount).toBe(1);
       expect(data.overdueAmount).toBe(300);
+    });
+
+    it("calculates pending receivables and payables", async () => {
+      await seedCategory("cat-1", "Contas");
+      const today = formatDateLocal(new Date());
+      const lastMonth = new Date();
+      lastMonth.setMonth(lastMonth.getMonth() - 1);
+      const lastMonthStr = formatDateLocal(lastMonth);
+
+      await seedTransaction({ description: "Cliente A", amount: 1500, type: "INCOME", status: "PENDING", date: today, categoryId: "cat-1" });
+      await seedTransaction({ description: "Cliente B", amount: 500, type: "INCOME", status: "OVERDUE", date: today, categoryId: "cat-1" });
+      await seedTransaction({ description: "Fornecedor", amount: 800, type: "EXPENSE", status: "PENDING", date: today, categoryId: "cat-1" });
+      await seedTransaction({ description: "Conta atrasada", amount: 400, type: "EXPENSE", status: "OVERDUE", date: today, categoryId: "cat-1" });
+      await seedTransaction({ description: "Recebido", amount: 1000, type: "INCOME", status: "PAID", date: today, categoryId: "cat-1" });
+
+      await seedTransaction({ description: "Cliente mês anterior", amount: 600, type: "INCOME", status: "PENDING", date: lastMonthStr, categoryId: "cat-1" });
+      await seedTransaction({ description: "Conta mês anterior", amount: 300, type: "EXPENSE", status: "PENDING", date: lastMonthStr, categoryId: "cat-1" });
+
+      const data = await getDashboard();
+      expect(data.pendingReceivables).toBe(2000);
+      expect(data.pendingPayables).toBe(1200);
+      expect(data.prevPendingReceivables).toBe(600);
+      expect(data.prevPendingPayables).toBe(300);
     });
   });
 

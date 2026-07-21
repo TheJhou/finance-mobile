@@ -97,6 +97,10 @@ export interface DashboardData {
   overdueAmount: number;
   upcomingAmount: number;
   activeRecurring: number;
+  pendingReceivables: number;
+  pendingPayables: number;
+  prevPendingReceivables: number;
+  prevPendingPayables: number;
   expensesByCategory: { name: string; value: number; color: string }[];
   expenseTrend: { label: string; value: number }[];
   monthlyTrend: { month: string; income: number; expense: number }[];

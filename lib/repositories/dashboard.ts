@@ -45,6 +45,11 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
   const db = await getDb();
   const startDay = opts?.monthStartDay ?? getCachedMonthStartDay();
   const { first, last } = monthRange(opts?.year, opts?.month, startDay);
+  const { first: prevFirst, last: prevLast } = monthRange(
+    opts?.year,
+    (opts?.month ?? new Date().getMonth()) - 1,
+    startDay
+  );
   const today = formatDateLocal(new Date());
   const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
@@ -70,7 +75,8 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
   const [
     balanceRow, incomeRow, expenseRow, pendingRow,
     overdueRow, upcomingRow, recurringRow, byCategory,
-    expenseTrendRows, trendRows
+    expenseTrendRows, trendRows,
+    receivablesRow, payablesRow, prevReceivablesRow, prevPayablesRow
   ] = await Promise.all([
     db.getFirstAsync<{ balance: number | null }>(
       `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
@@ -131,6 +137,26 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
        ORDER BY month ASC`,
       [trendShift, trendStart, trendShift]
     ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE type = 'INCOME' AND status IN ('PENDING', 'OVERDUE') AND date BETWEEN ? AND ?`,
+      [first, last]
+    ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE type = 'EXPENSE' AND status IN ('PENDING', 'OVERDUE') AND date BETWEEN ? AND ?`,
+      [first, last]
+    ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE type = 'INCOME' AND status IN ('PENDING', 'OVERDUE') AND date BETWEEN ? AND ?`,
+      [prevFirst, prevLast]
+    ),
+    db.getFirstAsync<{ total: number | null }>(
+      `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
+       WHERE type = 'EXPENSE' AND status IN ('PENDING', 'OVERDUE') AND date BETWEEN ? AND ?`,
+      [prevFirst, prevLast]
+    ),
   ]);
 
   return {
@@ -141,6 +167,10 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
     overdueAmount: overdueRow?.total ?? 0,
     upcomingAmount: upcomingRow?.total ?? 0,
     activeRecurring: recurringRow?.count ?? 0,
+    pendingReceivables: receivablesRow?.total ?? 0,
+    pendingPayables: payablesRow?.total ?? 0,
+    prevPendingReceivables: prevReceivablesRow?.total ?? 0,
+    prevPendingPayables: prevPayablesRow?.total ?? 0,
     expensesByCategory: byCategory.map((r) => ({
       name: r.name,
       color: r.color,
