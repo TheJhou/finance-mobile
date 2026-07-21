@@ -103,9 +103,11 @@ interface TransactionFiltersProps {
   readonly onChange: (filters: Filters) => void;
   readonly categories: readonly Category[];
   readonly visible: boolean;
+  readonly hideType?: boolean;
+  readonly hideStatus?: boolean;
 }
 
-export function TransactionFilters({ filters, onChange, categories, visible }: TransactionFiltersProps) {
+export function TransactionFilters({ filters, onChange, categories, visible, hideType, hideStatus }: TransactionFiltersProps) {
   if (!visible) return null;
 
   const toggleCategory = (id: string) => {
@@ -169,24 +171,28 @@ export function TransactionFilters({ filters, onChange, categories, visible }: T
           </View>
         </View>
 
-        <Text style={styles.filterLabel}>Tipo</Text>
-        <View style={styles.chipRow}>
-          {([
-            { key: "ALL", label: "Todos" },
-            { key: "EXPENSE", label: "Saída" },
-            { key: "INCOME", label: "Entrada" },
-          ] as { key: TransactionType | "ALL"; label: string }[]).map((t) => (
-            <Pressable
-              key={t.key}
-              style={[styles.chip, filters.type === t.key && styles.chipActive]}
-              onPress={() => onChange({ ...filters, type: t.key })}
-            >
-              <Text style={[styles.chipText, filters.type === t.key && styles.chipTextActive]}>
-                {t.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        {!hideType && (
+          <>
+            <Text style={styles.filterLabel}>Tipo</Text>
+            <View style={styles.chipRow}>
+              {([
+                { key: "ALL", label: "Todos" },
+                { key: "EXPENSE", label: "Saída" },
+                { key: "INCOME", label: "Entrada" },
+              ] as { key: TransactionType | "ALL"; label: string }[]).map((t) => (
+                <Pressable
+                  key={t.key}
+                  style={[styles.chip, filters.type === t.key && styles.chipActive]}
+                  onPress={() => onChange({ ...filters, type: t.key })}
+                >
+                  <Text style={[styles.chipText, filters.type === t.key && styles.chipTextActive]}>
+                    {t.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
 
         <Text style={styles.filterLabel}>Valor (R$)</Text>
         <View style={styles.dateRangeRow}>
@@ -240,25 +246,29 @@ export function TransactionFilters({ filters, onChange, categories, visible }: T
           </>
         )}
 
-        <Text style={styles.filterLabel}>Status</Text>
-        <View style={styles.chipRow}>
-          {([
-            { key: "ALL", label: "Todos" },
-            { key: "PAID", label: "Pago" },
-            { key: "PENDING", label: "Pendente" },
-            { key: "OVERDUE", label: "Atrasado" },
-          ] as { key: TransactionStatus | "ALL"; label: string }[]).map((s) => (
-            <Pressable
-              key={s.key}
-              style={[styles.chip, filters.status === s.key && styles.chipActive]}
-              onPress={() => onChange({ ...filters, status: s.key })}
-            >
-              <Text style={[styles.chipText, filters.status === s.key && styles.chipTextActive]}>
-                {s.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
+        {!hideStatus && (
+          <>
+            <Text style={styles.filterLabel}>Status</Text>
+            <View style={styles.chipRow}>
+              {([
+                { key: "ALL", label: "Todos" },
+                { key: "PAID", label: "Pago" },
+                { key: "PENDING", label: "Pendente" },
+                { key: "OVERDUE", label: "Atrasado" },
+              ] as { key: TransactionStatus | "ALL"; label: string }[]).map((s) => (
+                <Pressable
+                  key={s.key}
+                  style={[styles.chip, filters.status === s.key && styles.chipActive]}
+                  onPress={() => onChange({ ...filters, status: s.key })}
+                >
+                  <Text style={[styles.chipText, filters.status === s.key && styles.chipTextActive]}>
+                    {s.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
 
         <Text style={styles.filterLabel}>Pagamento</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
