@@ -1,4 +1,5 @@
 import { generateId, getDb } from "@/lib/db";
+import { formatDateLocal } from "@/lib/utils";
 import type {
     Category,
     DocumentType,
@@ -211,4 +212,22 @@ export async function updateTransaction(
 export async function deleteTransaction(id: string): Promise<void> {
   const db = await getDb();
   await db.runAsync("DELETE FROM transactions WHERE id = ?", [id]);
+}
+
+export async function markAsPaid(id: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE transactions SET status = 'PAID', updated_at = datetime('now') WHERE id = ?`,
+    [id]
+  );
+}
+
+export async function markOverdueTransactions(): Promise<void> {
+  const db = await getDb();
+  const today = formatDateLocal(new Date());
+  await db.runAsync(
+    `UPDATE transactions SET status = 'OVERDUE', updated_at = datetime('now')
+     WHERE status = 'PENDING' AND date < ?`,
+    [today]
+  );
 }

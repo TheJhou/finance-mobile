@@ -1,4 +1,4 @@
-import { APP_SECRET, BACKEND_URL } from "@/lib/config";
+import { BACKEND_URL } from "@/lib/config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
@@ -93,7 +93,6 @@ export async function register(name: string, email: string, password: string): P
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-App-Secret": APP_SECRET,
     },
     body: JSON.stringify({ name, email, password }),
   });
@@ -119,7 +118,6 @@ export async function login(email: string, password: string): Promise<void> {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-App-Secret": APP_SECRET,
     },
     body: JSON.stringify({ email, password }),
   });
@@ -145,7 +143,6 @@ export async function forgotPassword(email: string): Promise<{ message: string }
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-App-Secret": APP_SECRET,
     },
     body: JSON.stringify({ email }),
   });
@@ -172,7 +169,6 @@ export async function resetPassword(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-App-Secret": APP_SECRET,
     },
     body: JSON.stringify({ email, code, password, confirmPassword }),
   });
@@ -242,7 +238,6 @@ async function refreshAccessToken(): Promise<string | null> {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-App-Secret": APP_SECRET,
         },
         body: JSON.stringify({ refreshToken }),
       });

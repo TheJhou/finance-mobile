@@ -5,6 +5,8 @@ import {
   deleteTransaction,
   getTransaction,
   listTransactions,
+  markAsPaid,
+  markOverdueTransactions,
   updateTransaction,
 } from "@/lib/repositories/transactions";
 
@@ -73,6 +75,34 @@ describe("transactions repository", () => {
       expect(tx.status).toBe("PAID");
       expect(tx.paymentMethod).toBe("CASH");
       expect(tx.documentType).toBe("NORMAL");
+    });
+
+    it("creates a payable with PENDING status", async () => {
+      const tx = await createTransaction({
+        description: "Aluguel",
+        amount: 1500,
+        type: "EXPENSE",
+        status: "PENDING",
+        date: "2025-06-20",
+        categoryId: "cat-1",
+      });
+
+      expect(tx.status).toBe("PENDING");
+      expect(tx.type).toBe("EXPENSE");
+    });
+
+    it("creates a receivable with PENDING status", async () => {
+      const tx = await createTransaction({
+        description: "Cliente A",
+        amount: 2500,
+        type: "INCOME",
+        status: "PENDING",
+        date: "2025-06-20",
+        categoryId: "cat-1",
+      });
+
+      expect(tx.status).toBe("PENDING");
+      expect(tx.type).toBe("INCOME");
     });
   });
 
@@ -169,6 +199,62 @@ describe("transactions repository", () => {
 
       const found = await getTransaction(created.id);
       expect(found).toBeNull();
+    });
+  });
+
+  describe("markAsPaid", () => {
+    it("changes PENDING transaction to PAID", async () => {
+      const created = await createTransaction({
+        description: "Conta",
+        amount: 100,
+        type: "EXPENSE",
+        status: "PENDING",
+        date: "2025-06-15",
+        categoryId: "cat-1",
+      });
+
+      await markAsPaid(created.id);
+
+      const updated = await getTransaction(created.id);
+      expect(updated?.status).toBe("PAID");
+    });
+  });
+
+  describe("markOverdueTransactions", () => {
+    it("marks past PENDING transactions as OVERDUE", async () => {
+      await createTransaction({
+        description: "Conta vencida",
+        amount: 100,
+        type: "EXPENSE",
+        status: "PENDING",
+        date: "2020-01-01",
+        categoryId: "cat-1",
+      });
+
+      await markOverdueTransactions();
+
+      const list = await listTransactions();
+      expect(list[0].status).toBe("OVERDUE");
+    });
+
+    it("does not mark future PENDING transactions as OVERDUE", async () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const futureStr = `${futureDate.getFullYear()}-${String(futureDate.getMonth() + 1).padStart(2, "0")}-${String(futureDate.getDate()).padStart(2, "0")}`;
+
+      await createTransaction({
+        description: "Conta futura",
+        amount: 100,
+        type: "EXPENSE",
+        status: "PENDING",
+        date: futureStr,
+        categoryId: "cat-1",
+      });
+
+      await markOverdueTransactions();
+
+      const list = await listTransactions();
+      expect(list[0].status).toBe("PENDING");
     });
   });
 });

@@ -402,9 +402,11 @@ class InMemoryDatabase {
             }
           }
         }
-        const whereParam = params ? params[paramIndex] : undefined;
+        const setQuestionMarkCount = (setMatch[1].match(/\?/g) || []).length;
+        const whereParams = params ? params.slice(setQuestionMarkCount) : [];
+        const predicate = this.parseWhere(sql, whereParams);
         for (const row of data) {
-          if (row.id === whereParam) Object.assign(row, updates);
+          if (!predicate || predicate(row)) Object.assign(row, updates);
         }
       }
     } else if (sql.trim().toUpperCase().startsWith("DELETE")) {
