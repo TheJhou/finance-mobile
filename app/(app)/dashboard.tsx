@@ -5,7 +5,8 @@ import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getSt
 import { calculateHealthScore } from "@/lib/health-score";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
-import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { getDashboard, getFutureBills, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { processRecurringDue } from "@/lib/repositories/recurring";
 import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -80,6 +81,7 @@ export default function DashboardScreen() {
   const [streak, setStreak] = useState<StreakData | null>(null);
   const [score, setScore] = useState<ScoreData | null>(null);
   const [bills, setBills] = useState<UpcomingBill[]>([]);
+  const [futureBills, setFutureBills] = useState<UpcomingBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,13 +157,19 @@ export default function DashboardScreen() {
       if (fetchIdRef.current !== fetchId) return;
       setMonthStartDay(startDay);
 
-      const [dashRes, billsRes] = await Promise.all([
+      // Process due recurring transactions so next_due_date is current before fetching bills
+      await processRecurringDue();
+      if (fetchIdRef.current !== fetchId) return;
+
+      const [dashRes, billsRes, futureRes] = await Promise.all([
         getDashboard({ year: selectedYear, month: selectedMonth, monthStartDay: startDay }),
         getUpcomingBills({ year: selectedYear, month: selectedMonth, monthStartDay: startDay }),
+        getFutureBills({ limit: 10 }),
       ]);
       if (fetchIdRef.current !== fetchId) return;
       setData(dashRes);
       setBills(billsRes);
+      setFutureBills(futureRes);
       lastFetchedMonthRef.current = selectedMonth;
       lastFetchedYearRef.current = selectedYear;
 
@@ -549,10 +557,10 @@ export default function DashboardScreen() {
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
                     <AlertIcon size={24} />
-                    {data.overdueAmount > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.danger }]}><Text style={styles.radarBadgeText}>!</Text></View>}
+                    <View style={[styles.radarBadge, { backgroundColor: colors.danger }]}><Text style={styles.radarBadgeText}>{data.overdueCount}</Text></View>
                   </View>
                   <Text style={styles.radarLabel}>Contas{"\n"}vencidas</Text>
-                  {data.overdueAmount > 0 && <Text style={{ fontSize: 9, color: colors.danger, fontWeight: "700" }}>{formatCurrency(data.overdueAmount)}</Text>}
+                  <Text style={{ fontSize: 9, color: colors.danger, fontWeight: "700" }}>{formatCurrency(data.overdueAmount)}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
@@ -564,10 +572,10 @@ export default function DashboardScreen() {
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/recurring")}>
                   <View style={styles.radarCircle}>
                     <CalendarIcon size={24} />
-                    {bills.length > 0 && <View style={[styles.radarBadge, { backgroundColor: colors.warning }]}><Text style={styles.radarBadgeText}>{bills.length}</Text></View>}
+                    <View style={[styles.radarBadge, { backgroundColor: colors.warning }]}><Text style={styles.radarBadgeText}>{bills.length}</Text></View>
                   </View>
                   <Text style={styles.radarLabel}>Contas próximas{"\n"}do vencimento</Text>
-                  {bills.length > 0 && <Text style={{ fontSize: 9, color: colors.warning, fontWeight: "700" }}>{formatCurrency(bills.reduce((s: number, b: UpcomingBill) => s + b.amount, 0))}</Text>}
+                  <Text style={{ fontSize: 9, color: colors.warning, fontWeight: "700" }}>{formatCurrency(bills.reduce((s: number, b: UpcomingBill) => s + b.amount, 0))}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.radarItem} onPress={() => router.push("/transactions")}>
                   <View style={styles.radarCircle}>
@@ -762,7 +770,7 @@ export default function DashboardScreen() {
                   <TouchableOpacity style={styles.linkButtonSm} onPress={() => router.push("/recurring")}><Text style={styles.linkButtonTextSm}>Ver todos {">"}</Text></TouchableOpacity>
                 </View>
                 <View style={{ gap: 8 }}>
-                  {bills.length > 0 ? bills.map((bill: UpcomingBill) => (
+                  {futureBills.length > 0 ? futureBills.map((bill: UpcomingBill) => (
                     <View key={bill.id} style={styles.billItem}>
                       <View style={[styles.billDot, { backgroundColor: bill.color }]} />
                       <Text style={styles.billName} numberOfLines={1}>{bill.name}</Text>

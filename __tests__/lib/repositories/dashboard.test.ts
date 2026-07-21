@@ -2,6 +2,7 @@ import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb } from "@/lib/db";
 import {
     getDashboard,
+    getFutureBills,
     getOverdueTransactions,
     getUpcomingBills,
     type UpcomingBill,
@@ -135,6 +136,7 @@ describe("dashboard repository", () => {
       const data = await getDashboard();
       expect(data.pendingCount).toBe(1);
       expect(data.overdueAmount).toBe(300);
+      expect(data.overdueCount).toBe(1);
     });
 
     it("calculates pending receivables and payables", async () => {
@@ -162,15 +164,17 @@ describe("dashboard repository", () => {
   });
 
   describe("getOverdueTransactions", () => {
-    it("returns only overdue pending transactions", async () => {
+    it("returns PENDING and OVERDUE transactions with past dates", async () => {
       await seedCategory("cat-1", "Contas");
 
-      await seedTransaction({ description: "Vencida", amount: 100, type: "EXPENSE", status: "PENDING", date: "2020-01-01", categoryId: "cat-1" });
+      await seedTransaction({ description: "Vencida PENDING", amount: 100, type: "EXPENSE", status: "PENDING", date: "2020-01-01", categoryId: "cat-1" });
+      await seedTransaction({ description: "Vencida OVERDUE", amount: 150, type: "EXPENSE", status: "OVERDUE", date: "2020-02-01", categoryId: "cat-1" });
       await seedTransaction({ description: "Futura", amount: 200, type: "EXPENSE", status: "PENDING", date: "2099-01-01", categoryId: "cat-1" });
 
       const overdue = await getOverdueTransactions();
-      expect(overdue.length).toBe(1);
-      expect(overdue[0].description).toBe("Vencida");
+      expect(overdue.length).toBe(2);
+      expect(overdue.map((t) => t.description)).toContain("Vencida PENDING");
+      expect(overdue.map((t) => t.description)).toContain("Vencida OVERDUE");
     });
   });
 
@@ -212,6 +216,46 @@ describe("dashboard repository", () => {
       );
 
       const bills = await getUpcomingBills();
+      expect(bills.length).toBe(0);
+    });
+  });
+
+  describe("getFutureBills", () => {
+    it("returns active recurring bills from today onwards", async () => {
+      const db = await getDb();
+      await seedCategory("cat-1", "Internet");
+
+      const today = new Date();
+      const future = new Date(today);
+      future.setDate(future.getDate() + 60);
+      const futureStr = formatDateLocal(future);
+
+      await db.runAsync(
+        `INSERT INTO recurring_transactions (id, description, amount, type, frequency, next_due_date, start_date, category_id, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        ["rec-1", "Internet", 100, "EXPENSE", "MONTHLY", futureStr, "2025-01-01", "cat-1"]
+      );
+
+      const bills = await getFutureBills();
+      expect(bills.length).toBe(1);
+      expect((bills[0] as UpcomingBill).name).toBe("Internet");
+    });
+
+    it("excludes inactive recurring bills", async () => {
+      const db = await getDb();
+      await seedCategory("cat-1", "Internet");
+
+      const today = new Date();
+      const future = new Date(today);
+      future.setDate(future.getDate() + 7);
+
+      await db.runAsync(
+        `INSERT INTO recurring_transactions (id, description, amount, type, frequency, next_due_date, start_date, category_id, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        ["rec-1", "Internet", 100, "EXPENSE", "MONTHLY", formatDateLocal(future), "2025-01-01", "cat-1"]
+      );
+
+      const bills = await getFutureBills();
       expect(bills.length).toBe(0);
     });
   });

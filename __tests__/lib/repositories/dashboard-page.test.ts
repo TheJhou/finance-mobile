@@ -1,6 +1,6 @@
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb } from "@/lib/db";
-import { getDashboard, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { getDashboard, getFutureBills, getOverdueTransactions, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { formatDateLocal } from "@/lib/utils";
 
 async function seedCategory(id: string, name: string, color = "#6366f1") {
@@ -15,7 +15,7 @@ async function seedTransaction(data: {
   description: string;
   amount: number;
   type: "INCOME" | "EXPENSE";
-  status: "PAID" | "PENDING";
+  status: "PAID" | "PENDING" | "OVERDUE";
   date: string;
   categoryId: string;
 }) {
@@ -130,13 +130,14 @@ describe("dashboard — página por página", () => {
 
       const data = await getDashboard();
       expect(data.overdueAmount).toBe(250);
+      expect(data.overdueCount).toBe(1);
     });
 
-    it("getOverdueTransactions retorna só as vencidas", async () => {
+    it("getOverdueTransactions retorna PENDING e OVERDUE vencidas", async () => {
       await seedCategory("cat-1", "Contas");
 
       await seedTransaction({ description: "Vencida A", amount: 100, type: "EXPENSE", status: "PENDING", date: "2020-01-01", categoryId: "cat-1" });
-      await seedTransaction({ description: "Vencida B", amount: 200, type: "EXPENSE", status: "PENDING", date: "2020-02-01", categoryId: "cat-1" });
+      await seedTransaction({ description: "Vencida B", amount: 200, type: "EXPENSE", status: "OVERDUE", date: "2020-02-01", categoryId: "cat-1" });
       await seedTransaction({ description: "Futura", amount: 300, type: "EXPENSE", status: "PENDING", date: "2099-01-01", categoryId: "cat-1" });
 
       const overdue = await getOverdueTransactions();
@@ -243,6 +244,26 @@ describe("dashboard — página por página", () => {
 
       const bills = await getUpcomingBills();
       expect(bills.length).toBe(0);
+    });
+
+    it("getFutureBills inclui contas além de 30 dias", async () => {
+      await seedCategory("cat-int", "Internet");
+      const today = new Date();
+      const future = new Date(today);
+      future.setDate(future.getDate() + 60);
+
+      await seedRecurring({
+        id: "rec-1",
+        description: "Internet",
+        amount: 120,
+        nextDueDate: formatDateLocal(future),
+        startDate: "2025-01-01",
+        categoryId: "cat-int",
+      });
+
+      const bills = await getFutureBills();
+      expect(bills.length).toBe(1);
+      expect(bills[0].name).toBe("Internet");
     });
   });
 

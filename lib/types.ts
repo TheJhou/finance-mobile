@@ -97,6 +97,7 @@ export interface DashboardData {
   monthlyExpense: number;
   pendingCount: number;
   overdueAmount: number;
+  overdueCount: number;
   upcomingAmount: number;
   activeRecurring: number;
   pendingReceivables: number;

@@ -74,7 +74,7 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
 
   const [
     balanceRow, incomeRow, expenseRow, pendingRow,
-    overdueRow, upcomingRow, recurringRow, byCategory,
+    overdueRow, overdueCountRow, upcomingRow, recurringRow, byCategory,
     expenseTrendRows, trendRows,
     receivablesRow, payablesRow, prevReceivablesRow, prevPayablesRow
   ] = await Promise.all([
@@ -99,7 +99,12 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
     ),
     db.getFirstAsync<{ total: number | null }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-       WHERE status = 'PENDING' AND date < ?`,
+       WHERE status IN ('PENDING', 'OVERDUE') AND date < ?`,
+      [overdueDate]
+    ),
+    db.getFirstAsync<{ count: number }>(
+      `SELECT COUNT(*) as count FROM transactions
+       WHERE status IN ('PENDING', 'OVERDUE') AND date < ?`,
       [overdueDate]
     ),
     db.getFirstAsync<{ total: number | null }>(
@@ -165,6 +170,7 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
     monthlyExpense: expenseRow?.total ?? 0,
     pendingCount: pendingRow?.count ?? 0,
     overdueAmount: overdueRow?.total ?? 0,
+    overdueCount: overdueCountRow?.count ?? 0,
     upcomingAmount: upcomingRow?.total ?? 0,
     activeRecurring: recurringRow?.count ?? 0,
     pendingReceivables: receivablesRow?.total ?? 0,
@@ -231,11 +237,45 @@ export async function getUpcomingBills(opts?: { year?: number; month?: number; m
   });
 }
 
+export async function getFutureBills(opts?: { limit?: number }): Promise<UpcomingBill[]> {
+  const db = await getDb();
+  const today = formatDateLocal(new Date());
+  const limit = opts?.limit ?? 10;
+
+  const rows = await db.getAllAsync<{
+    id: string;
+    description: string;
+    next_due_date: string;
+    amount: number;
+    color: string;
+  }>(
+    `SELECT r.id, r.description, r.next_due_date, r.amount, c.color
+     FROM recurring_transactions r
+     LEFT JOIN categories c ON c.id = r.category_id
+     WHERE r.is_active = 1 AND r.next_due_date >= ?
+     ORDER BY r.next_due_date ASC
+     LIMIT ?`,
+    [today, limit]
+  );
+
+  return rows.map((r) => {
+    const d = new Date(r.next_due_date + "T00:00:00");
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+    return {
+      id: r.id,
+      name: r.description,
+      date: `${d.getDate()} ${months[d.getMonth()]}`,
+      amount: r.amount,
+      color: r.color || "#6366f1",
+    };
+  });
+}
+
 export async function getOverdueTransactions(): Promise<{ id: string; description: string; amount: number; date: string }[]> {
   const db = await getDb();
   const today = formatDateLocal(new Date());
   const rows = await db.getAllAsync<{ id: string; description: string; amount: number; date: string }>(
-    `SELECT id, description, amount, date FROM transactions WHERE status = 'PENDING' AND date < ? ORDER BY date ASC LIMIT 10`,
+    `SELECT id, description, amount, date FROM transactions WHERE status IN ('PENDING', 'OVERDUE') AND date < ? ORDER BY date ASC LIMIT 10`,
     [today]
   );
   return rows;
