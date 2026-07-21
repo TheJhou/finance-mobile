@@ -7,7 +7,6 @@ import {
     createRecurring,
     deleteRecurring,
     listRecurring,
-    postRecurringTransaction,
     processRecurringDue,
     toggleRecurringActive,
     updateRecurring
@@ -79,10 +78,6 @@ export default function RecurringScreen() {
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<RecurringTransaction | null>(null);
-  const [showPostModal, setShowPostModal] = useState(false);
-  const [postingItem, setPostingItem] = useState<RecurringTransaction | null>(null);
-  const [postDate, setPostDate] = useState(toDateInputValue(new Date()));
-  const [posting, setPosting] = useState(false);
   const [confirmDel, setConfirmDel] = useState<RecurringTransaction | null>(null);
   const [infoDialog, setInfoDialog] = useState<{ title: string; message: string; variant?: "default" | "warning" | "danger" | "success" } | null>(null);
 
@@ -126,32 +121,6 @@ export default function RecurringScreen() {
       fetchItems();
     } catch (err) {
       setInfoDialog({ title: "Erro", message: err instanceof Error ? err.message : "Falha", variant: "danger" });
-    }
-  };
-
-  const handlePost = (item: RecurringTransaction) => {
-    setPostingItem(item);
-    setPostDate(toDateInputValue(new Date()));
-    setShowPostModal(true);
-  };
-
-  const confirmPost = async () => {
-    if (!postingItem) return;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(postDate)) {
-      setInfoDialog({ title: "Data inválida", message: "Use o formato AAAA-MM-DD", variant: "warning" });
-      return;
-    }
-    setPosting(true);
-    try {
-      await postRecurringTransaction(postingItem.id, postDate);
-      setShowPostModal(false);
-      setPostingItem(null);
-      setInfoDialog({ title: "Sucesso", message: `"${postingItem.description}" lançada como transação em ${postDate}.`, variant: "success" });
-      fetchItems();
-    } catch (err) {
-      setInfoDialog({ title: "Erro", message: err instanceof Error ? err.message : "Falha ao lançar", variant: "danger" });
-    } finally {
-      setPosting(false);
     }
   };
 
@@ -262,15 +231,6 @@ export default function RecurringScreen() {
                   {item.isActive ? "Ativa" : "Inativa"}
                 </Text>
                 <View style={styles.actionButtons}>
-                  {item.isActive && (
-                    <Pressable
-                      style={styles.actionButton}
-                      onPress={() => handlePost(item)}
-                      hitSlop={10}
-                    >
-                      <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
-                    </Pressable>
-                  )}
                   <Pressable
                     style={styles.actionButton}
                     onPress={() => handleToggle(item)}
@@ -330,44 +290,6 @@ export default function RecurringScreen() {
         }}
       />
 
-      {/* Modal: Lançar recorrência em transação */}
-      <Modal visible={showPostModal} transparent animationType="slide" onRequestClose={() => setShowPostModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowPostModal(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Lançar transação</Text>
-            {postingItem && (
-              <Text style={styles.modalSubtitle}>
-                {postingItem.description} · {formatCurrency(postingItem.amount)}
-              </Text>
-            )}
-            <DatePicker
-              label="Data do lançamento"
-              value={postDate}
-              onChange={setPostDate}
-            />
-            <View style={styles.modalActions}>
-              <Pressable
-                style={[styles.modalBtn, styles.modalBtnSecondary]}
-                onPress={() => setShowPostModal(false)}
-              >
-                <Text style={styles.modalBtnTextSecondary}>Cancelar</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.modalBtn, styles.modalBtnPrimary, posting && { opacity: 0.6 }]}
-                onPress={confirmPost}
-                disabled={posting}
-              >
-                {posting ? (
-                  <ActivityIndicator size="small" color="#fff" />
-                ) : (
-                  <Text style={styles.modalBtnTextPrimary}>Lançar</Text>
-                )}
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
       <ConfirmDialog
         visible={confirmDel !== null}
         title="Excluir recorrência"
@@ -425,6 +347,12 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<Recu
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const addMonths = useCallback((dateStr: string, months: number) => {
+    const d = new Date(dateStr + "T00:00:00");
+    d.setMonth(d.getMonth() + months);
+    return toDateInputValue(d);
+  }, []);
+
   useEffect(() => {
     if (!visible) return;
     listCategories().then((cats) => {
@@ -445,16 +373,17 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<Recu
       setNextDueDate(editingItem.nextDueDate);
       setCategoryId(editingItem.categoryId);
     } else {
+      const today = toDateInputValue(new Date());
       setDescription("");
       setAmount("");
       setType("EXPENSE");
       setFrequency("MONTHLY");
-      setStartDate(toDateInputValue(new Date()));
-      setEndDate("");
-      setNextDueDate(toDateInputValue(new Date()));
+      setStartDate(today);
+      setEndDate(addMonths(today, 24));
+      setNextDueDate(today);
       setCategoryId(null);
     }
-  }, [editingItem, visible]);
+  }, [editingItem, visible, addMonths]);
 
   const handleSave = async () => {
     const parsedAmount = parseCurrencyInput(amount);
@@ -612,8 +541,31 @@ function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<Recu
             </View>
 
             <View>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={formStyles.label}>Gerar contas até</Text>
+                <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                  <Pressable
+                    style={[formStyles.smallChip, endDate === addMonths(startDate, 12) && formStyles.smallChipActive]}
+                    onPress={() => setEndDate(addMonths(startDate, 12))}
+                  >
+                    <Text style={[formStyles.smallChipText, endDate === addMonths(startDate, 12) && { color: colors.primary }]}>12 m</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[formStyles.smallChip, endDate === addMonths(startDate, 24) && formStyles.smallChipActive]}
+                    onPress={() => setEndDate(addMonths(startDate, 24))}
+                  >
+                    <Text style={[formStyles.smallChipText, endDate === addMonths(startDate, 24) && { color: colors.primary }]}>24 m</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[formStyles.smallChip, endDate === "" && formStyles.smallChipActive]}
+                    onPress={() => setEndDate("")}
+                  >
+                    <Text style={[formStyles.smallChipText, endDate === "" && { color: colors.primary }]}>Sem fim</Text>
+                  </Pressable>
+                </View>
+              </View>
               <DatePicker
-                label="Data de fim (opcional)"
+                label=""
                 value={endDate}
                 onChange={setEndDate}
               />
@@ -676,6 +628,19 @@ function createFormStyles() {
     backgroundColor: colors.primary + "15",
   },
   freqLabel: { fontSize: 13, fontWeight: "600", color: colors.textSecondary },
+  smallChip: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  smallChipActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + "15",
+  },
+  smallChipText: { fontSize: 11, fontWeight: "600", color: colors.textSecondary },
   pillRow: { gap: spacing.sm, paddingVertical: 2 },
   pill: {
     flexDirection: "row",

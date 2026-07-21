@@ -67,6 +67,8 @@ export interface Transaction {
   boletoNumber?: string | null;
   cnpj?: string | null;
   recipientName?: string | null;
+  // Recurrence tracking
+  recurringId?: string | null;
   // Source tracking
   source: TransactionSource;
   bankOrigin?: string | null;

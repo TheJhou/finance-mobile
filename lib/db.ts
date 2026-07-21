@@ -198,9 +198,11 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
         boleto_number TEXT,
         cnpj TEXT,
         recipient_name TEXT,
+        recurring_id TEXT,
         created_at TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE RESTRICT,
+        FOREIGN KEY (recurring_id) REFERENCES recurring_transactions(id) ON DELETE SET NULL
       );
 
       CREATE TABLE IF NOT EXISTS recurring_transactions (
@@ -373,11 +375,14 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
       colsToAddV2.push(`ALTER TABLE transactions ADD COLUMN source TEXT NOT NULL DEFAULT 'MANUAL'`);
     if (!existingColsV2.has("bank_origin"))
       colsToAddV2.push(`ALTER TABLE transactions ADD COLUMN bank_origin TEXT`);
+    if (!existingColsV2.has("recurring_id"))
+      colsToAddV2.push(`ALTER TABLE transactions ADD COLUMN recurring_id TEXT`);
 
     const indexesToCreate = [
       `CREATE INDEX IF NOT EXISTS idx_transactions_status ON transactions(status)`,
       `CREATE INDEX IF NOT EXISTS idx_transactions_type ON transactions(type)`,
       `CREATE INDEX IF NOT EXISTS idx_transactions_source ON transactions(source)`,
+      `CREATE INDEX IF NOT EXISTS idx_transactions_recurring ON transactions(recurring_id)`,
       `CREATE INDEX IF NOT EXISTS idx_transactions_payment_method ON transactions(payment_method)`,
     ];
 

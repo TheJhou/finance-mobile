@@ -8,6 +8,8 @@ import type {
 } from "@/lib/types";
 import { formatDateLocal } from "@/lib/utils";
 
+type SQLiteDatabase = Awaited<ReturnType<typeof getDb>>;
+
 interface RecurringRow {
   id: string;
   description: string;
@@ -100,25 +102,35 @@ export async function createRecurring(data: {
 }): Promise<RecurringTransaction> {
   const db = await getDb();
   const id = generateId();
-  await db.runAsync(
-    `INSERT INTO recurring_transactions
-      (id, description, amount, type, frequency, payment_method, is_active,
-       start_date, end_date, next_due_date, category_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      id,
-      data.description,
-      data.amount,
-      data.type,
-      data.frequency,
-      data.paymentMethod ?? "CASH",
-      data.isActive === false ? 0 : 1,
-      data.startDate,
-      data.endDate ?? null,
-      data.nextDueDate,
-      data.categoryId,
-    ]
-  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `INSERT INTO recurring_transactions
+        (id, description, amount, type, frequency, payment_method, is_active,
+         start_date, end_date, next_due_date, category_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        data.description,
+        data.amount,
+        data.type,
+        data.frequency,
+        data.paymentMethod ?? "CASH",
+        data.isActive === false ? 0 : 1,
+        data.startDate,
+        data.endDate ?? null,
+        data.nextDueDate,
+        data.categoryId,
+      ]
+    );
+    const row = await db.getFirstAsync<RecurringRow>(
+      `${BASE_SELECT} WHERE r.id = ?`,
+      [id]
+    );
+    if (!row) throw new Error("Failed to create recurring transaction");
+    if (data.isActive !== false) {
+      await generateRecurringInstances(db, row);
+    }
+  });
   const created = await getRecurring(id);
   if (!created) throw new Error("Failed to create recurring transaction");
   return created;
@@ -152,31 +164,59 @@ export async function updateRecurring(
     nextDueDate: "next_due_date",
     categoryId: "category_id",
   };
-  const sets: string[] = [];
-  const params: unknown[] = [];
-  for (const [key, col] of Object.entries(map)) {
-    const value = (data as Record<string, unknown>)[key];
-    if (value !== undefined) {
-      sets.push(`${col} = ?`);
-      if (key === "isActive") {
-        params.push(value ? 1 : 0);
-      } else {
-        params.push(value as string | number | null);
+
+  const needsRegeneration =
+    data.description !== undefined ||
+    data.amount !== undefined ||
+    data.type !== undefined ||
+    data.frequency !== undefined ||
+    data.startDate !== undefined ||
+    data.endDate !== undefined ||
+    data.nextDueDate !== undefined ||
+    data.categoryId !== undefined ||
+    data.paymentMethod !== undefined;
+
+  await db.withTransactionAsync(async () => {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+    for (const [key, col] of Object.entries(map)) {
+      const value = (data as Record<string, unknown>)[key];
+      if (value !== undefined) {
+        sets.push(`${col} = ?`);
+        if (key === "isActive") {
+          params.push(value ? 1 : 0);
+        } else {
+          params.push(value as string | number | null);
+        }
       }
     }
-  }
-  if (sets.length === 0) return;
-  sets.push("updated_at = datetime('now')");
-  params.push(id);
-  await db.runAsync(
-    `UPDATE recurring_transactions SET ${sets.join(", ")} WHERE id = ?`,
-    params as (string | number | null)[]
-  );
+    if (sets.length === 0) return;
+    sets.push("updated_at = datetime('now')");
+    params.push(id);
+    await db.runAsync(
+      `UPDATE recurring_transactions SET ${sets.join(", ")} WHERE id = ?`,
+      params as (string | number | null)[]
+    );
+
+    if (needsRegeneration) {
+      const row = await db.getFirstAsync<RecurringRow>(
+        `${BASE_SELECT} WHERE r.id = ?`,
+        [id]
+      );
+      if (row) await generateRecurringInstances(db, row);
+    }
+  });
 }
 
 export async function deleteRecurring(id: string): Promise<void> {
   const db = await getDb();
-  await db.runAsync("DELETE FROM recurring_transactions WHERE id = ?", [id]);
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `DELETE FROM transactions WHERE recurring_id = ? AND status IN ('PENDING', 'OVERDUE')`,
+      [id]
+    );
+    await db.runAsync("DELETE FROM recurring_transactions WHERE id = ?", [id]);
+  });
 }
 
 export async function toggleRecurringActive(
@@ -184,10 +224,24 @@ export async function toggleRecurringActive(
   isActive: boolean
 ): Promise<void> {
   const db = await getDb();
-  await db.runAsync(
-    "UPDATE recurring_transactions SET is_active = ?, updated_at = datetime('now') WHERE id = ?",
-    [isActive ? 1 : 0, id]
-  );
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      "UPDATE recurring_transactions SET is_active = ?, updated_at = datetime('now') WHERE id = ?",
+      [isActive ? 1 : 0, id]
+    );
+    if (!isActive) {
+      await db.runAsync(
+        `DELETE FROM transactions WHERE recurring_id = ? AND status IN ('PENDING', 'OVERDUE')`,
+        [id]
+      );
+    } else {
+      const row = await db.getFirstAsync<RecurringRow>(
+        `${BASE_SELECT} WHERE r.id = ?`,
+        [id]
+      );
+      if (row) await generateRecurringInstances(db, row);
+    }
+  });
 }
 
 function advanceDate(date: string, frequency: Frequency): string {
@@ -209,107 +263,87 @@ function advanceDate(date: string, frequency: Frequency): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export async function postRecurringTransaction(
-  id: string,
-  date?: string
+function generateDates(
+  startDate: string,
+  frequency: Frequency,
+  endDate?: string | null
+): string[] {
+  const dates: string[] = [];
+  let current = startDate;
+  const limit = 500;
+  const effectiveEnd =
+    endDate ??
+    (() => {
+      const d = new Date(startDate + "T00:00:00");
+      d.setMonth(d.getMonth() + 24);
+      return formatDateLocal(d);
+    })();
+
+  while (dates.length < limit) {
+    if (current > effectiveEnd) break;
+    dates.push(current);
+    const next = advanceDate(current, frequency);
+    if (next <= current) break;
+    current = next;
+  }
+  return dates;
+}
+
+async function generateRecurringInstances(
+  db: SQLiteDatabase,
+  recurring: RecurringRow
 ): Promise<void> {
-  const db = await getDb();
-  const row = await db.getFirstAsync<RecurringRow>(
-    `${BASE_SELECT} WHERE r.id = ?`,
-    [id]
+  await db.runAsync(
+    `DELETE FROM transactions WHERE recurring_id = ? AND status IN ('PENDING', 'OVERDUE')`,
+    [recurring.id]
   );
-  if (!row) throw new Error("Recorrência não encontrada");
-  if (!row.is_active) throw new Error("Recorrência inativa");
 
-  const txDate = date ?? formatDateLocal(new Date());
-  const txId = generateId();
+  const dates = generateDates(
+    recurring.next_due_date,
+    recurring.frequency as Frequency,
+    recurring.end_date
+  );
+  if (dates.length === 0) return;
 
-  await db.withTransactionAsync(async () => {
+  for (const date of dates) {
     await db.runAsync(
       `INSERT INTO transactions
-        (id, description, amount, type, status, payment_method, date, notes, category_id, source)
-       VALUES (?, ?, ?, ?, 'PAID', ?, ?, ?, ?, 'MANUAL')`,
+        (id, description, amount, type, status, payment_method, date, notes, category_id, recurring_id, source)
+       VALUES (?, ?, ?, ?, 'PENDING', ?, ?, ?, ?, ?, 'MANUAL')`,
       [
-        txId,
-        row.description,
-        row.amount,
-        row.type,
-        row.payment_method,
-        txDate,
-        `Lançada manualmente (recorrente)`,
-        row.category_id,
+        generateId(),
+        recurring.description,
+        recurring.amount,
+        recurring.type,
+        recurring.payment_method,
+        date,
+        `Gerado pela recorrência`,
+        recurring.category_id,
+        recurring.id,
       ]
     );
-
-    const nextDue = advanceDate(txDate, row.frequency as Frequency);
-
-    if (row.end_date && nextDue > row.end_date) {
-      await db.runAsync(
-        "UPDATE recurring_transactions SET is_active = 0, next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
-        [nextDue, id]
-      );
-    } else {
-      await db.runAsync(
-        "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
-        [nextDue, id]
-      );
-    }
-  });
+  }
 }
 
 export async function processRecurringDue(): Promise<number> {
   const db = await getDb();
-  const today = formatDateLocal(new Date());
-
-  const dueRows = await db.getAllAsync<RecurringRow>(
-    `${BASE_SELECT} WHERE r.is_active = 1 AND r.next_due_date <= ? LIMIT 100`,
-    [today]
+  const rows = await db.getAllAsync<RecurringRow>(
+    `${BASE_SELECT} WHERE r.is_active = 1`
   );
 
-  let created = 0;
-
-  await db.withTransactionAsync(async () => {
-    for (const row of dueRows) {
-      let dueDate = row.next_due_date;
-
-      while (dueDate <= today) {
-        const txId = generateId();
-        await db.runAsync(
-          `INSERT INTO transactions
-            (id, description, amount, type, status, payment_method, date, notes, category_id, source)
-           VALUES (?, ?, ?, ?, 'PAID', ?, ?, ?, ?, 'MANUAL')`,
-          [
-            txId,
-            row.description,
-            row.amount,
-            row.type,
-            row.payment_method,
-            dueDate,
-            `Gerada automaticamente (recorrente)`,
-            row.category_id,
-          ]
-        );
-        created++;
-
-        dueDate = advanceDate(dueDate, row.frequency as Frequency);
-
-        if (row.end_date && dueDate > row.end_date) {
-          await db.runAsync(
-            "UPDATE recurring_transactions SET is_active = 0, next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
-            [dueDate, row.id]
-          );
-          break;
-        }
-      }
-
-      if (!row.end_date || dueDate <= row.end_date) {
-        await db.runAsync(
-          "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
-          [dueDate, row.id]
-        );
-      }
+  for (const row of rows) {
+    const next = await db.getFirstAsync<{ date: string | null }>(
+      `SELECT MIN(date) as date FROM transactions WHERE recurring_id = ? AND status IN ('PENDING', 'OVERDUE')`,
+      [row.id]
+    );
+    const nextDue = next?.date ?? row.next_due_date;
+    if (nextDue && nextDue !== row.next_due_date) {
+      await db.runAsync(
+        "UPDATE recurring_transactions SET next_due_date = ?, updated_at = datetime('now') WHERE id = ?",
+        [nextDue, row.id]
+      );
     }
-  });
+  }
 
-  return created;
+  return 0;
 }

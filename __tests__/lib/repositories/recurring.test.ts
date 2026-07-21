@@ -143,7 +143,7 @@ describe("recurring repository", () => {
       });
 
       const list = await listRecurring();
-      expect(list.length).toBe(2);
+      expect(list).toHaveLength(2);
       expect(list[0].nextDueDate).toBe("2025-06-01");
       expect(list[1].nextDueDate).toBe("2025-07-01");
     });
@@ -206,7 +206,8 @@ describe("recurring repository", () => {
   });
 
   describe("deleteRecurring", () => {
-    it("removes a recurring transaction", async () => {
+    it("removes a recurring transaction and its generated pending transactions", async () => {
+      const db = await getDb();
       const created = await createRecurring({
         description: "To delete",
         amount: 50,
@@ -214,18 +215,25 @@ describe("recurring repository", () => {
         frequency: "MONTHLY",
         startDate: "2025-01-01",
         nextDueDate: "2025-06-01",
+        endDate: "2025-08-01",
         categoryId: "cat-1",
       });
+
+      const before = await db.getAllAsync<any>("SELECT * FROM transactions WHERE recurring_id = ?", [created.id]);
+      expect(before.length).toBeGreaterThan(0);
 
       await deleteRecurring(created.id);
 
       const found = await getRecurring(created.id);
       expect(found).toBeNull();
+
+      const after = await db.getAllAsync<any>("SELECT * FROM transactions WHERE recurring_id = ?", [created.id]);
+      expect(after).toHaveLength(0);
     });
   });
 
   describe("processRecurringDue", () => {
-    it("creates transactions for due recurring items", async () => {
+    it("retorna 0 e mantém nextDueDate após geração em createRecurring", async () => {
       const db = await getDb();
       const today = new Date();
       const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
@@ -237,57 +245,17 @@ describe("recurring repository", () => {
         frequency: "MONTHLY",
         startDate: "2025-01-01",
         nextDueDate: todayStr,
+        endDate: `${today.getFullYear()}-${String(today.getMonth() + 4).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
         categoryId: "cat-1",
       });
 
-      const created = await processRecurringDue();
-      expect(created).toBe(1);
+      const count = await processRecurringDue();
+      expect(count).toBe(0);
 
-      // Verify transaction was created
-      const txs = await db.getAllAsync<{ amount: number }>("SELECT * FROM transactions WHERE description = ?", ["Aluguel"]);
-      expect(txs.length).toBe(1);
+      // createRecurring já gerou as parcelas PENDING
+      const txs = await db.getAllAsync<{ amount: number }>("SELECT * FROM transactions WHERE description = ? AND status = 'PENDING'", ["Aluguel"]);
+      expect(txs.length).toBeGreaterThanOrEqual(1);
       expect(txs[0].amount).toBe(1200);
-    });
-
-    it("does not create transactions for future due dates", async () => {
-      const future = new Date();
-      future.setDate(future.getDate() + 7);
-      const futureStr = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")}`;
-
-      await createRecurring({
-        description: "Futuro",
-        amount: 100,
-        type: "EXPENSE",
-        frequency: "MONTHLY",
-        startDate: "2025-01-01",
-        nextDueDate: futureStr,
-        categoryId: "cat-1",
-      });
-
-      const created = await processRecurringDue();
-      expect(created).toBe(0);
-    });
-
-    it("deactivates recurring when end_date is reached", async () => {
-      const db = await getDb();
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-      const rec = await createRecurring({
-        description: "One time",
-        amount: 100,
-        type: "EXPENSE",
-        frequency: "MONTHLY",
-        startDate: "2025-01-01",
-        nextDueDate: todayStr,
-        endDate: todayStr,
-        categoryId: "cat-1",
-      });
-
-      await processRecurringDue();
-
-      const updated = await getRecurring(rec.id);
-      expect(updated?.isActive).toBe(false);
     });
   });
 });

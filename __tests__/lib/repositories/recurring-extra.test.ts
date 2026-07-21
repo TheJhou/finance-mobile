@@ -18,7 +18,6 @@ import {
     deleteRecurring,
     getRecurring,
     listRecurring,
-    postRecurringTransaction,
     processRecurringDue,
     toggleRecurringActive,
     updateRecurring,
@@ -101,72 +100,36 @@ async function seedRecurring(overrides: Partial<{
   });
 }
 
-describe("recurring — postRecurringTransaction", () => {
-  it("cria uma transação e avança nextDueDate", async () => {
-    const rec = await seedRecurring({ nextDueDate: "2025-06-01" });
-
-    await postRecurringTransaction(rec.id, "2025-06-15");
+describe("recurring — createRecurring", () => {
+  it("gera parcelas PENDING ao criar recorrência ativa", async () => {
+    const rec = await seedRecurring({ nextDueDate: "2025-06-01", endDate: "2025-12-01" });
 
     const db = await getDb();
-    const txs = await db.getAllAsync<any>("SELECT * FROM transactions");
-    expect(txs).toHaveLength(1);
+    const txs = await db.getAllAsync<any>("SELECT * FROM transactions WHERE recurring_id = ?", [rec.id]);
+    expect(txs).toHaveLength(7); // 2025-06-01 até 2025-12-01 mensal
+    expect(txs[0].status).toBe("PENDING");
     expect(txs[0].description).toBe("Aluguel");
     expect(txs[0].amount).toBe(1500);
-    expect(txs[0].status).toBe("PAID");
-    expect(txs[0].notes).toMatch(/recorrente/i);
-
-    const updated = await getRecurring(rec.id);
-    expect(updated!.nextDueDate).toBe("2025-07-15");
   });
 
-  it("desativa recorrência se nextDueDate passar end_date", async () => {
-    const rec = await seedRecurring({
-      nextDueDate: "2025-06-01",
-      endDate: "2025-06-30",
-    });
-
-    await postRecurringTransaction(rec.id, "2025-06-15");
-
-    const updated = await getRecurring(rec.id);
-    expect(updated!.isActive).toBe(false);
-  });
-
-  it("lança erro se recorrência não existe", async () => {
-    await expect(postRecurringTransaction("nonexistent")).rejects.toThrow(/não encontrada/i);
-  });
-
-  it("lança erro se recorrência inativa", async () => {
+  it("não gera parcelas se recorrência estiver inativa", async () => {
     const rec = await seedRecurring({ isActive: false });
-    await expect(postRecurringTransaction(rec.id)).rejects.toThrow(/inativa/i);
+
+    const db = await getDb();
+    const txs = await db.getAllAsync<any>("SELECT * FROM transactions WHERE recurring_id = ?", [rec.id]);
+    expect(txs).toHaveLength(0);
   });
 });
 
 describe("recurring — processRecurringDue", () => {
-  it("cria transação para recorrência vencida", async () => {
-    await seedRecurring({ nextDueDate: "2020-01-01" });
+  it("não cria novas transações, apenas atualiza nextDueDate", async () => {
+    const rec = await seedRecurring({ nextDueDate: "2025-06-01", endDate: "2025-12-01" });
 
-    const created = await processRecurringDue();
-    expect(created).toBeGreaterThanOrEqual(1);
-
-    const db = await getDb();
-    const txs = await db.getAllAsync<any>("SELECT * FROM transactions");
-    expect(txs.length).toBeGreaterThanOrEqual(1);
-  });
-
-  it("não cria transação se nenhuma está vencida", async () => {
-    await seedRecurring({ nextDueDate: "2099-12-31" });
-
-    const created = await processRecurringDue();
-    expect(created).toBe(0);
-  });
-
-  it("avança nextDueDate após processar", async () => {
-    const rec = await seedRecurring({ nextDueDate: "2020-01-01" });
-    await processRecurringDue();
+    const count = await processRecurringDue();
+    expect(count).toBe(0);
 
     const updated = await getRecurring(rec.id);
-    // Should have advanced past today
-    expect(updated!.nextDueDate).toBeGreaterThan("2020-01-01" as any);
+    expect(updated!.nextDueDate).toBe("2025-06-01");
   });
 });
 
