@@ -1,6 +1,8 @@
 import DrawerMenu from "@/components/drawer-menu";
 import { getStoredUserName } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { onNotificationQueued } from "@/lib/notification-events";
+import { countPendingApproval } from "@/lib/notification-queue";
 import { getProfilePhotoUri, onProfilePhotoChange } from "@/lib/profile-photo";
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -37,17 +39,15 @@ export function AppHeader() {
     setProfilePhoto(photo);
     try {
       const db = await getDb();
-      const [balanceRow, pendingRow] = await Promise.all([
+      const [balanceRow, pendingCountResult] = await Promise.all([
         db.getFirstAsync<{ balance: number | null }>(
           `SELECT COALESCE(SUM(CASE WHEN type = 'INCOME' THEN amount ELSE -amount END), 0) as balance
            FROM transactions WHERE status = 'PAID'`
         ),
-        db.getFirstAsync<{ count: number }>(
-          `SELECT COUNT(*) as count FROM transactions WHERE status = 'PENDING'`
-        ),
+        countPendingApproval(),
       ]);
       setBalance(balanceRow?.balance ?? 0);
-      setPendingCount(pendingRow?.count ?? 0);
+      setPendingCount(pendingCountResult);
     } catch {
       // offline
     }
@@ -63,6 +63,13 @@ export function AppHeader() {
   useEffect(() => {
     return onProfilePhotoChange((uri) => setProfilePhoto(uri));
   }, []);
+
+  // Update badge in real-time when notification queue changes
+  useEffect(() => {
+    return onNotificationQueued(() => {
+      loadUserData();
+    });
+  }, [loadUserData]);
 
   return (
     <>

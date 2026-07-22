@@ -94,7 +94,6 @@ function PendingTabContent({
     ...INITIAL_FILTERS,
     type: "ALL",
     status: "ALL",
-    datePreset: "all",
   });
 
   const isExpense = type === "EXPENSE";

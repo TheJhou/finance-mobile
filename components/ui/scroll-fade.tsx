@@ -34,6 +34,7 @@ export function HorizontalScrollFade({
   fadeColor,
   fadeWidth = 40,
   children,
+  style,
   ...scrollViewProps
 }: Readonly<HorizontalScrollFadeProps>) {
   const { isDark } = useTheme();
@@ -43,7 +44,7 @@ export function HorizontalScrollFade({
   const [showRight, setShowRight] = useState(true);
 
   return (
-    <View style={{ position: "relative" }}>
+    <View style={{ position: "relative", width: "100%" }}>
       <ScrollView
         horizontal
         onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -54,6 +55,7 @@ export function HorizontalScrollFade({
           );
         }}
         scrollEventThrottle={16}
+        style={[{ width: "100%" }, style]}
         {...scrollViewProps}
       >
         {children}
