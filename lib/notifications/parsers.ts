@@ -39,8 +39,26 @@ export const BANK_APPS: Record<string, string> = {
   "br.com.pagseguro.app": "PagBank",
 };
 
-// ── RAG: Notificações que NUNCA devem ser salvas ──────────────────────
-const IGNORE_PATTERNS = [
+// ── RAG: Notificações que SEMPRE devem ser ignoradas ──────────────────
+const ALWAYS_IGNORE_PATTERNS = [
+  /login\s+realizado/i,
+  /dispositivo\s+autorizado/i,
+  /compra\s+recusada/i,
+  /pagamento\s+n[aã]o\s+aprovado/i,
+  /transa[çc][aã]o\s+falhou/i,
+  /erro\s+ao\s+processar/i,
+  /compra\s+negada/i,
+  /voc[eê]\s+recebeu\s+uma\s+mensagem/i,
+  /c[oó]digo\s+de\s+(seguran|verifica|autentica)/i,
+  /token\s+de\s+acesso/i,
+  /cupom/i,
+  /desconto\s+especial/i,
+  /convide\s+amigos/i,
+  /indique\s+e\s+ganhe/i,
+];
+
+// ── RAG: Padrões que só ignoram quando não indicam transação real ─────
+const CONTEXT_IGNORE_PATTERNS = [
   /fatura\s+(fecha|vence|vencimento)/i,
   /seu\s+boleto\s+vence/i,
   /acesse\s+o\s+app/i,
@@ -50,31 +68,31 @@ const IGNORE_PATTERNS = [
   /pontua[çc][aã]o\s+de\s+cr[eé]dito/i,
   /atualize\s+seu\s+cadastro/i,
   /promo[çc][aã]o\s+dispon[ií]vel/i,
-  // Removidos: cashback e ganhe podem ser notificações importantes de receita
-  // /cashback\s+de\s+at[eé]/i,
-  // /ganhe\s+at[eé]/i,
-  /voc[eê]\s+recebeu\s+uma\s+mensagem/i,
-  /login\s+realizado/i,
-  /dispositivo\s+autorizado/i,
-  /compra\s+recusada/i,
-  /pagamento\s+n[aã]o\s+aprovado/i,
-  /transa[çc][aã]o\s+falhou/i,
-  /erro\s+ao\s+processar/i,
-  /compra\s+negada/i,
-  // Removido: compra cancelada pode ser importante (estorno)
-  // /compra\s+cancelada/i,
   /saldo\s+atual/i,
   /seu\s+saldo/i,
-  /c[oó]digo\s+de\s+(seguran|verifica|autentica)/i,
-  /token\s+de\s+acesso/i,
-  /cupom/i,
-  /desconto\s+especial/i,
-  /convide\s+amigos/i,
-  /indique\s+e\s+ganhe/i,
+];
+
+// Indicadores fortes de uma transação real que anulam CONTEXT_IGNORE.
+const TRANSACTION_INDICATORS = [
+  /compra\s+(aprovada|cancelada)/i,
+  /compra\s+no\s+(d[eé]bito|cr[eé]dito)/i,
+  /d[eé]bito\s+realizado/i,
+  /cr[eé]dito\s+(aprovado|recebido)/i,
+  /pagamento\s+realizado/i,
+  /transfer[eê]ncia\s+(enviada|recebida|realizada)/i,
+  /pix\s+(enviado|recebido)/i,
+  /dep[oó]sito\s+(recebido|realizado)/i,
+  /saque\s+realizado/i,
+  /boleto\s+pago/i,
+  /voc[eê]\s+(enviou|recebeu|pagou)/i,
+  /creditado/i,
+  /debitado/i,
 ];
 
 function shouldIgnoreNotification(text: string): boolean {
-  return IGNORE_PATTERNS.some((p) => p.test(text));
+  if (ALWAYS_IGNORE_PATTERNS.some((p) => p.test(text))) return true;
+  if (TRANSACTION_INDICATORS.some((p) => p.test(text))) return false;
+  return CONTEXT_IGNORE_PATTERNS.some((p) => p.test(text));
 }
 
 // ── RAG: Mapeamento de palavras-chave → categoria ────────────────────
@@ -653,6 +671,7 @@ function parseGeneric(input: NotificationInput): PartialParsed | null {
   let paymentMethod: PaymentMethod = "OTHER";
   if (/pix/i.test(text)) paymentMethod = "PIX";
   else if (/mercado\s*pago|mercadopago/i.test(text)) paymentMethod = "MERCADO_PAGO";
+  else if (isIncome && /cr[eé]dito\s+recebido|dep[oó]sito|transfer[eê]ncia\s+recebida|sal[aá]rio|rendimento|reembolso|estorno\s+recebido|cashback\s+recebido/i.test(text)) paymentMethod = "BANK_TRANSFER";
   else if (/d[eé]bito|no\s+d[eé]bito|cart[aã]o\s+de\s+d[eé]bito/i.test(text)) paymentMethod = "DEBIT_CARD";
   else if (/cr[eé]dito|cart[aã]o\s+de\s+cr[eé]dito|compra\s+aprovada|parcel/i.test(text)) paymentMethod = "CREDIT_CARD";
   else if (/transfer[eê]ncia|ted|doc/i.test(text)) paymentMethod = "BANK_TRANSFER";

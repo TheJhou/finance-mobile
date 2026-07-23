@@ -203,6 +203,68 @@ describe("notifications parsers", () => {
       expect(result!.type).toBe("INCOME");
     });
 
+    it("parses generic credit card purchase as EXPENSE", () => {
+      const result = parseNotification({
+        packageName: "com.bradesco",
+        title: "Bradesco",
+        text: "Compra no crédito de R$ 120,00 em RESTAURANTE",
+        bigText: null,
+        subText: null,
+        postTime: Date.now(),
+      });
+      expect(result).not.toBeNull();
+      expect(result!.amount).toBe(120);
+      expect(result!.type).toBe("EXPENSE");
+      expect(result!.paymentMethod).toBe("CREDIT_CARD");
+      expect(result!.bank).toBe("Bradesco");
+    });
+
+    it("parses generic debit card purchase as EXPENSE", () => {
+      const result = parseNotification({
+        packageName: "com.itau",
+        title: "Itaú",
+        text: "Compra no débito de R$ 45,67 em PADARIA",
+        bigText: null,
+        subText: null,
+        postTime: Date.now(),
+      });
+      expect(result).not.toBeNull();
+      expect(result!.amount).toBe(45.67);
+      expect(result!.type).toBe("EXPENSE");
+      expect(result!.paymentMethod).toBe("DEBIT_CARD");
+      expect(result!.bank).toBe("Itaú");
+    });
+
+    it("does not ignore transaction notification containing saldo keyword", () => {
+      const result = parseNotification({
+        packageName: "com.bradesco",
+        title: "Bradesco",
+        text: "Compra aprovada de R$ 89,90 em SUPERMERCADO. Saldo atual R$ 1.234,56",
+        bigText: null,
+        subText: null,
+        postTime: Date.now(),
+      });
+      expect(result).not.toBeNull();
+      expect(result!.amount).toBe(89.9);
+      expect(result!.type).toBe("EXPENSE");
+      expect(result!.paymentMethod).toBe("CREDIT_CARD");
+    });
+
+    it("parses generic bank transfer received as INCOME", () => {
+      const result = parseNotification({
+        packageName: "com.itau",
+        title: "Itaú",
+        text: "Transferência recebida de R$ 2.000,00 de João Silva",
+        bigText: null,
+        subText: null,
+        postTime: Date.now(),
+      });
+      expect(result).not.toBeNull();
+      expect(result!.amount).toBe(2000);
+      expect(result!.type).toBe("INCOME");
+      expect(result!.paymentMethod).toBe("BANK_TRANSFER");
+    });
+
     it("returns null when no amount is found", () => {
       const result = parseNotification({
         packageName: "com.nu.production",
