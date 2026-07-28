@@ -6,13 +6,37 @@ import { deleteTransaction, listTransactions } from "@/lib/repositories/transact
 import { colors, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import type { Category, Transaction } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, LayoutAnimation, Platform, Pressable, RefreshControl, StyleSheet, Text, UIManager, View } from "react-native";
+import { ActivityIndicator, LayoutAnimation, Platform, Pressable, RefreshControl, SectionList, StyleSheet, Text, UIManager, View } from "react-native";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+interface DaySection {
+  date: string;
+  income: number;
+  expense: number;
+  balance: number;
+  data: Transaction[];
+}
+
+function formatGroupDate(dateStr: string): string {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, "0")}-${String(yesterday.getDate()).padStart(2, "0")}`;
+
+  if (dateStr === todayStr) return "Hoje";
+  if (dateStr === yesterdayStr) return "Ontem";
+
+  const date = new Date(dateStr + "T00:00:00");
+  const formatted = date.toLocaleDateString("pt-BR", { day: "numeric", month: "long", year: "numeric" });
+  return formatted.charAt(0).toUpperCase() + formatted.slice(1);
 }
 
 interface HistoryTabProps {
@@ -88,6 +112,23 @@ export function HistoryTab({ onEditTransaction, refreshKey }: HistoryTabProps) {
     return result;
   }, [items, filters]);
 
+  const sections = useMemo<DaySection[]>(() => {
+    const map = new Map<string, DaySection>();
+    for (const item of filteredItems) {
+      let section = map.get(item.date);
+      if (!section) {
+        section = { date: item.date, income: 0, expense: 0, balance: 0, data: [] };
+        map.set(item.date, section);
+      }
+      section.data.push(item);
+      const amount = Number(item.amount);
+      if (item.type === "INCOME") section.income += amount;
+      else section.expense += amount;
+      section.balance = section.income - section.expense;
+    }
+    return Array.from(map.values());
+  }, [filteredItems]);
+
   const filterCount = activeFilterCount(filters);
 
   if (loading) {
@@ -130,8 +171,8 @@ export function HistoryTab({ onEditTransaction, refreshKey }: HistoryTabProps) {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <FlatList
-        data={filteredItems}
+      <SectionList
+        sections={sections}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />}
@@ -142,6 +183,19 @@ export function HistoryTab({ onEditTransaction, refreshKey }: HistoryTabProps) {
             <Text style={styles.emptyHint}>{isFiltersActive(filters) ? "Tente ajustar os filtros." : "As transações pagas aparecem aqui."}</Text>
           </View>
         }
+        renderSectionHeader={({ section }) => (
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionDate}>{formatGroupDate(section.date)}</Text>
+            <View style={{ alignItems: "flex-end" }}>
+              <Text style={[styles.sectionBalance, { color: section.balance >= 0 ? colors.incomeFg : colors.expenseFg }]}>
+                {section.balance >= 0 ? "+" : "-"}{formatCurrency(Math.abs(section.balance))}
+              </Text>
+              <Text style={styles.sectionMeta}>
+                +{formatCurrency(section.income)} · -{formatCurrency(section.expense)}
+              </Text>
+            </View>
+          </View>
+        )}
         renderItem={({ item }) => (
           <TransactionCard
             transaction={item}
@@ -215,6 +269,16 @@ function createStyles() {
       borderRadius: 8,
     },
     list: { padding: spacing.lg, gap: spacing.sm, flexGrow: 1, paddingBottom: 96 },
+    sectionHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      paddingVertical: spacing.xs,
+      paddingTop: spacing.sm,
+    },
+    sectionDate: { fontSize: 13, fontWeight: "700", color: colors.textPrimary },
+    sectionBalance: { fontSize: 13, fontWeight: "700" },
+    sectionMeta: { fontSize: 11, color: colors.textMuted, marginTop: 1 },
     empty: {
       flex: 1,
       alignItems: "center",

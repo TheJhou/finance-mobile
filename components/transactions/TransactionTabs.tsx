@@ -13,7 +13,7 @@ interface TabOption {
 }
 
 const TAB_OPTIONS: TabOption[] = [
-  { key: "history", label: "Histórico", icon: "checkmark-done-outline" },
+  { key: "history", label: "Extrato", icon: "checkmark-done-outline" },
   { key: "payables", label: "A pagar", icon: "arrow-down-circle-outline" },
   { key: "receivables", label: "A receber", icon: "arrow-up-circle-outline" },
 ];

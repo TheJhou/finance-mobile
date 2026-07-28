@@ -1,8 +1,10 @@
 import { DueBadge } from "@/components/transactions/DueBadge";
+import { TransactionDetailsModal } from "@/components/transactions/TransactionDetailsModal";
 import { colors, radius, spacing } from "@/lib/theme";
 import type { Transaction } from "@/lib/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 const paymentIcons: Record<string, keyof typeof Ionicons.glyphMap> = {
@@ -56,9 +58,11 @@ export function TransactionCard({
 }: TransactionCardProps) {
   const isIncome = transaction.type === "INCOME";
   const itemSource = transaction.source ?? "MANUAL";
+  const [showDetails, setShowDetails] = useState(false);
 
   return (
-    <View style={styles.card}>
+    <>
+    <Pressable style={styles.card} onPress={() => setShowDetails(true)}>
       <View
         style={[
           styles.icon,
@@ -152,7 +156,15 @@ export function TransactionCard({
           </Pressable>
         </View>
       </View>
-    </View>
+    </Pressable>
+    <TransactionDetailsModal
+      visible={showDetails}
+      transaction={transaction}
+      onClose={() => setShowDetails(false)}
+      onEdit={onEdit}
+      onDelete={onDelete}
+    />
+    </>
   );
 }
 
