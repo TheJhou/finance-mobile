@@ -2,7 +2,7 @@
   "expo": {
     "name": "Kilun",
     "slug": "finance-mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/Icone.png",
     "scheme": "financemobile",
@@ -17,7 +17,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.kilun",
-      "versionCode": 18,
+      "versionCode": 19,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO",
