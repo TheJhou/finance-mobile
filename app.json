@@ -17,7 +17,7 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.thejhou.kilun",
-      "versionCode": 19,
+      "versionCode": 20,
       "permissions": [
         "android.permission.INTERNET",
         "android.permission.RECORD_AUDIO",
