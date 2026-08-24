@@ -2,13 +2,11 @@ import { authenticateWithBiometrics, setBiometricUnlocked } from "@/lib/biometri
 import { colors, radius, spacing } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function LockScreen() {
-  const router = useRouter();
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
   const [error, setError] = useState<string | null>(null);
@@ -33,13 +31,12 @@ export default function LockScreen() {
     if (result.success) {
       await setBiometricUnlocked(true);
       // RootNavigator reage via onBiometricUnlockChange e remove a lock screen
-      router.replace("/" as any);
     } else {
       isAuthenticatingRef.current = false;
       setAuthenticating(false);
       setError(result.error ?? "Falha na autenticação");
     }
-  }, [router]);
+  }, []);
 
   // Dispara biometria IMEDIATAMENTE na montagem — sem deps que causem re-disparo
   useEffect(() => {

@@ -10,7 +10,7 @@ export async function isBiometricAvailable(): Promise<{
   enrolled: boolean;
 }> {
   const hasHardware = await LocalAuthentication.hasHardwareAsync();
-  const enrolled = await LocalAuthentication.isEnrolledAsync();
+  const enrolled = hasHardware && await LocalAuthentication.isEnrolledAsync();
   const available = hasHardware && enrolled;
   const biometricType = available ? await LocalAuthentication.supportedAuthenticationTypesAsync() : [];
   return { available, biometricType, hasHardware, enrolled };
@@ -61,6 +61,14 @@ export async function authenticateWithBiometrics(
   promptMessage = "Autentique-se para acessar o app"
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const availability = await isBiometricAvailable();
+    if (!availability.hasHardware) {
+      return { success: false, error: "Biometria não disponível neste dispositivo" };
+    }
+    if (!availability.enrolled) {
+      return { success: false, error: "Nenhuma biometria cadastrada no dispositivo" };
+    }
+
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage,
       fallbackLabel: "Usar senha do dispositivo",
