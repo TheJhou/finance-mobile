@@ -1,5 +1,6 @@
 import { HorizontalScrollFade, ScrollFade } from "@/components/ui/scroll-fade";
 import { isAuthenticated } from "@/lib/auth";
+import { isProUser } from "@/lib/subscription";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
 import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getStreak } from "@/lib/backend";
 import { calculateHealthScore } from "@/lib/health-score";
@@ -112,7 +113,8 @@ export default function DashboardScreen() {
   const loadAiForecast = useCallback(async (dashData: DashboardData) => {
     try {
       const authed = await isAuthenticated();
-      if (!authed) {
+      // A previsão é exclusiva do PRO: para FREE o backend sempre responde 403
+      if (!authed || !(await isProUser())) {
         setAiForecast(null);
         return;
       }

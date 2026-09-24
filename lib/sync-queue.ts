@@ -121,7 +121,9 @@ export async function processSyncQueue(): Promise<void> {
   for (const item of items) {
     try {
       const payload: SyncPayload = JSON.parse(item.payload);
-      await autoSaveTransaction(payload);
+      // externalId = id local: se a resposta se perder e o item for reenviado,
+      // o backend devolve a transação já gravada em vez de duplicar
+      await autoSaveTransaction({ ...payload, externalId: item.transactionId });
       await markSynced(item.id);
       console.log(`[SyncQueue] Item ${item.id} sincronizado com sucesso`);
     } catch (err) {
