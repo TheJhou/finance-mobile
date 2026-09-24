@@ -15,7 +15,7 @@ describe("transactions repository", () => {
     resetMockDatabase();
     const db = await getDb();
     await db.runAsync(
-      "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
       ["cat-1", "Alimentação", "#ef4444", "restaurant"]
     );
   });

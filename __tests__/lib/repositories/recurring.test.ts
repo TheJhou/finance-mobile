@@ -58,7 +58,7 @@ describe("recurring repository", () => {
       );
     `);
     await db.runAsync(
-      "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
       ["cat-1", "Moradia", "#eab308", "home"]
     );
   });
