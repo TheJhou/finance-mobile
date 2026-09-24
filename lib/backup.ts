@@ -53,6 +53,9 @@ export interface CloudBackupEntry {
 
 // ── Backup System ───────────────────────────────────────────────────────
 
+// Backups completos podem ter vários MB
+const BACKUP_TRANSFER_TIMEOUT_MS = 120_000;
+
 export class BackupSystem {
   private static readonly BACKUP_VERSION = '1.0.0';
   private static get BACKUP_DIR(): Directory {
@@ -501,6 +504,7 @@ export class BackupSystem {
 
     const response = await authFetch(`${BACKEND_URL}/backup/upload`, {
       method: 'POST',
+      timeoutMs: BACKUP_TRANSFER_TIMEOUT_MS,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(backupPackage),
     });
@@ -532,7 +536,7 @@ export class BackupSystem {
    * Baixa o backup mais recente da nuvem e restaura localmente.
    */
   static async downloadAndRestoreLatest(): Promise<RestoreResult> {
-    const response = await authFetch(`${BACKEND_URL}/backup/latest`);
+    const response = await authFetch(`${BACKEND_URL}/backup/latest`, { timeoutMs: BACKUP_TRANSFER_TIMEOUT_MS });
     if (!response.ok) {
       if (response.status === 404) {
         return { success: false, restoredTables: [], recordsRestored: 0, error: 'Nenhum backup na nuvem' };
@@ -561,7 +565,8 @@ export class BackupSystem {
    */
   static async downloadAndRestoreByFilename(filename: string): Promise<RestoreResult> {
     const response = await authFetch(
-      `${BACKEND_URL}/backup/download/${encodeURIComponent(filename)}`
+      `${BACKEND_URL}/backup/download/${encodeURIComponent(filename)}`,
+      { timeoutMs: BACKUP_TRANSFER_TIMEOUT_MS }
     );
     if (!response.ok) throw new Error('Erro ao baixar backup da nuvem');
 

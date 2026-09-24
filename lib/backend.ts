@@ -2,6 +2,11 @@ import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { handleTokenLimitError } from "@/lib/token-limit";
 
+// Upload de arquivo + processamento no servidor (OCR, transcrição, foto)
+const UPLOAD_TIMEOUT_MS = 90_000;
+// Chamadas que passam pela IA no backend
+const AI_TIMEOUT_MS = 60_000;
+
 // ── Helpers ────────────────────────────────────────────────────────────
 
 export class ApiError extends Error {
@@ -49,6 +54,7 @@ export async function transcribeAudio(fileUri: string, mimeType: string): Promis
 
   const response = await authFetch(`${BACKEND_URL}/imports/transcribe`, {
     method: "POST",
+    timeoutMs: UPLOAD_TIMEOUT_MS,
     body: formData,
   });
 
@@ -77,6 +83,7 @@ export async function ocrDocument(
 
   const response = await authFetch(`${BACKEND_URL}/imports/ocr`, {
     method: "POST",
+    timeoutMs: UPLOAD_TIMEOUT_MS,
     body: formData,
   });
 
@@ -95,6 +102,7 @@ export async function analyzeText(
 ) {
   const response = await authFetch(`${BACKEND_URL}/imports/analyze`, {
     method: "POST",
+    timeoutMs: AI_TIMEOUT_MS,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ rawText: text, source, categories, context }),
   });
@@ -123,6 +131,7 @@ export async function extractFromPhoto(
 ) {
   const response = await authFetch(`${BACKEND_URL}/imports/extract-photo`, {
     method: "POST",
+    timeoutMs: UPLOAD_TIMEOUT_MS,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image: base64Image, mimeType, categories }),
   });
@@ -136,6 +145,7 @@ export async function extractFromPhoto(
 export async function extractFromText(text: string, categories: Array<{ id: string; name: string }> = []) {
   const response = await authFetch(`${BACKEND_URL}/imports/extract-text`, {
     method: "POST",
+    timeoutMs: AI_TIMEOUT_MS,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ text, categories }),
   });
@@ -169,6 +179,7 @@ export async function getAiForecast(payload: {
 }): Promise<AiForecast> {
   const response = await authFetch(`${BACKEND_URL}/dashboard/ai-forecast`, {
     method: "POST",
+    timeoutMs: AI_TIMEOUT_MS,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
