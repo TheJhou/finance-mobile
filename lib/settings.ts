@@ -69,3 +69,14 @@ export async function getBoolSetting(key: string, defaultValue = true): Promise<
   if (val === null) return defaultValue;
   return val === "true";
 }
+
+/**
+ * Período financeiro em andamento hoje. Com início no dia 5, o dia 03/09
+ * ainda pertence ao período de agosto (05/08 a 04/09).
+ * `month` é 0-based, como em Date.
+ */
+export function getCurrentPeriod(monthStartDay = getCachedMonthStartDay()): { year: number; month: number } {
+  const now = new Date();
+  const shifted = new Date(now.getFullYear(), now.getMonth() - (now.getDate() < monthStartDay ? 1 : 0), 1);
+  return { year: shifted.getFullYear(), month: shifted.getMonth() };
+}
