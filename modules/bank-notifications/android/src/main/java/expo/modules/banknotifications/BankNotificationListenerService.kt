@@ -8,7 +8,8 @@ import android.os.Looper
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
-import java.util.concurrent.ConcurrentLinkedQueue
+import org.json.JSONArray
+import org.json.JSONObject
 
 class BankNotificationListenerService : NotificationListenerService() {
 
@@ -66,13 +67,9 @@ class BankNotificationListenerService : NotificationListenerService() {
         Log.e(TAG, "Error dispatching notification to JS", e)
       }
     } else {
-      // JS listener is null (app in background or not observing) — buffer for later
-      if (bufferedNotifications.size < MAX_BUFFER) {
-        bufferedNotifications.add(payload)
-        Log.i(TAG, "Notification buffered (JS listener null, buffer=${bufferedNotifications.size}, pkg=${sbn.packageName})")
-      } else {
-        Log.w(TAG, "Buffer full — dropping notification (pkg=${sbn.packageName})")
-      }
+      // JS listener is null (app fechado ou sem observar) — persiste em disco para
+      // sobreviver ao encerramento do processo pelo sistema
+      bufferNotification(applicationContext, payload)
     }
   }
 
@@ -111,18 +108,67 @@ class BankNotificationListenerService : NotificationListenerService() {
     var connectionCallback: ((Boolean) -> Unit)? = null
 
     private const val MAX_BUFFER = 100
-    val bufferedNotifications = ConcurrentLinkedQueue<Map<String, Any?>>()
+    private const val BUFFER_PREFS = "bank_notifications_buffer"
+    private const val BUFFER_KEY = "pending"
+    private val bufferLock = Any()
 
-    fun drainBufferedNotifications(): List<Map<String, Any?>> {
-      val drained = mutableListOf<Map<String, Any?>>()
-      while (true) {
-        val item = bufferedNotifications.poll() ?: break
-        drained.add(item)
+    /**
+     * Guarda a notificação em SharedPreferences (privado do app) até o JS voltar a
+     * observar. Antes ficava só em memória e se perdia quando o Android encerrava
+     * o processo com o app fechado.
+     */
+    fun bufferNotification(context: Context, payload: Map<String, Any?>) {
+      synchronized(bufferLock) {
+        try {
+          val prefs = context.getSharedPreferences(BUFFER_PREFS, Context.MODE_PRIVATE)
+          val pending = JSONArray(prefs.getString(BUFFER_KEY, "[]"))
+          if (pending.length() >= MAX_BUFFER) {
+            Log.w(TAG, "Buffer full — dropping notification (pkg=${payload["packageName"]})")
+            return
+          }
+          val item = JSONObject()
+          for ((key, value) in payload) {
+            item.put(key, value ?: JSONObject.NULL)
+          }
+          pending.put(item)
+          prefs.edit().putString(BUFFER_KEY, pending.toString()).commit()
+          Log.i(TAG, "Notification buffered (buffer=${pending.length()}, pkg=${payload["packageName"]})")
+        } catch (e: Throwable) {
+          Log.e(TAG, "Failed to buffer notification", e)
+        }
       }
-      if (drained.isNotEmpty()) {
-        Log.i(TAG, "Drained ${drained.size} buffered notifications")
+    }
+
+    fun drainBufferedNotifications(context: Context): List<Map<String, Any?>> {
+      synchronized(bufferLock) {
+        val prefs = context.getSharedPreferences(BUFFER_PREFS, Context.MODE_PRIVATE)
+        val raw = prefs.getString(BUFFER_KEY, null) ?: return emptyList()
+        prefs.edit().remove(BUFFER_KEY).commit()
+
+        val drained = mutableListOf<Map<String, Any?>>()
+        try {
+          val pending = JSONArray(raw)
+          for (i in 0 until pending.length()) {
+            val item = pending.getJSONObject(i)
+            drained.add(
+              mapOf(
+                "packageName" to item.optString("packageName"),
+                "title" to item.optString("title"),
+                "text" to item.optString("text"),
+                "bigText" to if (item.isNull("bigText")) null else item.optString("bigText"),
+                "subText" to if (item.isNull("subText")) null else item.optString("subText"),
+                "postTime" to item.optLong("postTime")
+              )
+            )
+          }
+        } catch (e: Throwable) {
+          Log.e(TAG, "Corrupted notification buffer — discarding", e)
+        }
+        if (drained.isNotEmpty()) {
+          Log.i(TAG, "Drained ${drained.size} buffered notifications")
+        }
+        return drained
       }
-      return drained
     }
 
     fun requestRebind(context: Context) {

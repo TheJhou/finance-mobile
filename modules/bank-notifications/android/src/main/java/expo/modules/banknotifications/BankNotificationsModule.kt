@@ -76,9 +76,12 @@ class BankNotificationsModule : Module() {
       }
 
       // Drain any notifications that were buffered while JS wasn't observing
-      val buffered = BankNotificationListenerService.drainBufferedNotifications()
-      for (payload in buffered) {
-        weakModule.get()?.sendEvent("onNotification", payload)
+      val context = appContext.reactContext
+      if (context != null) {
+        val buffered = BankNotificationListenerService.drainBufferedNotifications(context)
+        for (payload in buffered) {
+          weakModule.get()?.sendEvent("onNotification", payload)
+        }
       }
 
       // If the service is already connected, notify JS immediately so it
