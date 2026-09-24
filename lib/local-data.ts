@@ -1,4 +1,4 @@
-import { logout } from "@/lib/auth";
+import { logout, revokeCurrentSession } from "@/lib/auth";
 import { BackupSystem } from "@/lib/backup";
 import { setBiometricEnabled } from "@/lib/biometric";
 import { wipeUserData } from "@/lib/db";
@@ -65,10 +65,15 @@ export async function clearLocalUserData(): Promise<void> {
  * Se os dados locais pertencem a outra conta, apaga antes de liberar o acesso,
  * para que um usuário nunca veja as finanças de outro no mesmo aparelho.
  */
-export async function claimLocalDataFor(email: string): Promise<void> {
-  const owner = normalizeEmail(email);
+export async function claimLocalDataFor(account: { id: string | null; email: string }): Promise<void> {
+  // O dono é o id da conta: o e-mail pode ser trocado, e usá-lo apagaria os
+  // dados do próprio usuário no primeiro login com o e-mail novo.
+  const email = normalizeEmail(account.email);
+  const owner = account.id ?? email;
   const previousOwner = await SecureStore.getItemAsync(LOCAL_DATA_OWNER_KEY);
-  if (previousOwner && previousOwner !== owner) {
+  // Versões anteriores gravavam o e-mail como dono: mesmo e-mail = mesma conta
+  const sameAccount = previousOwner === owner || previousOwner === email;
+  if (previousOwner && !sameAccount) {
     console.log("[LocalData] Conta diferente da dona dos dados locais — limpando");
     await clearLocalUserData();
   }
@@ -79,16 +84,20 @@ export async function claimLocalDataFor(email: string): Promise<void> {
  * Instalações antigas não registravam o dono dos dados.
  * Se já há sessão ativa e nenhum dono salvo, adota o usuário atual.
  */
-export async function adoptLocalDataOwnerIfMissing(currentEmail: string | null): Promise<void> {
-  if (!currentEmail) return;
+export async function adoptLocalDataOwnerIfMissing(current: { id: string | null; email: string | null }): Promise<void> {
+  const owner = current.id ?? (current.email ? normalizeEmail(current.email) : null);
+  if (!owner) return;
   const previousOwner = await SecureStore.getItemAsync(LOCAL_DATA_OWNER_KEY);
-  if (!previousOwner) {
-    await SecureStore.setItemAsync(LOCAL_DATA_OWNER_KEY, normalizeEmail(currentEmail));
+  const isLegacyEmailOwner = !!current.email && previousOwner === normalizeEmail(current.email);
+  if (!previousOwner || (isLegacyEmailOwner && current.id)) {
+    await SecureStore.setItemAsync(LOCAL_DATA_OWNER_KEY, owner);
   }
 }
 
 /** Sai da conta apagando antes os dados locais do usuário. */
 export async function signOutAndClearLocalData(): Promise<void> {
+  // Precisa dos tokens, então vem antes do logout local
+  await revokeCurrentSession();
   await clearLocalUserData();
   await logout();
 }

@@ -1,4 +1,4 @@
-import { authFetch } from "@/lib/auth";
+import { authFetch, saveTokens } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
 export interface UpdateProfileData {
@@ -47,9 +47,13 @@ export async function changePassword(data: ChangePasswordData): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+  const body = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || "Erro ao alterar senha");
+    throw new Error(body.message || "Erro ao alterar senha");
+  }
+  // O backend encerra todas as sessões e devolve tokens novos para este aparelho
+  if (body.accessToken && body.refreshToken) {
+    await saveTokens(body.accessToken, body.refreshToken);
   }
 }
 
@@ -67,10 +71,24 @@ export async function deleteAccount(password: string): Promise<void> {
 
 export async function getSessions(): Promise<SessionInfo[]> {
   const response = await authFetch(`${BACKEND_URL}/auth/sessions`);
-  if (!response.ok) return [];
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Erro ao carregar sessões");
+  }
   return response.json();
 }
 
+export async function revokeSession(sessionId: string): Promise<void> {
+  const response = await authFetch(`${BACKEND_URL}/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || "Erro ao encerrar sessão");
+  }
+}
+
+/** Encerra todas as sessões, inclusive a deste aparelho (é preciso entrar de novo). */
 export async function revokeAllSessions(): Promise<void> {
   const response = await authFetch(`${BACKEND_URL}/auth/sessions`, {
     method: "DELETE",

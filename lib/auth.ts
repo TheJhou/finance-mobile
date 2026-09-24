@@ -1,4 +1,5 @@
 import { BACKEND_URL } from "@/lib/config";
+import { getDeviceInfo } from "@/lib/device-info";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from "expo-secure-store";
 
@@ -147,19 +148,25 @@ export async function hasStoredSession(): Promise<boolean> {
 interface SessionResponse {
   accessToken: string;
   refreshToken: string;
-  user?: { name?: string | null; email?: string | null };
+  user?: { id?: string | null; name?: string | null; email?: string | null };
 }
 
 async function storeSession(data: SessionResponse, fallbackEmail: string): Promise<void> {
   // Antes de liberar a sessão, garante que os dados locais pertencem a esta conta.
   // Import dinâmico evita ciclo auth → local-data → backup → auth.
   const { claimLocalDataFor } = await import("@/lib/local-data");
-  await claimLocalDataFor(data.user?.email ?? fallbackEmail);
+  await claimLocalDataFor({ id: data.user?.id ?? null, email: data.user?.email ?? fallbackEmail });
 
-  await setStoredValue("jwt_access_token", data.accessToken);
-  await setStoredValue("jwt_refresh_token", data.refreshToken);
+  await saveTokens(data.accessToken, data.refreshToken);
+  if (data.user?.id) await setStoredValue("user_id", data.user.id);
   if (data.user?.name) await setStoredValue("user_name", data.user.name);
   if (data.user?.email) await setStoredValue("user_email", data.user.email);
+}
+
+/** Grava um par de tokens emitido pelo backend (login, refresh, troca de senha). */
+export async function saveTokens(accessToken: string, refreshToken: string): Promise<void> {
+  await setStoredValue("jwt_access_token", accessToken);
+  await setStoredValue("jwt_refresh_token", refreshToken);
 }
 
 export async function register(name: string, email: string, password: string): Promise<void> {
@@ -168,7 +175,7 @@ export async function register(name: string, email: string, password: string): P
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ name, email, password }),
+    body: JSON.stringify({ name, email, password, device: getDeviceInfo() }),
   });
 
   if (!response.ok) {
@@ -189,7 +196,7 @@ export async function login(email: string, password: string): Promise<void> {
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, device: getDeviceInfo() }),
   });
 
   if (!response.ok) {
@@ -251,11 +258,29 @@ export async function resetPassword(
   return response.json();
 }
 
+/**
+ * Encerra no servidor a sessão deste aparelho (some de "Sessões ativas" e o
+ * refresh token deixa de valer). Melhor esforço: sem rede, o logout local
+ * segue normalmente e a sessão expira sozinha.
+ */
+export async function revokeCurrentSession(): Promise<void> {
+  try {
+    await authFetch(`${BACKEND_URL}/auth/logout`, { method: "POST", timeoutMs: 5_000 });
+  } catch (error) {
+    console.warn("[Auth] Não foi possível encerrar a sessão no servidor:", error);
+  }
+}
+
+export async function getStoredUserId(): Promise<string | null> {
+  return getStoredValue("user_id");
+}
+
 export async function logout(): Promise<void> {
   await removeStoredValue("jwt_access_token");
   await removeStoredValue("jwt_refresh_token");
   await removeStoredValue("user_name");
   await removeStoredValue("user_email");
+  await removeStoredValue("user_id");
   try {
     await AsyncStorage.removeItem("ai_forecast_cache");
   } catch (error) {
@@ -315,7 +340,7 @@ async function refreshAccessToken(): Promise<RefreshResult> {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ refreshToken, device: getDeviceInfo() }),
       });
     } catch (error) {
       console.warn("[Auth] Token refresh failed (network error, keeping session):", error);

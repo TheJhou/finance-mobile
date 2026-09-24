@@ -226,8 +226,9 @@ export default function AccountScreen() {
       alert("Erro", "Preencha todos os campos", { variant: "danger" });
       return;
     }
-    if (editNewPassword.length < 6) {
-      alert("Erro", "A nova senha deve ter no mínimo 6 caracteres", { variant: "danger" });
+    // Mesma regra do backend
+    if (editNewPassword.length < 8 || !/[a-zA-Z]/.test(editNewPassword) || !/\d/.test(editNewPassword)) {
+      alert("Erro", "A nova senha deve ter no mínimo 8 caracteres, com pelo menos 1 letra e 1 número", { variant: "danger" });
       return;
     }
     if (editNewPassword !== editConfirmPassword) {

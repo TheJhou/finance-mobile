@@ -1,6 +1,6 @@
 import { AppHeader } from "@/components/app-header";
 import { useNotificationListener } from "@/hooks/use-notification-listener";
-import { getStoredUserEmail, isAuthenticated } from "@/lib/auth";
+import { getStoredUserEmail, getStoredUserId, isAuthenticated } from "@/lib/auth";
 import { BackupScheduler } from "@/lib/backup-scheduler";
 import { startGlobalPurchaseHandling } from "@/lib/iap";
 import { adoptLocalDataOwnerIfMissing } from "@/lib/local-data";
@@ -66,8 +66,8 @@ export default function AppLayout() {
       setAuthed(auth);
       setAuthChecking(false);
       if (auth) {
-        getStoredUserEmail()
-          .then(adoptLocalDataOwnerIfMissing)
+        Promise.all([getStoredUserId(), getStoredUserEmail()])
+          .then(([id, email]) => adoptLocalDataOwnerIfMissing({ id, email }))
           .catch((error) => console.warn("[AppLayout] Falha ao registrar dono dos dados locais:", error));
       }
     });
