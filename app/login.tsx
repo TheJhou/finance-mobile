@@ -1,3 +1,4 @@
+import { isValidPassword, PASSWORD_HINT, PASSWORD_RULE_MESSAGE } from "@/lib/password-rules";
 import { Button } from "@/components/ui/button";
 import { login, register } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -39,8 +40,8 @@ export default function LoginScreen() {
       Alert.alert("Erro", "E-mail inválido");
       return;
     }
-    if (isRegister && password.trim().length < 6) {
-      Alert.alert("Erro", "A senha deve ter no mínimo 6 caracteres");
+    if (isRegister && !isValidPassword(password.trim())) {
+      Alert.alert("Erro", PASSWORD_RULE_MESSAGE);
       return;
     }
     setLoading(true);
@@ -112,7 +113,7 @@ export default function LoginScreen() {
           style={styles.input}
           value={password}
           onChangeText={setPassword}
-          placeholder={isRegister ? "Mínimo 6 caracteres" : "Sua senha"}
+          placeholder={isRegister ? PASSWORD_HINT : "Sua senha"}
           placeholderTextColor={colors.textMuted}
           secureTextEntry
           autoCapitalize="none"

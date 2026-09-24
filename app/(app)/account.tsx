@@ -1,3 +1,4 @@
+import { isValidPassword, PASSWORD_HINT, PASSWORD_RULE_MESSAGE } from "@/lib/password-rules";
 import { withoutAutoLock } from "@/lib/biometric";
 import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
@@ -259,8 +260,8 @@ export default function AccountScreen() {
       return;
     }
     // Mesma regra do backend
-    if (editNewPassword.length < 8 || !/[a-zA-Z]/.test(editNewPassword) || !/\d/.test(editNewPassword)) {
-      alert("Erro", "A nova senha deve ter no mínimo 8 caracteres, com pelo menos 1 letra e 1 número", { variant: "danger" });
+    if (!isValidPassword(editNewPassword)) {
+      alert("Erro", PASSWORD_RULE_MESSAGE, { variant: "danger" });
       return;
     }
     if (editNewPassword !== editConfirmPassword) {
@@ -522,7 +523,7 @@ export default function AccountScreen() {
         }
       >
         <Input label="Senha atual" value={editCurrentPassword} onChangeText={setEditCurrentPassword} secureTextEntry placeholder="••••••••" />
-        <Input label="Nova senha" value={editNewPassword} onChangeText={setEditNewPassword} secureTextEntry placeholder="Mínimo 6 caracteres" />
+        <Input label="Nova senha" value={editNewPassword} onChangeText={setEditNewPassword} secureTextEntry placeholder={PASSWORD_HINT} />
         <Input label="Confirmar nova senha" value={editConfirmPassword} onChangeText={setEditConfirmPassword} secureTextEntry placeholder="••••••••" />
       </EditModal>
       {dialog}
