@@ -2,6 +2,7 @@ import { AppHeader } from "@/components/app-header";
 import { useNotificationListener } from "@/hooks/use-notification-listener";
 import { getStoredUserEmail, isAuthenticated } from "@/lib/auth";
 import { BackupScheduler } from "@/lib/backup-scheduler";
+import { startGlobalPurchaseHandling } from "@/lib/iap";
 import { adoptLocalDataOwnerIfMissing } from "@/lib/local-data";
 import { colors } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
@@ -42,6 +43,14 @@ export default function AppLayout() {
   }), [isDark, tabBarStyle]);
 
   useNotificationListener();
+
+  // Compras são processadas aqui, e não na tela Plano, para não se perderem
+  // se o usuário sair da tela ou fechar o app durante o pagamento.
+  useEffect(() => {
+    if (!authed) return;
+    const sub = startGlobalPurchaseHandling();
+    return () => sub.remove();
+  }, [authed]);
 
   // Initialize backup scheduler
   useEffect(() => {
