@@ -8,6 +8,7 @@ import {
   login,
   logout,
   register,
+  REQUEST_TIMEOUT_MS,
 } from "@/lib/auth";
 
 // Helper to create a valid JWT with a future exp
@@ -258,6 +259,82 @@ describe("auth", () => {
       const response = await authFetch("https://api.test.com/data");
       expect(response.status).toBe(500);
       expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("sem internet", () => {
+    beforeEach(async () => {
+      await SecureStore.setItemAsync("jwt_access_token", createExpiredToken());
+      await SecureStore.setItemAsync("jwt_refresh_token", createMockToken(7200));
+    });
+
+    it("continua autenticado se o refresh falhar por falta de rede (evita loop de redirecionamento)", async () => {
+      (global.fetch as jest.Mock).mockRejectedValueOnce(new TypeError("Network request failed"));
+
+      expect(await isAuthenticated()).toBe(true);
+      expect(await getStoredTokens()).not.toBeNull();
+    });
+
+    it("desloga se o servidor recusar o refresh token", async () => {
+      (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: false, status: 401, json: async () => ({}) });
+
+      expect(await isAuthenticated()).toBe(false);
+      expect(await getStoredTokens()).toBeNull();
+    });
+
+    it("authFetch informa falta de conexão em vez de sessão expirada", async () => {
+      (global.fetch as jest.Mock).mockRejectedValueOnce(new TypeError("Network request failed"));
+
+      await expect(authFetch("https://api.test.com/data")).rejects.toThrow(/conex/i);
+      expect(await getStoredTokens()).not.toBeNull();
+    });
+  });
+
+  describe("timeout", () => {
+    afterEach(() => jest.useRealTimers());
+
+    function hangingFetch(_url: string, init?: RequestInit): Promise<Response> {
+      return new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => {
+          reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+        });
+      });
+    }
+
+    it("aborta requisições que não respondem e informa o usuário", async () => {
+      jest.useFakeTimers();
+      await SecureStore.setItemAsync("jwt_access_token", createMockToken(3600));
+      (global.fetch as jest.Mock).mockImplementationOnce(hangingFetch);
+
+      const request = authFetch("https://api.test.com/data");
+      const assertion = expect(request).rejects.toThrow(/tempo/i);
+      await jest.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+      await assertion;
+    });
+
+    it("login também tem limite de tempo", async () => {
+      jest.useFakeTimers();
+      (global.fetch as jest.Mock).mockImplementationOnce(hangingFetch);
+
+      const request = login("joao@test.com", "123456");
+      const assertion = expect(request).rejects.toThrow(/tempo/i);
+      await jest.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+      await assertion;
+    });
+
+    it("permite prazo maior para uploads", async () => {
+      jest.useFakeTimers();
+      await SecureStore.setItemAsync("jwt_access_token", createMockToken(3600));
+      (global.fetch as jest.Mock).mockImplementationOnce(hangingFetch);
+      let settled = false;
+
+      const request = authFetch("https://api.test.com/upload", { timeoutMs: REQUEST_TIMEOUT_MS * 3 });
+      request.catch(() => {}).finally(() => { settled = true; });
+      await jest.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS * 2);
+      expect(settled).toBe(false);
+
+      await jest.advanceTimersByTimeAsync(REQUEST_TIMEOUT_MS);
+      await expect(request).rejects.toThrow(/tempo/i);
     });
   });
 });
