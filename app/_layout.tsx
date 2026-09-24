@@ -1,6 +1,6 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,11 +16,10 @@ import {
 } from "@/lib/biometric";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
-import { ThemeProvider, useTheme } from "@/lib/theme-context";
+import { ThemeProvider, useTheme, useThemedStyles } from "@/lib/theme-context";
 
 function RootNavigator() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   // ── Fase 1: checagem de biometria (AsyncStorage, ~5 ms) ──────────────
   // Começa com locked=false; se biometria estiver ativa, vira true assim

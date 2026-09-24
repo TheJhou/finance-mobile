@@ -5,7 +5,7 @@ import { BackupScheduler } from "@/lib/backup-scheduler";
 import { startGlobalPurchaseHandling } from "@/lib/iap";
 import { adoptLocalDataOwnerIfMissing } from "@/lib/local-data";
 import { colors } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useTheme, useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs, useSegments } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -18,7 +18,7 @@ export default function AppLayout() {
   const [authed, setAuthed] = useState(false);
   const segments = useSegments();
   const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   const tabBarStyle = useMemo(() => ({
     backgroundColor: isDark ? "#2a2740" : "#e5e7eb",
@@ -40,6 +40,8 @@ export default function AppLayout() {
       fontWeight: "600" as const,
     },
     safeAreaInsets: { top: 0 },
+    // isDark sinaliza a troca de tema: `colors` é mutado por applyTheme (ver useThemedStyles)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [isDark, tabBarStyle]);
 
   useNotificationListener();

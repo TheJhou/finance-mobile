@@ -12,7 +12,7 @@ import { createTransaction } from "@/lib/repositories/transactions";
 import { checkProFeature } from "@/lib/subscription";
 import { enqueueSync, processSyncQueue, type SyncPayload } from "@/lib/sync-queue";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { Category, DocumentType, TransactionStatus } from "@/lib/types";
 import { onNotificationQueued } from "@/lib/notification-events";
 import { formatCurrency, normalizePaymentMethod, toDateInputValue } from "@/lib/utils";
@@ -22,7 +22,7 @@ import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioRecorder } fr
 import * as DocumentPicker from "expo-document-picker";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     AppState,
@@ -84,8 +84,7 @@ function normalizeStatus(value: unknown, fallback: TransactionStatus): Transacti
 
 export default function NotificationsScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [granted, setGranted] = useState(false);
   const [connected, setConnected] = useState(false);
   const [pendingNotifications, setPendingNotifications] = useState<NotificationQueueItem[]>([]);
@@ -276,7 +275,7 @@ export default function NotificationsScreen() {
       showToast("warning", "Abra as configurações e ative 'Kilun'");
       
       // Check permission again after a delay to see if user enabled it
-      const settingsTimeout = setTimeout(() => {
+      setTimeout(() => {
         checkPermission();
       }, 2000);
     } catch (err) {

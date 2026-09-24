@@ -5,12 +5,12 @@ import { onPurchaseEvent, requestProSubscription } from "@/lib/iap";
 import { clearProCache, getSubscriptionStatus } from "@/lib/subscription";
 import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Modal,
@@ -26,8 +26,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PlanScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [loggedIn, setLoggedIn] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);

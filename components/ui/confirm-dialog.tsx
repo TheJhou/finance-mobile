@@ -1,7 +1,7 @@
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
     ActivityIndicator,
     Modal,
@@ -39,8 +39,7 @@ export function ConfirmDialog({
   secondaryText,
   onSecondary,
 }: Readonly<ConfirmDialogProps>) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [loading, setLoading] = useState(false);
 
   const variantColor =

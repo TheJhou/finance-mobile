@@ -5,11 +5,11 @@ import type { DreData, DrePeriod, DrePeriodRange } from "@/lib/repositories/dre"
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
 import { getCachedMonthStartDay, getCurrentPeriod, loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Dimensions,
@@ -53,8 +53,7 @@ function CategoryRow({
   total: number;
   type: "income" | "expense";
 }) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
   return (
     <View style={styles.categoryRow}>
@@ -80,8 +79,7 @@ function CategoryRow({
 const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 export default function DreScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [selectedPeriod, setSelectedPeriod] = useState<DrePeriod>("month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");

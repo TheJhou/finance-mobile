@@ -12,12 +12,12 @@ import {
     updateRecurring
 } from "@/lib/repositories/recurring";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { Category, Frequency, PaymentMethod, RecurringTransaction, TransactionType } from "@/lib/types";
 import { formatCurrency, formatCurrencyInput, formatDate, parseCurrencyInput, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -70,8 +70,7 @@ function ListSeparator() {
 }
 
 export default function RecurringScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [items, setItems] = useState<RecurringTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -332,9 +331,8 @@ interface RecurringFormProps {
 }
 
 function RecurringForm({ visible, editingItem, onClose, onSaved }: Readonly<RecurringFormProps>) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
-  const formStyles = useMemo(() => createFormStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
+  const formStyles = useThemedStyles(createFormStyles);
   const [categories, setCategories] = useState<Category[]>([]);
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");

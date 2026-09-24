@@ -4,10 +4,10 @@ import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
 import { loadMonthStartDay } from "@/lib/settings";
 import { checkProFeature } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
     ActivityIndicator,
     ScrollView,
@@ -72,8 +72,7 @@ const PERIOD_OPTIONS: PeriodOption[] = [
 
 export default function ExportDataScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("pdf");
   const [selectedPeriod, setSelectedPeriod] = useState<ExportPeriod>("month");
   const [exporting, setExporting] = useState(false);

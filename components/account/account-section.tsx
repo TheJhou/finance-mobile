@@ -1,6 +1,6 @@
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
-import { useMemo } from "react";
+import { useThemedStyles } from "@/lib/theme-context";
+
 import { StyleSheet, Text, View, type ViewStyle } from "react-native";
 
 interface AccountSectionProps {
@@ -10,8 +10,7 @@ interface AccountSectionProps {
 }
 
 export function AccountSection({ title, children, style }: Readonly<AccountSectionProps>) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={[styles.section, style]}>
       <Text style={styles.sectionTitle}>{title}</Text>

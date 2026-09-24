@@ -1,8 +1,8 @@
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
     Animated,
     Dimensions,
@@ -39,8 +39,7 @@ interface DrawerMenuProps {
 export default function DrawerMenu({ visible, onClose, userName, userEmail, profilePhoto }: DrawerMenuProps) {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const translateX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);

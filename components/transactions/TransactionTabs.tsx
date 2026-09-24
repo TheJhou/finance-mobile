@@ -1,7 +1,7 @@
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo } from "react";
+
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 export type TabKey = "history" | "payables" | "receivables";
@@ -24,8 +24,7 @@ interface TransactionTabsProps {
 }
 
 export function TransactionTabs({ activeTab, onChange }: TransactionTabsProps) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   return (
     <View style={styles.container}>

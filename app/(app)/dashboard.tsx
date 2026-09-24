@@ -1,7 +1,7 @@
 import { HorizontalScrollFade, ScrollFade } from "@/components/ui/scroll-fade";
-import { getStoredUserName, isAuthenticated } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
-import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
+import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getStreak } from "@/lib/backend";
 import { calculateHealthScore } from "@/lib/health-score";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
@@ -9,7 +9,7 @@ import { getCurrentPeriod, getDashboard, getFutureBills, getUpcomingBills } from
 import { processRecurringDue } from "@/lib/repositories/recurring";
 import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { getTokenLimitStatus, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { DashboardData, HealthScoreResult } from "@/lib/types";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
@@ -20,7 +20,7 @@ import { CreditCardIcon } from "@/components/icons/CreditCardIcon";
 import { HourglassDoneIcon } from "@/components/icons/HourglassDoneIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -73,10 +73,8 @@ function CircularProgress({
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [data, setData] = useState<DashboardData | null>(null);
-  const [userName, setUserName] = useState<string | null>(null);
   const [goals, setGoals] = useState<GoalData[]>([]);
   const [streak, setStreak] = useState<StreakData | null>(null);
   const [score, setScore] = useState<ScoreData | null>(null);
@@ -156,11 +154,6 @@ export default function DashboardScreen() {
     lastFetchRef.current = Date.now();
 
     try {
-      // Load cached name immediately
-      const cachedName = await getStoredUserName();
-      if (fetchIdRef.current !== fetchId) return;
-      if (cachedName) setUserName(cachedName);
-
       // Load month start day setting
       const startDay = await loadMonthStartDay();
       if (fetchIdRef.current !== fetchId) return;
@@ -201,14 +194,12 @@ export default function DashboardScreen() {
       setTokenLimitStatus(currentTokenStatus);
 
       if (!currentTokenStatus.exceeded) {
-        const [meRes, goalsRes, streakRes, scoreRes] = await Promise.allSettled([
-          getMe(),
+        const [goalsRes, streakRes, scoreRes] = await Promise.allSettled([
           getGoals(),
           getStreak(),
           getDashboardScore(),
         ]);
         if (fetchIdRef.current !== fetchId) return;
-        if (meRes.status === "fulfilled" && meRes.value.name) setUserName(meRes.value.name);
         if (goalsRes.status === "fulfilled") setGoals(goalsRes.value);
         if (streakRes.status === "fulfilled") setStreak(streakRes.value);
         if (scoreRes.status === "fulfilled") setScore(scoreRes.value);

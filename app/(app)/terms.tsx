@@ -1,9 +1,9 @@
 import { setTermsAccepted } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo } from "react";
+
 import {
     Linking,
     ScrollView,
@@ -16,8 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function TermsScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const { fromOnboarding } = useLocalSearchParams<{ fromOnboarding?: string }>();
   const isOnboarding = fromOnboarding === "true";
 

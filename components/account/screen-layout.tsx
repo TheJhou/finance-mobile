@@ -1,8 +1,8 @@
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useMemo, type ReactNode } from "react";
+import { type ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -13,8 +13,7 @@ interface ScreenLayoutProps {
 
 export function ScreenLayout({ title, children }: ScreenLayoutProps) {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right"]}>

@@ -1,7 +1,7 @@
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo } from "react";
+
 import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface EditModalProps {
@@ -13,8 +13,7 @@ interface EditModalProps {
 }
 
 export function EditModal({ visible, title, onClose, children, footer }: Readonly<EditModalProps>) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.overlay}>

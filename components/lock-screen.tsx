@@ -1,8 +1,8 @@
 import { authenticateWithBiometrics, setBiometricUnlocked } from "@/lib/biometric";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BackHandler, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -11,8 +11,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
  * Ficar por cima, em vez de substituir as rotas, preserva o estado das telas.
  */
 export function LockScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [error, setError] = useState<string | null>(null);
   const [authenticating, setAuthenticating] = useState(false);
 

@@ -1,7 +1,7 @@
 import { colors } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps, ScrollView, StyleSheet, View } from "react-native";
 
 interface ScrollFadeProps {
@@ -10,8 +10,7 @@ interface ScrollFadeProps {
 }
 
 export function ScrollFade({ height = 40, fadeColor }: Readonly<ScrollFadeProps>) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const bg = fadeColor ?? colors.background;
   return (
     <View style={styles.container} pointerEvents="none">
@@ -37,8 +36,7 @@ export function HorizontalScrollFade({
   style,
   ...scrollViewProps
 }: Readonly<HorizontalScrollFadeProps>) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const bg = fadeColor ?? colors.background;
   const [showLeft, setShowLeft] = useState(false);
   const [showRight, setShowRight] = useState(true);

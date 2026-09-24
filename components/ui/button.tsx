@@ -1,6 +1,6 @@
 import { colors, radius } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
-import { useMemo } from "react";
+import { useThemedStyles } from "@/lib/theme-context";
+
 import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
@@ -20,8 +20,7 @@ export function Button({
   disabled,
   variant = "primary",
 }: Props) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const bg: Record<Variant, string> = {
     primary: colors.primary,
     secondary: colors.surface,

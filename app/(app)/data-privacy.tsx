@@ -10,18 +10,17 @@ import { deleteAccount, exportAccountData } from "@/lib/account-service";
 import { logout } from "@/lib/auth";
 import { clearLocalUserData } from "@/lib/local-data";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { File, Paths } from "expo-file-system";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 export default function DataPrivacyScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);

@@ -4,15 +4,14 @@ import { RowSeparator } from "@/components/account/row-separator";
 import { ScreenLayout } from "@/components/account/screen-layout";
 import { useAppDialog } from "@/hooks/use-app-dialog";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
-import { useMemo } from "react";
+
 import { Linking, StyleSheet, Text, View } from "react-native";
 
 export default function SupportScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   const { alert, dialog } = useAppDialog();
 

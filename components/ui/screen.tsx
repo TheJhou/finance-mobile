@@ -1,7 +1,7 @@
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { ReactNode } from "react";
-import { useMemo } from "react";
+
 import { ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -12,8 +12,7 @@ interface Props {
 }
 
 export function Screen({ children, scroll = true, style }: Props) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const content = scroll ? (
     <ScrollView
       contentContainerStyle={[styles.content, style]}

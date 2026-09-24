@@ -10,14 +10,13 @@ import { useAppDialog } from "@/hooks/use-app-dialog";
 import { changePassword } from "@/lib/account-service";
 import { authenticateWithBiometrics, getBiometricTypeName, isBiometricAvailable, isBiometricEnabled, setBiometricEnabled } from "@/lib/biometric";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 export default function SecurityScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricTypeName, setBiometricTypeName] = useState("Biometria");

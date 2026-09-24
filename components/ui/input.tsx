@@ -1,6 +1,6 @@
 import { colors, radius } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
-import { useMemo } from "react";
+import { useThemedStyles } from "@/lib/theme-context";
+
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from "react-native";
 
 interface Props extends TextInputProps {
@@ -9,8 +9,7 @@ interface Props extends TextInputProps {
 }
 
 export function Input({ label, error, style, ...rest }: Props) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.wrapper}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
