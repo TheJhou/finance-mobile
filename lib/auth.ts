@@ -307,6 +307,10 @@ export async function setStoredUserName(name: string): Promise<void> {
   await setStoredValue("user_name", name);
 }
 
+export async function setStoredUserEmail(email: string): Promise<void> {
+  await setStoredValue("user_email", email);
+}
+
 export async function hasAcceptedTerms(): Promise<boolean> {
   const accepted = await getStoredValue("terms_accepted");
   return accepted === "true";

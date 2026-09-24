@@ -1,4 +1,4 @@
-import { authFetch, saveTokens } from "@/lib/auth";
+import { authFetch, saveTokens, setStoredUserEmail } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 
 export interface UpdateProfileData {
@@ -39,6 +39,37 @@ export async function updateProfile(data: UpdateProfileData): Promise<{ name: st
     throw new Error(err.message || "Erro ao atualizar perfil");
   }
   return response.json();
+}
+
+/**
+ * Pede a troca de e-mail: o backend confere a senha e envia um código de
+ * 6 dígitos ao novo endereço. O e-mail só muda em confirmEmailChange.
+ */
+export async function requestEmailChange(email: string, currentPassword: string): Promise<{ message: string }> {
+  const response = await authFetch(`${BACKEND_URL}/auth/me`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, currentPassword }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.message || "Erro ao solicitar troca de e-mail");
+  }
+  return { message: body.message ?? `Enviamos um código para ${email}.` };
+}
+
+export async function confirmEmailChange(code: string): Promise<{ name: string | null; email: string }> {
+  const response = await authFetch(`${BACKEND_URL}/auth/confirm-email`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(body.message || "Erro ao confirmar e-mail");
+  }
+  await setStoredUserEmail(body.email);
+  return body;
 }
 
 export async function changePassword(data: ChangePasswordData): Promise<void> {
