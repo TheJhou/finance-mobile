@@ -55,9 +55,13 @@ Importação automática de notificações bancárias para controle financeiro i
 - **Finalidade:** Backup automático diário em horário preciso
 - **Justificativa:** "Para backup diário dos dados financeiros"
 
-### 6. **USE_EXACT_ALARM** ✅
-- **Finalidade:** Complemento do alarme exato
-- **Justificativa:** "Para garantir precisão no backup automático"
+### 6. **USE_EXACT_ALARM** ❌ removida
+- **Motivo:** a Play Store só permite essa permissão para apps de despertador e
+  calendário. `SCHEDULE_EXACT_ALARM` cobre o backup agendado. Está em
+  `android.blockedPermissions` no `app.json` para nenhuma biblioteca reintroduzi-la.
+
+> `READ_MEDIA_IMAGES`/`READ_MEDIA_VIDEO` também estão bloqueadas: a escolha de foto
+> (perfil e comprovantes) usa o Photo Picker do sistema, que não exige permissão.
 
 ### 7. **BIND_NOTIFICATION_LISTENER_SERVICE** ⚠️
 - **Finalidade:** Ler notificações bancárias com consentimento

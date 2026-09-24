@@ -14,17 +14,15 @@ import { useCallback, useState } from "react";
 import { View } from "react-native";
 
 export default function PreferencesScreen() {
-  const { isDark, mode, setTheme, toggleTheme } = useTheme();
+  const { isDark, mode, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(true);
   const [emails, setEmails] = useState(true);
-  const [monthStartDay, setMonthStartDayState] = useState(1);
   const [datePickerValue, setDatePickerValue] = useState("");
   const { alert, dialog } = useAppDialog();
 
   useFocusEffect(
     useCallback(() => {
       loadMonthStartDay().then((day) => {
-        setMonthStartDayState(day);
         const ref = new Date();
         ref.setDate(day);
         setDatePickerValue(toDateInputValue(ref));
@@ -52,7 +50,6 @@ export default function PreferencesScreen() {
     const day = new Date(date + "T00:00:00").getDate();
     const clamped = Math.max(1, Math.min(28, day));
     setMonthStartDay(clamped);
-    setMonthStartDayState(clamped);
     alert("Dia de início atualizado", `Seu mês financeiro agora começa no dia ${clamped}.`, { variant: "success" });
   };
 

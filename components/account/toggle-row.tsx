@@ -1,7 +1,7 @@
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo } from "react";
+
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 interface ToggleRowProps {
@@ -21,8 +21,7 @@ export function ToggleRow({
   value,
   onToggle,
 }: Readonly<ToggleRowProps>) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.row}>
       <View style={[styles.icon, { backgroundColor: iconColor + "22" }]}>

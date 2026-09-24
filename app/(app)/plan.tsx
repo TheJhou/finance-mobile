@@ -1,17 +1,16 @@
 import { Button } from "@/components/ui/button";
 import { useAppDialog } from "@/hooks/use-app-dialog";
-import { authFetch, isAuthenticated, login, register } from "@/lib/auth";
-import { BACKEND_URL } from "@/lib/config";
-import { acknowledgePurchaseTransaction, closeIAP, initIAP, requestProSubscription, startPurchaseListener } from "@/lib/iap";
+import { isAuthenticated, login, register } from "@/lib/auth";
+import { onPurchaseEvent, requestProSubscription } from "@/lib/iap";
 import { clearProCache, getSubscriptionStatus } from "@/lib/subscription";
 import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Modal,
@@ -27,8 +26,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PlanScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [loggedIn, setLoggedIn] = useState(false);
   const [status, setStatus] = useState<SubscriptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -117,50 +115,31 @@ export default function PlanScreen() {
     }
   };
 
+  // A compra é validada globalmente (lib/iap → startGlobalPurchaseHandling);
+  // aqui só exibimos o resultado.
   useEffect(() => {
-    initIAP();
-    const listener = startPurchaseListener(
-      async (purchase) => {
-        try {
-          setPurchasing(true);
-          const productId = purchase.productId ?? "finance_pro_monthly";
-          const purchaseToken = purchase.purchaseToken ?? "";
-          if (!purchaseToken) {
-            console.warn("[IAP] Purchase without token");
-            return;
-          }
-          const response = await authFetch(`${BACKEND_URL}/subscription/purchase`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ productId, purchaseToken }),
-          });
-          if (!response.ok) {
-            const err = await response.json().catch(() => ({}));
-            alert("Erro", err.error || err.message || "Falha ao ativar assinatura", { variant: "danger" });
-            return;
-          }
-          await acknowledgePurchaseTransaction(purchase);
+    return onPurchaseEvent((event) => {
+      setPurchasing(false);
+      switch (event.type) {
+        case "activated":
           alert("Sucesso!", "Assinatura PRO ativada com sucesso!", { variant: "success" });
-          clearProCache();
           fetchStatus();
-        } catch (err) {
-          alert("Erro", err instanceof Error ? err.message : "Falha ao ativar assinatura", { variant: "danger" });
-        } finally {
-          setPurchasing(false);
-        }
-      },
-      (error) => {
-        setPurchasing(false);
-        if (!error.toLowerCase().includes("cancel")) {
-          alert("Erro na compra", error, { variant: "danger" });
-        }
+          break;
+        case "pending":
+          alert(
+            "Pagamento pendente",
+            "Sua assinatura será ativada automaticamente assim que o pagamento for confirmado pela Google Play.",
+            { variant: "warning" }
+          );
+          break;
+        case "error":
+          alert("Erro na compra", event.message, { variant: "danger" });
+          break;
+        case "cancelled":
+          break;
       }
-    );
-    return () => {
-      listener.remove();
-      closeIAP();
-    };
-  }, []);
+    });
+  }, [alert, fetchStatus]);
 
   const handleUpgrade = async () => {
     try {

@@ -3,13 +3,13 @@ import { useAppDialog } from "@/hooks/use-app-dialog";
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
 import type { DreData, DrePeriod, DrePeriodRange } from "@/lib/repositories/dre";
 import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
-import { loadMonthStartDay } from "@/lib/settings";
+import { getCachedMonthStartDay, getCurrentPeriod, loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Dimensions,
@@ -53,8 +53,7 @@ function CategoryRow({
   total: number;
   type: "income" | "expense";
 }) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const pct = total > 0 ? Math.round((amount / total) * 100) : 0;
   return (
     <View style={styles.categoryRow}>
@@ -80,8 +79,7 @@ function CategoryRow({
 const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
 export default function DreScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [selectedPeriod, setSelectedPeriod] = useState<DrePeriod>("month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
@@ -92,8 +90,23 @@ export default function DreScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  // Período financeiro (respeita o dia de início do mês), não o mês do calendário
+  const [selectedYear, setSelectedYear] = useState(() => getCurrentPeriod().year);
+  const [selectedMonth, setSelectedMonth] = useState(() => getCurrentPeriod().month);
+  const [monthStartDay, setMonthStartDay] = useState(getCachedMonthStartDay);
+  const userNavigatedRef = useRef(false);
+
+  // O estado inicial usou o dia de início em cache; ao carregar o configurado,
+  // corrige o período atual se o usuário ainda não navegou.
+  useEffect(() => {
+    loadMonthStartDay().then((startDay) => {
+      setMonthStartDay(startDay);
+      if (userNavigatedRef.current) return;
+      const current = getCurrentPeriod(startDay);
+      setSelectedYear(current.year);
+      setSelectedMonth(current.month);
+    });
+  }, []);
   const [period, setPeriod] = useState<DrePeriodRange>(buildPeriodRange("month"));
   const periodRef = useRef<DrePeriodRange>(period);
   const { alert, dialog } = useAppDialog();
@@ -158,6 +171,7 @@ export default function DreScreen() {
   }
 
   function changeMonth(delta: number) {
+    userNavigatedRef.current = true;
     const next = new Date(selectedYear, selectedMonth + delta, 1);
     setSelectedMonth(next.getMonth());
     setSelectedYear(next.getFullYear());
@@ -211,6 +225,8 @@ export default function DreScreen() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
+  const currentPeriod = getCurrentPeriod(monthStartDay);
+
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
       {/* Header */}
@@ -259,11 +275,10 @@ export default function DreScreen() {
           <TouchableOpacity onPress={() => changeMonth(1)} hitSlop={8}>
             <Ionicons name="chevron-forward" size={22} color={colors.primary} />
           </TouchableOpacity>
-          {!(selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth()) && (
+          {!(selectedYear === currentPeriod.year && selectedMonth === currentPeriod.month) && (
             <TouchableOpacity style={styles.todayBtn} onPress={() => {
-              const now = new Date();
-              setSelectedMonth(now.getMonth());
-              setSelectedYear(now.getFullYear());
+              setSelectedMonth(currentPeriod.month);
+              setSelectedYear(currentPeriod.year);
             }}>
               <Text style={styles.todayBtnText}>Hoje</Text>
             </TouchableOpacity>

@@ -203,7 +203,11 @@ export async function updateRecurring(
         `${BASE_SELECT} WHERE r.id = ?`,
         [id]
       );
-      if (row) await generateRecurringInstances(db, row);
+      if (row) {
+        // Nova data ou frequência redefine o dia da série; senão preserva o atual
+        const seriesChanged = data.nextDueDate !== undefined || data.frequency !== undefined;
+        await generateRecurringInstances(db, row, seriesChanged ? row.next_due_date : undefined);
+      }
     }
   });
 }
@@ -244,63 +248,79 @@ export async function toggleRecurringActive(
   });
 }
 
-function advanceDate(date: string, frequency: Frequency): string {
-  const d = new Date(date + "T00:00:00");
-  switch (frequency) {
-    case "WEEKLY":
-      d.setDate(d.getDate() + 7);
-      break;
-    case "MONTHLY":
-      d.setMonth(d.getMonth() + 1);
-      break;
-    case "YEARLY":
-      d.setFullYear(d.getFullYear() + 1);
-      break;
+/**
+ * n-ésima ocorrência calculada sempre a partir da data inicial (não da anterior),
+ * para que um vencimento no dia 31 caia no último dia dos meses curtos e volte
+ * ao dia 31 depois — em vez de deslizar para 03/03 e ficar no dia 3 para sempre.
+ */
+function nthOccurrence(startDate: string, frequency: Frequency, n: number): string {
+  const [year, month, day] = startDate.split("-").map(Number);
+  if (frequency === "WEEKLY") {
+    return formatDateLocal(new Date(year, month - 1, day + 7 * n));
   }
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  const targetYear = frequency === "YEARLY" ? year + n : year;
+  const targetMonth = frequency === "MONTHLY" ? month - 1 + n : month - 1;
+  const lastDayOfMonth = new Date(targetYear, targetMonth + 1, 0).getDate();
+  return formatDateLocal(new Date(targetYear, targetMonth, Math.min(day, lastDayOfMonth)));
 }
 
+/** Ocorrências da série ancorada em `anchor`, a partir de `from` (inclusive). */
 function generateDates(
-  startDate: string,
+  anchor: string,
   frequency: Frequency,
+  from: string,
   endDate?: string | null
 ): string[] {
   const dates: string[] = [];
-  let current = startDate;
-  const limit = 500;
-  const effectiveEnd =
-    endDate ??
-    (() => {
-      const d = new Date(startDate + "T00:00:00");
-      d.setMonth(d.getMonth() + 24);
-      return formatDateLocal(d);
-    })();
+  const maxInstances = 500;
+  const effectiveEnd = endDate ?? nthOccurrence(from, "MONTHLY", 24);
 
-  while (dates.length < limit) {
+  for (let n = 0; dates.length < maxInstances; n++) {
+    const current = nthOccurrence(anchor, frequency, n);
     if (current > effectiveEnd) break;
-    dates.push(current);
-    const next = advanceDate(current, frequency);
-    if (next <= current) break;
-    current = next;
+    if (current >= from) dates.push(current);
   }
   return dates;
 }
 
+/**
+ * Data que define o dia de vencimento da série. next_due_date pode estar
+ * "achatado" (28/02 numa série do dia 31), então o dia vem do maior dia do mês
+ * entre as parcelas ainda em aberto — ex.: 28/02 e 31/03 → dia 31.
+ * nthOccurrence ajusta dias inexistentes (31/02 → 28/02).
+ */
+async function resolveSeriesAnchor(db: SQLiteDatabase, recurring: RecurringRow): Promise<string> {
+  if (recurring.frequency === "WEEKLY") return recurring.next_due_date;
+  const open = await db.getAllAsync<{ date: string }>(
+    `SELECT date FROM transactions WHERE recurring_id = ? AND status IN ('PENDING', 'OVERDUE')`,
+    [recurring.id]
+  );
+  const dayOf = (date: string) => Number(date.slice(8, 10));
+  const anchorDay = Math.max(dayOf(recurring.next_due_date), ...open.map((r) => dayOf(r.date)));
+  return `${recurring.next_due_date.slice(0, 8)}${String(anchorDay).padStart(2, "0")}`;
+}
+
+/**
+ * Regenera as parcelas em aberto da recorrência.
+ * `anchor` força o dia de vencimento (usado quando o usuário muda a data ou a
+ * frequência); se omitido, preserva o dia da série atual.
+ */
 async function generateRecurringInstances(
   db: SQLiteDatabase,
-  recurring: RecurringRow
+  recurring: RecurringRow,
+  anchor?: string
 ): Promise<void> {
+  const seriesAnchor = anchor ?? (await resolveSeriesAnchor(db, recurring));
+
   await db.runAsync(
     `DELETE FROM transactions WHERE recurring_id = ? AND status IN ('PENDING', 'OVERDUE')`,
     [recurring.id]
   );
 
   const dates = generateDates(
-    recurring.next_due_date,
+    seriesAnchor,
     recurring.frequency as Frequency,
+    recurring.next_due_date,
     recurring.end_date
   );
   if (dates.length === 0) return;

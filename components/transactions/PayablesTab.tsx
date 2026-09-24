@@ -11,7 +11,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { listCategories } from "@/lib/repositories/categories";
 import { deleteTransaction, listTransactions, markAsPaid, markOverdueTransactions } from "@/lib/repositories/transactions";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { Category, Transaction, TransactionType } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
@@ -80,8 +80,7 @@ function PendingTabContent({
   readonly onEditTransaction: (item: Transaction) => void;
   readonly refreshKey: number;
 }) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [items, setItems] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);

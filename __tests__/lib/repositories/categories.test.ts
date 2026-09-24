@@ -27,8 +27,8 @@ describe("categories repository", () => {
 
   describe("createCategory", () => {
     it("creates a category with defaults", async () => {
-      const cat = await createCategory({ name: "Lazer" });
-      expect(cat.name).toBe("Lazer");
+      const cat = await createCategory({ name: "Pets" });
+      expect(cat.name).toBe("Pets");
       expect(cat.color).toBe("#6366f1");
       expect(cat.icon).toBe("tag");
       expect(cat.isDefault).toBe(false);
@@ -59,7 +59,7 @@ describe("categories repository", () => {
     it("returns categories ordered by default desc then name", async () => {
       const db = await getDb();
       await db.runAsync(
-        "INSERT INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, 1)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, 1)",
         ["cat-1", "Alimentação", "#ef4444", "restaurant"]
       );
       await createCategory({ name: "Zebra" });

@@ -8,11 +8,11 @@ import {
     listCategories,
 } from "@/lib/repositories/categories";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { Category } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     FlatList,
@@ -56,8 +56,7 @@ const PALETTE = [
 ];
 
 export default function CategoriesScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [items, setItems] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

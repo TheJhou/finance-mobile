@@ -25,8 +25,29 @@ export async function isBiometricEnabled(): Promise<boolean> {
   }
 }
 
+type EnabledListener = (enabled: boolean) => void;
+const enabledListeners = new Set<EnabledListener>();
+
+/** Notifica quando a biometria é ligada/desligada (tela de Segurança, logout). */
+export function onBiometricEnabledChange(listener: EnabledListener): () => void {
+  enabledListeners.add(listener);
+  return () => { enabledListeners.delete(listener); };
+}
+
 export async function setBiometricEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(BIOMETRIC_ENABLED_KEY, enabled ? "true" : "false");
+  enabledListeners.forEach((l) => l(enabled));
+}
+
+/**
+ * Tempo em segundo plano tolerado antes de exigir biometria de novo.
+ * Cobre câmera, galeria, seletor de arquivos, permissões e a tela de
+ * pagamento do Google Play, que colocam o app em background.
+ */
+export const BIOMETRIC_LOCK_GRACE_MS = 30_000;
+
+export function shouldLockAfterBackground(backgroundedAt: number | null, now: number): boolean {
+  return backgroundedAt !== null && now - backgroundedAt >= BIOMETRIC_LOCK_GRACE_MS;
 }
 
 const BIOMETRIC_UNLOCKED_KEY = "biometric_unlocked";

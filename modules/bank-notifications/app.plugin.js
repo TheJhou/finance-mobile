@@ -21,7 +21,7 @@ const withBankNotifications = (config) => {
       app["service"].push({
         $: {
           "android:name": serviceName,
-          "android:label": "Finance App - Leitor de Notificações",
+          "android:label": "Kilun - Leitor de Notificações",
           "android:permission": "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
           "android:exported": "true",
           "tools:replace": "android:exported,android:label",

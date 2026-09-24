@@ -9,18 +9,19 @@ import {
     changePassword,
     updateProfile,
 } from "@/lib/account-service";
-import { getStoredUserName, logout, setStoredUserName } from "@/lib/auth";
+import { getStoredUserName, setStoredUserName } from "@/lib/auth";
 import { getMe } from "@/lib/backend";
+import { backupThenSignOut, signOutAndClearLocalData } from "@/lib/local-data";
 import { deleteProfilePhoto, getProfilePhotoUri, onProfilePhotoChange, saveProfilePhoto } from "@/lib/profile-photo";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
 import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
     ActivityIndicator,
     Image,
@@ -42,8 +43,7 @@ type ModalType = "name" | "password" | "email" | null;
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [photoUri, setPhotoUri] = useState<string | null>(null);
@@ -133,14 +133,28 @@ export default function AccountScreen() {
   };
 
   const handleLogout = () => {
-    confirm("Sair da conta", "Tem certeza que deseja sair?", {
-      variant: "danger",
-      confirmText: "Sair",
-      onConfirm: async () => {
-        await logout();
+    const signOut = async (action: () => Promise<void>) => {
+      try {
+        await action();
         router.replace("/" as any);
-      },
-    });
+      } catch (err) {
+        alert("Não foi possível sair", err instanceof Error ? err.message : "Erro ao sair da conta", {
+          variant: "danger",
+        });
+      }
+    };
+
+    confirm(
+      "Sair da conta",
+      "Ao sair, os dados financeiros deste aparelho serão apagados. Faça um backup na nuvem para recuperá-los quando entrar novamente.",
+      {
+        variant: "warning",
+        confirmText: "Backup e sair",
+        onConfirm: () => signOut(backupThenSignOut),
+        secondaryText: "Sair sem backup",
+        onSecondary: () => signOut(signOutAndClearLocalData),
+      }
+    );
   };
 
   const openModal = (type: ModalType) => {
@@ -237,7 +251,6 @@ export default function AccountScreen() {
 
   const appVersion = Constants.expoConfig?.version ?? "1.0.0";
   const buildVersion = String(Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "1");
-  const environment = __DEV__ ? "Homologação" : "Produção";
 
   const isPro = subscription?.plan.code === "PRO";
 

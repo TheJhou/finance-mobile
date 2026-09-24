@@ -39,7 +39,7 @@ describe("transactions edge cases", () => {
   describe("boundary dates", () => {
     it("handles first day of month", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -56,7 +56,7 @@ describe("transactions edge cases", () => {
 
     it("handles last day of month (31 days)", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -73,7 +73,7 @@ describe("transactions edge cases", () => {
 
     it("handles leap year February 29", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -90,7 +90,7 @@ describe("transactions edge cases", () => {
 
     it("handles year boundary", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -109,7 +109,7 @@ describe("transactions edge cases", () => {
   describe("amount edge cases", () => {
     it("handles very small amounts", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -126,7 +126,7 @@ describe("transactions edge cases", () => {
 
     it("handles large amounts", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -143,7 +143,7 @@ describe("transactions edge cases", () => {
 
     it("handles zero amount", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -162,7 +162,7 @@ describe("transactions edge cases", () => {
   describe("description edge cases", () => {
     it("handles unicode and special characters", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -179,7 +179,7 @@ describe("transactions edge cases", () => {
 
     it("handles empty notes as null", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 
@@ -199,7 +199,7 @@ describe("transactions edge cases", () => {
   describe("category mapping", () => {
     it("includes category when category exists", async () => {
       await (await getDb()).runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Alimentação", "#ef4444", "restaurant"]
       );
 
@@ -221,7 +221,7 @@ describe("transactions edge cases", () => {
     it("orders by date desc then created_at desc", async () => {
       const db = await getDb();
       await db.runAsync(
-        "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+        "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
         ["cat-1", "Test", "#6366f1", "tag"]
       );
 

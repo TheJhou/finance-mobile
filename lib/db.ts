@@ -537,6 +537,32 @@ async function seedDefaultCategories(db: SQLite.SQLiteDatabase): Promise<void> {
   }
 }
 
+/**
+ * Apaga todos os dados do usuário no banco local e recria as categorias padrão.
+ * Mantém apenas dados de referência (financial_institutions) e o schema.
+ */
+export async function wipeUserData(): Promise<void> {
+  const db = await getDb();
+  await db.withTransactionAsync(async () => {
+    // Ordem respeita as foreign keys: filhos antes dos pais
+    await db.execAsync(`
+      DELETE FROM transactions;
+      DELETE FROM recurring_transactions;
+      DELETE FROM categories;
+      DELETE FROM settings;
+      DELETE FROM notification_queue;
+      DELETE FROM processed_notifications;
+      DELETE FROM sync_queue;
+      DELETE FROM backup_metadata;
+      DELETE FROM backup_schedule;
+      DELETE FROM user_accounts;
+      DELETE FROM user_sessions;
+      DELETE FROM users;
+    `);
+    await seedDefaultCategories(db);
+  });
+}
+
 export function generateId(): string {
   const ts = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 10);

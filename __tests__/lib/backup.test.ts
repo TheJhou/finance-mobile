@@ -21,6 +21,7 @@ jest.mock("@/lib/config", () => ({
 }));
 
 jest.mock("@react-native-async-storage/async-storage", () => ({
+  __esModule: true,
   default: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
@@ -34,27 +35,24 @@ jest.mock("expo-crypto", () => ({
   CryptoDigestAlgorithm: { SHA256: "SHA256" },
 }));
 
-jest.mock("expo-file-system/legacy", () => ({
-  documentDirectory: "/mock/documents/",
-  getInfoAsync: jest.fn().mockResolvedValue({ exists: false }),
-  makeDirectoryAsync: jest.fn().mockResolvedValue(undefined),
-  writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
-  readAsStringAsync: jest.fn().mockResolvedValue("{}"),
-  readDirectoryAsync: jest.fn().mockResolvedValue([]),
-  deleteAsync: jest.fn().mockResolvedValue(undefined),
-}));
-
 import { BackupSystem } from "@/lib/backup";
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb } from "@/lib/db";
 import { authFetch } from "@/lib/auth";
-import * as FileSystem from "expo-file-system/legacy";
+import { File } from "expo-file-system";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const mockAuthFetch = authFetch as jest.MockedFunction<typeof authFetch>;
 
+async function clearUserData() {
+  // getDb() já semeia categorias padrão; remove para simular um app sem dados
+  const db = await getDb();
+  await db.execAsync("DELETE FROM categories");
+}
+
 beforeEach(async () => {
   jest.clearAllMocks();
+  mockAuthFetch.mockReset();
   resetMockDatabase();
 
   const db = await getDb();
@@ -67,6 +65,7 @@ beforeEach(async () => {
 
 describe("BackupSystem.createBackup", () => {
   it("falha se não há dados", async () => {
+    await clearUserData();
     const result = await BackupSystem.createBackup();
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/nenhum dado/i);
@@ -75,7 +74,7 @@ describe("BackupSystem.createBackup", () => {
   it("cria backup com sucesso quando há dados", async () => {
     const db = await getDb();
     await db.runAsync(
-      "INSERT INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
       ["cat-1", "Mercado", "#fff", "tag", 0]
     );
 
@@ -89,7 +88,7 @@ describe("BackupSystem.createBackup", () => {
   it("inclui deviceId e appVersion no metadata", async () => {
     const db = await getDb();
     await db.runAsync(
-      "INSERT INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
       ["cat-1", "Test", "#fff", "tag", 0]
     );
 
@@ -117,8 +116,8 @@ describe("BackupSystem.scheduleDailyBackup", () => {
 
     await BackupSystem.scheduleDailyBackup();
 
-    // createBackup should not be called (no writeAsStringAsync)
-    expect(FileSystem.writeAsStringAsync).not.toHaveBeenCalled();
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+    expect(await BackupSystem.listBackups()).toHaveLength(0);
   });
 
   it("executa se não fez backup hoje", async () => {
@@ -126,20 +125,19 @@ describe("BackupSystem.scheduleDailyBackup", () => {
 
     const db = await getDb();
     await db.runAsync(
-      "INSERT INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
+      "INSERT OR REPLACE INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
       ["cat-1", "Test", "#fff", "tag", 0]
     );
 
     await BackupSystem.scheduleDailyBackup();
 
-    expect(FileSystem.writeAsStringAsync).toHaveBeenCalled();
+    expect(await BackupSystem.listBackups()).toHaveLength(1);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(expect.any(String), new Date().toDateString());
   });
 });
 
 describe("BackupSystem.getBackupStats", () => {
   it("retorna stats com zeros quando não há backups", async () => {
-    (FileSystem.readDirectoryAsync as jest.Mock).mockResolvedValueOnce([]);
-
     const stats = await BackupSystem.getBackupStats();
     expect(stats.totalBackups).toBe(0);
     expect(stats.totalSize).toBe(0);
@@ -150,9 +148,7 @@ describe("BackupSystem.getBackupStats", () => {
 
 describe("BackupSystem.restoreBackup", () => {
   it("falha para arquivo com formato inválido", async () => {
-    (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValueOnce(
-      JSON.stringify({ invalid: true })
-    );
+    new File("/mock/path.json").write(JSON.stringify({ invalid: true }));
 
     const result = await BackupSystem.restoreBackup("/mock/path.json");
     expect(result.success).toBe(false);
@@ -164,9 +160,7 @@ describe("BackupSystem.restoreBackup", () => {
 
 describe("BackupSystem.uploadToCloud", () => {
   it("faz POST /backup/upload com authFetch", async () => {
-    (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValueOnce(
-      JSON.stringify({ metadata: { id: "bk-1" }, data: {} })
-    );
+    new File("/mock/backup.json").write(JSON.stringify({ metadata: { id: "bk-1" }, data: {} }));
 
     mockAuthFetch.mockResolvedValueOnce({
       ok: true,
@@ -182,9 +176,7 @@ describe("BackupSystem.uploadToCloud", () => {
   });
 
   it("lança erro se backend responde não-ok", async () => {
-    (FileSystem.readAsStringAsync as jest.Mock).mockResolvedValueOnce(
-      JSON.stringify({ metadata: {}, data: {} })
-    );
+    new File("/mock/backup.json").write(JSON.stringify({ metadata: {}, data: {} }));
 
     mockAuthFetch.mockResolvedValueOnce({
       ok: false,
@@ -230,6 +222,7 @@ describe("BackupSystem.downloadAndRestoreLatest", () => {
 
 describe("BackupSystem.createAndUploadBackup", () => {
   it("retorna cloudKey null se backup local falha", async () => {
+    await clearUserData();
     const result = await BackupSystem.createAndUploadBackup();
     expect(result.localResult.success).toBe(false);
     expect(result.cloudKey).toBeNull();

@@ -1,13 +1,8 @@
 /**
- * Testes unitários para validateNotificationAiPayload
- * Executar: node --experimental-vm-modules --import tsx/esm __tests__/lib/notifications/validate-ai-payload.test.ts
- * Ou via: node --test __tests__/lib/notifications/validate-ai-payload.test.ts (requer compilação)
- *
- * Use: npx ts-node -r tsconfig-paths/register __tests__/lib/notifications/validate-ai-payload.test.ts
+ * Testes unitários para validateNotificationAiPayload (executados pelo Jest).
  */
 
 import assert from "node:assert/strict";
-import { describe, it, beforeEach, afterEach, mock } from "node:test";
 import {
   VALID_PAYMENT_METHODS,
   validateNotificationAiPayload,
@@ -119,27 +114,29 @@ describe("rawText", () => {
 
 // ── categories ────────────────────────────────────────────────────────────
 
+// O backend aceita categories vazio/incompleto — problemas aqui viram warning, não bloqueiam.
 describe("categories", () => {
-  it("retorna erro quando categories é array vazio", () => {
+  it("emite warning (não erro) quando categories é array vazio", () => {
     const result = validate({ categories: [] });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some((e) => e.includes("categories está vazio")));
+    assert.equal(result.valid, true);
+    assert.equal(result.errors.length, 0);
+    assert.ok(result.warnings.some((w) => w.includes("categories está vazio")));
   });
 
-  it("retorna erro quando alguma categoria não tem id", () => {
+  it("emite warning quando alguma categoria não tem id", () => {
     const result = validate({
       categories: [{ id: "", name: "Alimentação" }],
     });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some((e) => e.includes("categoria(s) com id ou name ausente")));
+    assert.equal(result.valid, true);
+    assert.ok(result.warnings.some((w) => w.includes("categoria(s) com id ou name ausente")));
   });
 
-  it("retorna erro quando alguma categoria não tem name", () => {
+  it("emite warning quando alguma categoria não tem name", () => {
     const result = validate({
       categories: [{ id: "cat-1", name: "" }],
     });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some((e) => e.includes("categoria(s) com id ou name ausente")));
+    assert.equal(result.valid, true);
+    assert.ok(result.warnings.some((w) => w.includes("categoria(s) com id ou name ausente")));
   });
 
   it("conta corretamente múltiplas categorias inválidas", () => {
@@ -150,18 +147,8 @@ describe("categories", () => {
         { id: "cat-3", name: "Válida" },
       ],
     });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some((e) => e.includes("2 categoria(s)")));
-  });
-
-  it("retorna erro se ao menos uma categoria for inválida", () => {
-    const result = validate({
-      categories: [
-        { id: "cat-1", name: "Válida" },
-        { id: "", name: "" },
-      ],
-    });
-    assert.equal(result.valid, false);
+    assert.equal(result.valid, true);
+    assert.ok(result.warnings.some((w) => w.includes("2 categoria(s)")));
   });
 });
 
@@ -205,45 +192,46 @@ describe("context.paymentMethod", () => {
     assert.ok(result.warnings.some((w) => w.includes("context.paymentMethod ausente")));
   });
 
-  it("retorna erro para paymentMethod fora do enum", () => {
+  // context é opcional no backend — paymentMethod desconhecido vira warning.
+  it("emite warning (não erro) para paymentMethod fora do enum", () => {
     const result = validate({
       context: { bank: "Nubank", paymentMethod: "CARTAO_INVALIDO" },
     });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some((e) => e.includes("context.paymentMethod inválido")));
+    assert.equal(result.valid, true);
+    assert.equal(result.errors.length, 0);
+    assert.ok(result.warnings.some((w) => w.includes("context.paymentMethod desconhecido")));
   });
 
-  it("retorna erro para paymentMethod em lowercase (enum é case-sensitive)", () => {
+  it("trata paymentMethod em lowercase como desconhecido (enum é case-sensitive)", () => {
     const result = validate({
       context: { bank: "Nubank", paymentMethod: "pix" },
     });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.some((e) => e.includes("context.paymentMethod inválido")));
+    assert.ok(result.warnings.some((w) => w.includes("context.paymentMethod desconhecido")));
   });
 });
 
 // ── Múltiplos erros simultâneos ────────────────────────────────────────────
 
-describe("múltiplos erros", () => {
-  it("acumula todos os erros em um único retorno", () => {
+describe("múltiplos problemas", () => {
+  it("bloqueia só pelo rawText vazio e acumula os demais como warnings", () => {
     const result = validate({
       rawText: "",
       categories: [],
       context: { paymentMethod: "INVALIDO" },
     });
     assert.equal(result.valid, false);
-    assert.ok(result.errors.length >= 3, `Esperado >= 3 erros, got ${result.errors.length}`);
+    assert.equal(result.errors.length, 1);
+    assert.ok(result.warnings.length >= 3, `Esperado >= 3 warnings, got ${result.warnings.length}`);
   });
 
-  it("acumula erros e warnings ao mesmo tempo", () => {
+  it("acumula warnings sem bloquear quando rawText é válido", () => {
     const result = validate({
       rawText: "curto", // warning (5 chars)
-      categories: [],   // erro
+      categories: [],   // warning
       context: { bank: "Nubank", paymentMethod: "PIX" },
     });
-    assert.equal(result.valid, false);
-    assert.ok(result.errors.length >= 1);
-    assert.ok(result.warnings.length >= 1);
+    assert.equal(result.valid, true);
+    assert.ok(result.warnings.length >= 2);
   });
 });
 

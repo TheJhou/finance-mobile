@@ -68,7 +68,7 @@ beforeEach(async () => {
 
   // Insert a category
   await db.runAsync(
-    "INSERT INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
+    "INSERT OR REPLACE INTO categories (id, name, color, icon, is_default) VALUES (?, ?, ?, ?, ?)",
     ["cat-1", "Mercado", "#6366f1", "tag", 0]
   );
 });

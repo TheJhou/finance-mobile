@@ -106,8 +106,9 @@ describe("backend AI functions", () => {
       const mockTransactions = [{ description: "Aluguel", amount: 1200, type: "EXPENSE" }];
       mockFetchOk({ transactions: mockTransactions });
       const result = await analyzeText("Paguei aluguel 1200", "TEXT", []);
-      expect(result.transactions).toHaveLength(1);
-      expect(result.transactions[0].description).toBe("Aluguel");
+      // Resposta sem wrapper "draft" é normalizada para { draft: ... }
+      expect(result.draft.transactions).toHaveLength(1);
+      expect(result.draft.transactions[0].description).toBe("Aluguel");
     });
 
     it("sends correct source field for AUDIO", async () => {

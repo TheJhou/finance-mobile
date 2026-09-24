@@ -1,9 +1,11 @@
 import { AppHeader } from "@/components/app-header";
 import { useNotificationListener } from "@/hooks/use-notification-listener";
-import { isAuthenticated } from "@/lib/auth";
+import { getStoredUserEmail, isAuthenticated } from "@/lib/auth";
 import { BackupScheduler } from "@/lib/backup-scheduler";
+import { startGlobalPurchaseHandling } from "@/lib/iap";
+import { adoptLocalDataOwnerIfMissing } from "@/lib/local-data";
 import { colors } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useTheme, useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs, useSegments } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
@@ -16,7 +18,7 @@ export default function AppLayout() {
   const [authed, setAuthed] = useState(false);
   const segments = useSegments();
   const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   const tabBarStyle = useMemo(() => ({
     backgroundColor: isDark ? "#2a2740" : "#e5e7eb",
@@ -38,9 +40,19 @@ export default function AppLayout() {
       fontWeight: "600" as const,
     },
     safeAreaInsets: { top: 0 },
+    // isDark sinaliza a troca de tema: `colors` é mutado por applyTheme (ver useThemedStyles)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [isDark, tabBarStyle]);
 
   useNotificationListener();
+
+  // Compras são processadas aqui, e não na tela Plano, para não se perderem
+  // se o usuário sair da tela ou fechar o app durante o pagamento.
+  useEffect(() => {
+    if (!authed) return;
+    const sub = startGlobalPurchaseHandling();
+    return () => sub.remove();
+  }, [authed]);
 
   // Initialize backup scheduler
   useEffect(() => {
@@ -53,6 +65,11 @@ export default function AppLayout() {
     isAuthenticated().then((auth) => {
       setAuthed(auth);
       setAuthChecking(false);
+      if (auth) {
+        getStoredUserEmail()
+          .then(adoptLocalDataOwnerIfMissing)
+          .catch((error) => console.warn("[AppLayout] Falha ao registrar dono dos dados locais:", error));
+      }
     });
   }, []);
 

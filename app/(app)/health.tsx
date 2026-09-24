@@ -5,7 +5,7 @@ import type { UpcomingBill } from "@/lib/repositories/dashboard";
 import { getDashboard, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { DashboardData, HealthScoreResult } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
@@ -58,8 +58,7 @@ function CircularProgress({
 
 export default function HealthScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   const [data, setData] = useState<DashboardData | null>(null);
   const [streak, setStreak] = useState<StreakData | null>(null);

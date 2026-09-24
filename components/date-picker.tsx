@@ -1,5 +1,5 @@
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { formatDate, toDateInputValue } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
@@ -64,8 +64,7 @@ export function DatePicker({
   minDate,
   maxDate,
 }: DatePickerProps) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [open, setOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(() => {
     const d = value ? new Date(value + "T00:00:00") : undefined;

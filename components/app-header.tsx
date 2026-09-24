@@ -5,11 +5,11 @@ import { onNotificationQueued } from "@/lib/notification-events";
 import { countPendingApproval } from "@/lib/notification-queue";
 import { getProfilePhotoUri, onProfilePhotoChange } from "@/lib/profile-photo";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useTheme, useThemedStyles } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -24,7 +24,7 @@ export function AppHeader() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { isDark, toggleTheme } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [userName, setUserName] = useState<string | null>(null);

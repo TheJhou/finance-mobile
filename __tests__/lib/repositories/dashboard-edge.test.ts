@@ -6,7 +6,7 @@ import { formatDateLocal } from "@/lib/utils";
 async function seedCategory(id: string, name: string) {
   const db = await getDb();
   await db.runAsync(
-    "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+    "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
     [id, name, "#6366f1", "tag"]
   );
 }

@@ -53,6 +53,9 @@ export interface CloudBackupEntry {
 
 // ── Backup System ───────────────────────────────────────────────────────
 
+// Backups completos podem ter vários MB
+const BACKUP_TRANSFER_TIMEOUT_MS = 120_000;
+
 export class BackupSystem {
   private static readonly BACKUP_VERSION = '1.0.0';
   private static get BACKUP_DIR(): Directory {
@@ -206,7 +209,7 @@ export class BackupSystem {
       return {
         success: false,
         backupId: generateId(),
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }
@@ -247,9 +250,10 @@ export class BackupSystem {
       let totalRestored = 0;
       const restoredTables: string[] = [];
 
-      // Explicit order: categories must exist before transactions (FK)
+      // Ordem das foreign keys: transactions referencia categories E
+      // recurring_transactions (recurring_id), então ambas vêm antes.
       // notification_queue and processed_notifications have no FK deps
-      const INSERT_ORDER = ['categories', 'transactions', 'recurring_transactions', 'settings', 'notification_queue', 'processed_notifications'];
+      const INSERT_ORDER = ['categories', 'recurring_transactions', 'transactions', 'settings', 'notification_queue', 'processed_notifications'];
       const DELETE_ORDER = [...INSERT_ORDER].reverse();
 
       // Begin transaction
@@ -309,7 +313,7 @@ export class BackupSystem {
         success: false,
         restoredTables: [],
         recordsRestored: 0,
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }
@@ -387,6 +391,15 @@ export class BackupSystem {
     } catch (error) {
       console.error('[Backup] Error deleting backup:', error);
       return false;
+    }
+  }
+
+  // Remove todos os arquivos de backup locais (usado ao sair da conta)
+  static deleteAllLocalBackups(): void {
+    const dir = this.BACKUP_DIR;
+    if (!dir.exists) return;
+    for (const item of dir.list()) {
+      if (item instanceof File) item.delete();
     }
   }
 
@@ -491,6 +504,7 @@ export class BackupSystem {
 
     const response = await authFetch(`${BACKEND_URL}/backup/upload`, {
       method: 'POST',
+      timeoutMs: BACKUP_TRANSFER_TIMEOUT_MS,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(backupPackage),
     });
@@ -522,7 +536,7 @@ export class BackupSystem {
    * Baixa o backup mais recente da nuvem e restaura localmente.
    */
   static async downloadAndRestoreLatest(): Promise<RestoreResult> {
-    const response = await authFetch(`${BACKEND_URL}/backup/latest`);
+    const response = await authFetch(`${BACKEND_URL}/backup/latest`, { timeoutMs: BACKUP_TRANSFER_TIMEOUT_MS });
     if (!response.ok) {
       if (response.status === 404) {
         return { success: false, restoredTables: [], recordsRestored: 0, error: 'Nenhum backup na nuvem' };
@@ -551,7 +565,8 @@ export class BackupSystem {
    */
   static async downloadAndRestoreByFilename(filename: string): Promise<RestoreResult> {
     const response = await authFetch(
-      `${BACKEND_URL}/backup/download/${encodeURIComponent(filename)}`
+      `${BACKEND_URL}/backup/download/${encodeURIComponent(filename)}`,
+      { timeoutMs: BACKUP_TRANSFER_TIMEOUT_MS }
     );
     if (!response.ok) throw new Error('Erro ao baixar backup da nuvem');
 

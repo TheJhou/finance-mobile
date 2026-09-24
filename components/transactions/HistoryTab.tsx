@@ -4,7 +4,7 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { listCategories } from "@/lib/repositories/categories";
 import { deleteTransaction, listTransactions } from "@/lib/repositories/transactions";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { Category, Transaction } from "@/lib/types";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
@@ -45,8 +45,7 @@ interface HistoryTabProps {
 }
 
 export function HistoryTab({ onEditTransaction, refreshKey }: HistoryTabProps) {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [items, setItems] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);

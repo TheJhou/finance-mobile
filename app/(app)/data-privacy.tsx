@@ -1,49 +1,74 @@
 import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
+import { EditModal } from "@/components/account/edit-modal";
 import { RowSeparator } from "@/components/account/row-separator";
 import { ScreenLayout } from "@/components/account/screen-layout";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useAppDialog } from "@/hooks/use-app-dialog";
 import { deleteAccount, exportAccountData } from "@/lib/account-service";
 import { logout } from "@/lib/auth";
+import { clearLocalUserData } from "@/lib/local-data";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { File, Paths } from "expo-file-system";
 import { useRouter } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 export default function DataPrivacyScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [deleting, setDeleting] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const { alert, confirm, dialog } = useAppDialog();
+  const [deleteModalVisible, setDeleteModalVisible] = useState(false);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { alert, dialog } = useAppDialog();
 
-  const handleDeleteAccount = () => {
-    confirm(
-      "Excluir conta",
-      "Esta ação é irreversível. Todos os seus dados serão permanentemente excluídos. Deseja continuar?",
-      {
-        variant: "danger",
-        confirmText: "Excluir",
-        onConfirm: async () => {
-          try {
-            setDeleting(true);
-            await deleteAccount("");
-            await logout();
-            alert("Conta excluída", "Sua conta foi excluída com sucesso.", { variant: "success" });
-            router.replace("/" as any);
-          } catch (err) {
-            alert("Erro", err instanceof Error ? err.message : "Erro ao excluir conta", { variant: "danger" });
-          } finally {
-            setDeleting(false);
-          }
-        },
-      }
-    );
+  const openDeleteModal = () => {
+    setDeletePassword("");
+    setDeleteError(null);
+    setDeleteModalVisible(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleting) return;
+    setDeleteModalVisible(false);
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!deletePassword) {
+      setDeleteError("Digite sua senha para confirmar");
+      return;
+    }
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deleteAccount(deletePassword);
+    } catch (err) {
+      // Conta não foi excluída (ex.: senha incorreta) — nada local é apagado
+      setDeleteError(err instanceof Error ? err.message : "Erro ao excluir conta");
+      setDeleting(false);
+      return;
+    }
+
+    // A conta já não existe no servidor: segue com a limpeza local mesmo se algo falhar
+    try {
+      await clearLocalUserData();
+    } catch (err) {
+      console.error("[DataPrivacy] Falha ao apagar dados locais após excluir conta:", err);
+    }
+    await logout();
+    setDeleting(false);
+    setDeleteModalVisible(false);
+    alert("Conta excluída", "Sua conta e os dados deste aparelho foram excluídos.", {
+      variant: "success",
+      onConfirm: () => router.replace("/" as any),
+      onCancel: () => router.replace("/" as any),
+    });
   };
 
   const handleExportLgpd = async () => {
@@ -122,16 +147,43 @@ export default function DataPrivacyScreen() {
           label="Excluir conta e todos os dados"
           subtitle="Exclusão permanente e irreversível (direito ao esquecimento)"
           danger
-          onPress={handleDeleteAccount}
+          onPress={openDeleteModal}
         />
       </AccountSection>
 
-      {(deleting || exporting) && (
+      <EditModal
+        visible={deleteModalVisible}
+        title="Excluir conta"
+        onClose={closeDeleteModal}
+        footer={
+          <>
+            <Button title="Excluir definitivamente" variant="danger" onPress={handleDeleteAccount} loading={deleting} />
+            <Button title="Cancelar" variant="ghost" onPress={closeDeleteModal} disabled={deleting} />
+          </>
+        }
+      >
+        <Text style={styles.deleteWarning}>
+          Esta ação é irreversível. Sua conta, seus backups na nuvem e todos os dados deste aparelho serão excluídos permanentemente.
+        </Text>
+        <Input
+          label="Confirme sua senha"
+          value={deletePassword}
+          onChangeText={(text) => {
+            setDeletePassword(text);
+            if (deleteError) setDeleteError(null);
+          }}
+          secureTextEntry
+          autoCapitalize="none"
+          autoComplete="current-password"
+          editable={!deleting}
+          error={deleteError ?? undefined}
+        />
+      </EditModal>
+
+      {exporting && (
         <View style={styles.loadingOverlay}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={styles.loadingText}>
-            {deleting ? "Excluindo conta..." : "Exportando dados..."}
-          </Text>
+          <Text style={styles.loadingText}>Exportando dados...</Text>
         </View>
       )}
       {dialog}
@@ -161,6 +213,11 @@ function createStyles() {
       textAlign: "center",
       paddingHorizontal: spacing.lg,
       lineHeight: 18,
+    },
+    deleteWarning: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      lineHeight: 20,
     },
     loadingOverlay: {
       position: "absolute",

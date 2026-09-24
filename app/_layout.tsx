@@ -1,19 +1,25 @@
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
+import { LockScreen } from "@/components/lock-screen";
 import { isAuthenticated } from "@/lib/auth";
-import { isBiometricEnabled, onBiometricUnlockChange, setBiometricUnlocked } from "@/lib/biometric";
+import {
+  isBiometricEnabled,
+  onBiometricEnabledChange,
+  onBiometricUnlockChange,
+  setBiometricUnlocked,
+  shouldLockAfterBackground,
+} from "@/lib/biometric";
 import { getDb } from "@/lib/db";
 import { colors, spacing } from "@/lib/theme";
-import { ThemeProvider, useTheme } from "@/lib/theme-context";
+import { ThemeProvider, useTheme, useThemedStyles } from "@/lib/theme-context";
 
 function RootNavigator() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
 
   // ── Fase 1: checagem de biometria (AsyncStorage, ~5 ms) ──────────────
   // Começa com locked=false; se biometria estiver ativa, vira true assim
@@ -21,6 +27,9 @@ function RootNavigator() {
   const [biometricChecked, setBiometricChecked] = useState(false);
   const [biometricEnabled, setBiometricEnabled] = useState(false);
   const [locked, setLocked] = useState(false);
+  // Cobre o conteúdo enquanto o app está em segundo plano (miniatura de apps recentes)
+  const [covered, setCovered] = useState(false);
+  const backgroundedAtRef = useRef<number | null>(null);
 
   // ── Fase 2: inicialização do DB + auth (pode demorar mais) ───────────
   const [appReady, setAppReady] = useState(false);
@@ -65,13 +74,33 @@ function RootNavigator() {
     return () => { cancelled = true; };
   }, []);
 
-  // Background → trava; foreground → a lock screen re-dispara a biometria
+  // Acompanha a biometria sendo ligada/desligada durante a sessão (Segurança, logout)
   useEffect(() => {
-    if (!biometricEnabled) return;
+    return onBiometricEnabledChange((enabled) => {
+      setBiometricEnabled(enabled);
+      if (!enabled) setLocked(false);
+    });
+  }, []);
+
+  // Só "background" conta: "inactive" dispara com o prompt de Face ID e a central
+  // de notificações. Câmera, seletores e a compra no Google Play levam o app ao
+  // background brevemente — por isso a tolerância antes de exigir biometria.
+  useEffect(() => {
+    if (!biometricEnabled) {
+      setCovered(false);
+      return;
+    }
     const handler = (nextState: AppStateStatus) => {
-      if (nextState === "background" || nextState === "inactive") {
-        void setBiometricUnlocked(false);
-        setLocked(true);
+      if (nextState === "background") {
+        backgroundedAtRef.current = Date.now();
+        setCovered(true);
+      } else if (nextState === "active") {
+        if (shouldLockAfterBackground(backgroundedAtRef.current, Date.now())) {
+          void setBiometricUnlocked(false);
+          setLocked(true);
+        }
+        backgroundedAtRef.current = null;
+        setCovered(false);
       }
     };
     const sub = AppState.addEventListener("change", handler);
@@ -92,40 +121,46 @@ function RootNavigator() {
     return <View style={{ flex: 1, backgroundColor: colors.background }} />;
   }
 
-  // ── Lock screen: aparece imediatamente após a checagem ────────────────
-  if (locked) {
-    return (
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="lock" />
-      </Stack>
-    );
-  }
-
-  // ── Erro de inicialização ─────────────────────────────────────────────
+  let content: ReactNode;
   if (error) {
-    return (
+    content = (
       <View style={styles.center}>
         <Text style={styles.errorTitle}>Falha ao iniciar</Text>
         <Text style={styles.errorMsg}>{error}</Text>
       </View>
     );
-  }
-
-  // ── Spinner apenas para usuários SEM biometria (DB ainda carregando) ──
-  if (!appReady || isAuth === null) {
-    return (
+  } else if (!appReady || isAuth === null) {
+    content = (
       <View style={styles.center}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
+  } else {
+    content = (
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="login" />
+        <Stack.Screen name="(app)" />
+      </Stack>
+    );
   }
 
+  // A navegação fica sempre montada; bloqueio e cobertura são overlays.
+  // Trocar a árvore de rotas desmontava as telas e perdia resultados de
+  // câmera/seletores e o listener de compras.
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index" />
-      <Stack.Screen name="login" />
-      <Stack.Screen name="(app)" />
-    </Stack>
+    <View style={styles.root}>
+      <View style={styles.root} importantForAccessibility={locked ? "no-hide-descendants" : "auto"}>
+        {content}
+      </View>
+      {locked ? (
+        <View style={StyleSheet.absoluteFill}>
+          <LockScreen />
+        </View>
+      ) : covered ? (
+        <View style={[StyleSheet.absoluteFill, styles.cover]} />
+      ) : null}
+    </View>
   );
 }
 
@@ -147,6 +182,8 @@ export default function RootLayout() {
 
 function createStyles() {
   return StyleSheet.create({
+    root: { flex: 1 },
+    cover: { backgroundColor: colors.background },
     center: {
       flex: 1,
       alignItems: "center",

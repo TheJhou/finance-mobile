@@ -3,16 +3,15 @@ import { PayablesTab, ReceivablesTab } from "@/components/transactions/PayablesT
 import { TransactionFormModal } from "@/components/transactions/TransactionFormModal";
 import { TransactionTabs, type TabKey } from "@/components/transactions/TransactionTabs";
 import { colors, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import type { Transaction, TransactionStatus, TransactionType } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function TransactionsScreen() {
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [activeTab, setActiveTab] = useState<TabKey>("history");
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<Transaction | null>(null);

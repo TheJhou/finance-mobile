@@ -57,17 +57,68 @@ async function removeStoredValue(key: string): Promise<void> {
   }
 }
 
+// ── Rede ─────────────────────────────────────────────────────────────
+
+/** Prazo padrão das requisições. Uploads (OCR, áudio, backup) passam `timeoutMs` maior. */
+export const REQUEST_TIMEOUT_MS = 20_000;
+
+export interface RequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+/** Falha de conectividade (sem internet ou servidor sem resposta), não de autenticação. */
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
+async function fetchWithTimeout(
+  url: string,
+  { timeoutMs = REQUEST_TIMEOUT_MS, ...init }: RequestOptions = {}
+): Promise<Response> {
+  const controller = new AbortController();
+  const callerSignal = init.signal;
+  const forwardAbort = () => controller.abort();
+  callerSignal?.addEventListener("abort", forwardAbort);
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (error) {
+    if (callerSignal?.aborted) throw error; // cancelado por quem chamou
+    if (controller.signal.aborted) {
+      throw new NetworkError("Tempo esgotado. Verifique sua conexão e tente novamente.");
+    }
+    // fetch só rejeita por falha de rede
+    throw new NetworkError("Sem conexão com a internet. Verifique sua conexão e tente novamente.");
+  } finally {
+    clearTimeout(timer);
+    callerSignal?.removeEventListener("abort", forwardAbort);
+  }
+}
+
 // ── Public API ─────────────────────────────────────────────────────────
 
-export async function getAccessToken(): Promise<string | null> {
-  const token = await getStoredValue("jwt_access_token");
-  if (!token) return null;
+type AccessTokenResult =
+  | { status: "ok"; token: string }
+  | { status: "none" } // sem sessão ou sessão recusada pelo servidor
+  | { status: "offline" }; // sessão existe, mas não foi possível renovar agora
 
-  if (!isTokenExpired(token)) return token;
+async function resolveAccessToken(): Promise<AccessTokenResult> {
+  const token = await getStoredValue("jwt_access_token");
+  if (!token) return { status: "none" };
+  if (!isTokenExpired(token)) return { status: "ok", token };
 
   // Token expirado — tentar refresh
   const refreshed = await refreshAccessToken();
-  return refreshed;
+  if (refreshed.status === "ok") return { status: "ok", token: refreshed.token };
+  return refreshed.status === "offline" ? { status: "offline" } : { status: "none" };
+}
+
+export async function getAccessToken(): Promise<string | null> {
+  const result = await resolveAccessToken();
+  return result.status === "ok" ? result.token : null;
 }
 
 export async function getStoredTokens(): Promise<AuthTokens | null> {
@@ -77,9 +128,14 @@ export async function getStoredTokens(): Promise<AuthTokens | null> {
   return { accessToken, refreshToken };
 }
 
+/**
+ * Há uma sessão válida neste aparelho. Sem internet, uma sessão que não pôde
+ * ser renovada continua valendo: o app funciona offline e o refresh é tentado
+ * de novo na próxima requisição. Só é false sem sessão ou se o servidor recusar.
+ */
 export async function isAuthenticated(): Promise<boolean> {
-  const token = await getAccessToken();
-  return token !== null;
+  const result = await resolveAccessToken();
+  return result.status !== "none";
 }
 
 export async function hasStoredSession(): Promise<boolean> {
@@ -88,8 +144,26 @@ export async function hasStoredSession(): Promise<boolean> {
   return !!accessToken && !!refreshToken;
 }
 
+interface SessionResponse {
+  accessToken: string;
+  refreshToken: string;
+  user?: { name?: string | null; email?: string | null };
+}
+
+async function storeSession(data: SessionResponse, fallbackEmail: string): Promise<void> {
+  // Antes de liberar a sessão, garante que os dados locais pertencem a esta conta.
+  // Import dinâmico evita ciclo auth → local-data → backup → auth.
+  const { claimLocalDataFor } = await import("@/lib/local-data");
+  await claimLocalDataFor(data.user?.email ?? fallbackEmail);
+
+  await setStoredValue("jwt_access_token", data.accessToken);
+  await setStoredValue("jwt_refresh_token", data.refreshToken);
+  if (data.user?.name) await setStoredValue("user_name", data.user.name);
+  if (data.user?.email) await setStoredValue("user_email", data.user.email);
+}
+
 export async function register(name: string, email: string, password: string): Promise<void> {
-  const response = await fetch(`${BACKEND_URL}/auth/register`, {
+  const response = await fetchWithTimeout(`${BACKEND_URL}/auth/register`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -106,15 +180,11 @@ export async function register(name: string, email: string, password: string): P
     throw new Error(msg);
   }
 
-  const data = await response.json();
-  await setStoredValue("jwt_access_token", data.accessToken);
-  await setStoredValue("jwt_refresh_token", data.refreshToken);
-  if (data.user?.name) await setStoredValue("user_name", data.user.name);
-  if (data.user?.email) await setStoredValue("user_email", data.user.email);
+  await storeSession(await response.json(), email);
 }
 
 export async function login(email: string, password: string): Promise<void> {
-  const response = await fetch(`${BACKEND_URL}/auth/login`, {
+  const response = await fetchWithTimeout(`${BACKEND_URL}/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -131,15 +201,11 @@ export async function login(email: string, password: string): Promise<void> {
     throw new Error(msg);
   }
 
-  const data = await response.json();
-  await setStoredValue("jwt_access_token", data.accessToken);
-  await setStoredValue("jwt_refresh_token", data.refreshToken);
-  if (data.user?.name) await setStoredValue("user_name", data.user.name);
-  if (data.user?.email) await setStoredValue("user_email", data.user.email);
+  await storeSession(await response.json(), email);
 }
 
 export async function forgotPassword(email: string): Promise<{ message: string }> {
-  const response = await fetch(`${BACKEND_URL}/auth/forgot-password`, {
+  const response = await fetchWithTimeout(`${BACKEND_URL}/auth/forgot-password`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -165,7 +231,7 @@ export async function resetPassword(
   password: string,
   confirmPassword: string
 ): Promise<{ message: string }> {
-  const response = await fetch(`${BACKEND_URL}/auth/reset-password`, {
+  const response = await fetchWithTimeout(`${BACKEND_URL}/auth/reset-password`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -208,6 +274,10 @@ export async function getStoredUserName(): Promise<string | null> {
   return getStoredValue("user_name");
 }
 
+export async function getStoredUserEmail(): Promise<string | null> {
+  return getStoredValue("user_email");
+}
+
 export async function setStoredUserName(name: string): Promise<void> {
   await setStoredValue("user_name", name);
 }
@@ -221,42 +291,50 @@ export async function setTermsAccepted(): Promise<void> {
   await setStoredValue("terms_accepted", "true");
 }
 
-let pendingRefresh: Promise<string | null> | null = null;
+type RefreshResult =
+  | { status: "ok"; token: string }
+  | { status: "rejected" } // servidor recusou: sessão encerrada
+  | { status: "offline" }; // falha de rede: sessão mantida
 
-async function refreshAccessToken(): Promise<string | null> {
+let pendingRefresh: Promise<RefreshResult> | null = null;
+
+async function refreshAccessToken(): Promise<RefreshResult> {
   if (pendingRefresh) return pendingRefresh;
 
-  pendingRefresh = (async () => {
+  pendingRefresh = (async (): Promise<RefreshResult> => {
     const refreshToken = await getStoredValue("jwt_refresh_token");
     if (!refreshToken || isTokenExpired(refreshToken, 0)) {
       await logout();
-      return null;
+      return { status: "rejected" };
     }
 
+    let response: Response;
     try {
-      const response = await fetch(`${BACKEND_URL}/auth/refresh`, {
+      response = await fetchWithTimeout(`${BACKEND_URL}/auth/refresh`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ refreshToken }),
       });
-
-      if (!response.ok) {
-        await logout();
-        return null;
-      }
-
-      const data = await response.json();
-      await setStoredValue("jwt_access_token", data.accessToken);
-      if (data.refreshToken) {
-        await setStoredValue("jwt_refresh_token", data.refreshToken);
-      }
-      return data.accessToken;
     } catch (error) {
       console.warn("[Auth] Token refresh failed (network error, keeping session):", error);
-      return null;
+      return { status: "offline" };
     }
+
+    // 5xx é instabilidade do servidor, não sessão inválida: não desloga
+    if (response.status >= 500) return { status: "offline" };
+    if (!response.ok) {
+      await logout();
+      return { status: "rejected" };
+    }
+
+    const data = await response.json();
+    await setStoredValue("jwt_access_token", data.accessToken);
+    if (data.refreshToken) {
+      await setStoredValue("jwt_refresh_token", data.refreshToken);
+    }
+    return { status: "ok", token: data.accessToken };
   })();
 
   try {
@@ -268,28 +346,29 @@ async function refreshAccessToken(): Promise<string | null> {
 
 // ── Authenticated fetch ────────────────────────────────────────────────
 
+const SESSION_EXPIRED_MESSAGE = "Sessão expirada. Faça login novamente.";
+const OFFLINE_MESSAGE = "Sem conexão com a internet. Verifique sua conexão e tente novamente.";
+
 export async function authFetch(
   url: string,
-  options: RequestInit = {}
+  options: RequestOptions = {}
 ): Promise<Response> {
-  const token = await getAccessToken();
-  if (!token) {
-    throw new Error("Sessão expirada. Faça login novamente.");
-  }
+  const access = await resolveAccessToken();
+  if (access.status === "offline") throw new NetworkError(OFFLINE_MESSAGE);
+  if (access.status === "none") throw new Error(SESSION_EXPIRED_MESSAGE);
 
   const headers = new Headers(options.headers);
-  headers.set("Authorization", `Bearer ${token}`);
+  headers.set("Authorization", `Bearer ${access.token}`);
 
-  const response = await fetch(url, { ...options, headers });
+  const response = await fetchWithTimeout(url, { ...options, headers });
 
   // Se 401, tentar refresh uma vez
   if (response.status === 401) {
-    const newToken = await refreshAccessToken();
-    if (!newToken) {
-      throw new Error("Sessão expirada. Faça login novamente.");
-    }
-    headers.set("Authorization", `Bearer ${newToken}`);
-    return fetch(url, { ...options, headers });
+    const refreshed = await refreshAccessToken();
+    if (refreshed.status === "offline") throw new NetworkError(OFFLINE_MESSAGE);
+    if (refreshed.status === "rejected") throw new Error(SESSION_EXPIRED_MESSAGE);
+    headers.set("Authorization", `Bearer ${refreshed.token}`);
+    return fetchWithTimeout(url, { ...options, headers });
   }
 
   return response;

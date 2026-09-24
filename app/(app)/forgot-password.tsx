@@ -1,10 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { forgotPassword, resetPassword } from "@/lib/auth";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
     Pressable,
     ScrollView,
@@ -19,8 +19,7 @@ type Step = "email" | "reset";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [step, setStep] = useState<Step>("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");

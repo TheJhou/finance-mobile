@@ -154,8 +154,9 @@ export function useNotificationListener() {
           aiCategoryName = catMatch.name;
         }
       }
-      if (!aiCategoryId && typeof draft.categoryName === "string" && draft.categoryName.trim().length > 0) {
-        const catMatch = categories.find((c) => c.name.toLowerCase() === draft.categoryName!.toLowerCase());
+      const draftCategoryName = typeof draft.categoryName === "string" ? draft.categoryName.trim() : "";
+      if (!aiCategoryId && draftCategoryName.length > 0) {
+        const catMatch = categories.find((c) => c.name.toLowerCase() === draftCategoryName.toLowerCase());
         if (catMatch) {
           aiCategoryId = catMatch.id;
           aiCategoryName = catMatch.name;

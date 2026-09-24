@@ -1,15 +1,15 @@
 import { HorizontalScrollFade, ScrollFade } from "@/components/ui/scroll-fade";
-import { getStoredUserName, isAuthenticated } from "@/lib/auth";
+import { isAuthenticated } from "@/lib/auth";
 import type { AiForecast, GoalData, ScoreData, StreakData } from "@/lib/backend";
-import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getStreak } from "@/lib/backend";
+import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getStreak } from "@/lib/backend";
 import { calculateHealthScore } from "@/lib/health-score";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
-import { getDashboard, getFutureBills, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { getCurrentPeriod, getDashboard, getFutureBills, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { processRecurringDue } from "@/lib/repositories/recurring";
 import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
-import { useTheme } from "@/lib/theme-context";
+import { useThemedStyles } from "@/lib/theme-context";
 import { getTokenLimitStatus, resetTokenLimitStatus } from "@/lib/token-limit";
 import type { DashboardData, HealthScoreResult } from "@/lib/types";
 import { formatCurrency, toDateInputValue } from "@/lib/utils";
@@ -20,7 +20,7 @@ import { CreditCardIcon } from "@/components/icons/CreditCardIcon";
 import { HourglassDoneIcon } from "@/components/icons/HourglassDoneIcon";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -73,10 +73,8 @@ function CircularProgress({
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { isDark } = useTheme();
-  const styles = useMemo(() => createStyles(), [isDark]);
+  const styles = useThemedStyles(createStyles);
   const [data, setData] = useState<DashboardData | null>(null);
-  const [userName, setUserName] = useState<string | null>(null);
   const [goals, setGoals] = useState<GoalData[]>([]);
   const [streak, setStreak] = useState<StreakData | null>(null);
   const [score, setScore] = useState<ScoreData | null>(null);
@@ -90,9 +88,18 @@ export default function DashboardScreen() {
   const [notificationsScheduled, setNotificationsScheduled] = useState(false);
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  // Período financeiro (respeita o dia de início do mês), não o mês do calendário
+  const [selectedYear, setSelectedYear] = useState(() => getCurrentPeriod().year);
+  const [selectedMonth, setSelectedMonth] = useState(() => getCurrentPeriod().month);
   const [monthStartDay, setMonthStartDay] = useState(1);
+  const userNavigatedRef = useRef(false);
+
+  const selectPeriod = useCallback((year: number, month: number, byUser: boolean) => {
+    if (byUser) userNavigatedRef.current = true;
+    const normalized = new Date(year, month, 1);
+    setSelectedYear(normalized.getFullYear());
+    setSelectedMonth(normalized.getMonth());
+  }, []);
 
   const fetchingRef = useRef(false);
   const fetchIdRef = useRef(0);
@@ -147,15 +154,20 @@ export default function DashboardScreen() {
     lastFetchRef.current = Date.now();
 
     try {
-      // Load cached name immediately
-      const cachedName = await getStoredUserName();
-      if (fetchIdRef.current !== fetchId) return;
-      if (cachedName) setUserName(cachedName);
-
       // Load month start day setting
       const startDay = await loadMonthStartDay();
       if (fetchIdRef.current !== fetchId) return;
       setMonthStartDay(startDay);
+
+      // O estado inicial usou o dia de início em cache; se o configurado muda o
+      // período atual, corrige (a mudança de mês dispara um novo fetch).
+      if (!userNavigatedRef.current) {
+        const current = getCurrentPeriod(startDay);
+        if (current.year !== selectedYear || current.month !== selectedMonth) {
+          selectPeriod(current.year, current.month, false);
+          return;
+        }
+      }
 
       // Process due recurring transactions so next_due_date is current before fetching bills
       await processRecurringDue();
@@ -182,14 +194,12 @@ export default function DashboardScreen() {
       setTokenLimitStatus(currentTokenStatus);
 
       if (!currentTokenStatus.exceeded) {
-        const [meRes, goalsRes, streakRes, scoreRes] = await Promise.allSettled([
-          getMe(),
+        const [goalsRes, streakRes, scoreRes] = await Promise.allSettled([
           getGoals(),
           getStreak(),
           getDashboardScore(),
         ]);
         if (fetchIdRef.current !== fetchId) return;
-        if (meRes.status === "fulfilled" && meRes.value.name) setUserName(meRes.value.name);
         if (goalsRes.status === "fulfilled") setGoals(goalsRes.value);
         if (streakRes.status === "fulfilled") setStreak(streakRes.value);
         if (scoreRes.status === "fulfilled") setScore(scoreRes.value);
@@ -219,7 +229,7 @@ export default function DashboardScreen() {
         setRefreshing(false);
       }
     }
-  }, [refreshing, notificationsScheduled, selectedYear, selectedMonth, loadAiForecast]);
+  }, [refreshing, notificationsScheduled, selectedYear, selectedMonth, loadAiForecast, selectPeriod]);
 
   useFocusEffect(
     useCallback(() => {
@@ -253,6 +263,7 @@ export default function DashboardScreen() {
   const pieColors = [colors.primary, "#f472b6", colors.info, colors.warning, colors.success, "#fb923c"];
 
   // Use selected month for comparison, not always the real current month
+  const currentPeriod = getCurrentPeriod(monthStartDay);
   const selectedMonthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
   const prevMonthDate = new Date(selectedYear, selectedMonth - 1, 1);
   const prevMonthStr = toDateInputValue(prevMonthDate).slice(0, 7);
@@ -308,11 +319,7 @@ export default function DashboardScreen() {
         {/* ── Month selector ── */}
         <View style={styles.monthSelector}>
           <TouchableOpacity
-            onPress={() => {
-              const prev = new Date(selectedYear, selectedMonth - 1, 1);
-              setSelectedMonth(prev.getMonth());
-              setSelectedYear(prev.getFullYear());
-            }}
+            onPress={() => selectPeriod(selectedYear, selectedMonth - 1, true)}
             hitSlop={8}
           >
             <Ionicons name="chevron-back" size={22} color={colors.primary} />
@@ -321,21 +328,13 @@ export default function DashboardScreen() {
             {MONTH_NAMES[selectedMonth]} {selectedYear}
           </Text>
           <TouchableOpacity
-            onPress={() => {
-              const next = new Date(selectedYear, selectedMonth + 1, 1);
-              setSelectedMonth(next.getMonth());
-              setSelectedYear(next.getFullYear());
-            }}
+            onPress={() => selectPeriod(selectedYear, selectedMonth + 1, true)}
             hitSlop={8}
           >
             <Ionicons name="chevron-forward" size={22} color={colors.primary} />
           </TouchableOpacity>
-          {!(selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth()) && (
-            <TouchableOpacity style={styles.todayBtn} onPress={() => {
-              const now = new Date();
-              setSelectedMonth(now.getMonth());
-              setSelectedYear(now.getFullYear());
-            }}>
+          {!(selectedYear === currentPeriod.year && selectedMonth === currentPeriod.month) && (
+            <TouchableOpacity style={styles.todayBtn} onPress={() => selectPeriod(currentPeriod.year, currentPeriod.month, false)}>
               <Text style={styles.todayBtnText}>Hoje</Text>
             </TouchableOpacity>
           )}

@@ -1,6 +1,6 @@
 import { applyTheme, type ThemeMode } from "@/lib/theme";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useColorScheme } from "react-native";
 
 const THEME_KEY = "app_theme_mode";
@@ -62,4 +62,15 @@ export function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
   return ctx;
+}
+
+/**
+ * Recria os estilos quando o tema muda.
+ * `colors` (lib/theme) é um objeto mutado por applyTheme durante o render, então
+ * a fábrica lê as cores direto dele; isDark é só o sinal de que elas mudaram.
+ */
+export function useThemedStyles<T>(factory: () => T): T {
+  const { isDark } = useTheme();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  return useMemo(factory, [isDark]);
 }
