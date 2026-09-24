@@ -164,7 +164,7 @@ export default function DataPrivacyScreen() {
         }
       >
         <Text style={styles.deleteWarning}>
-          Esta ação é irreversível. Sua conta e todos os dados deste aparelho serão excluídos permanentemente.
+          Esta ação é irreversível. Sua conta, seus backups na nuvem e todos os dados deste aparelho serão excluídos permanentemente.
         </Text>
         <Input
           label="Confirme sua senha"
