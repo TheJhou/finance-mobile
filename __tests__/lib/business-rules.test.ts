@@ -1,7 +1,7 @@
 import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
 import { getDb, resetDbCache } from "@/lib/db";
 import { getDashboard } from "@/lib/repositories/dashboard";
-import { processRecurringDue } from "@/lib/repositories/recurring";
+import { createRecurring, processRecurringDue } from "@/lib/repositories/recurring";
 import { parseNotification } from "@/lib/notifications/parsers";
 import type { NotificationInput } from "@/lib/notifications/parsers";
 import { formatDateLocal } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { formatDateLocal } from "@/lib/utils";
 async function seedCategory(id: string, name: string) {
   const db = await getDb();
   await db.runAsync(
-    "INSERT INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
+    "INSERT OR REPLACE INTO categories (id, name, color, icon) VALUES (?, ?, ?, ?)",
     [id, name, "#6366f1", "tag"]
   );
 }
@@ -142,72 +142,54 @@ describe("Regra de Negócio: Recorrências", () => {
     resetMockDatabase();
   });
 
-  it("processRecurringDue cria transação quando vencimento chega", async () => {
+  it("createRecurring gera contas PENDING vinculadas e processRecurringDue não as quita", async () => {
     await seedCategory("cat-1", "Internet");
     const today = formatDateLocal(new Date());
 
-    await seedRecurring({
-      id: "rec-1",
+    await createRecurring({
       description: "Internet",
       amount: 100,
+      type: "EXPENSE",
+      frequency: "MONTHLY",
+      startDate: today,
       nextDueDate: today,
-      startDate: "2025-01-01",
-      categoryId: "cat-1",
-    });
-
-    const created = await processRecurringDue();
-    expect(created).toBeGreaterThanOrEqual(1);
-
-    const db = await getDb();
-    const rows = await db.getAllAsync("SELECT * FROM transactions WHERE description = 'Internet'");
-    expect(rows.length).toBeGreaterThanOrEqual(1);
-    expect((rows[0] as any).amount).toBe(100);
-    expect((rows[0] as any).status).toBe("PAID");
-  });
-
-  it("processRecurringDue não cria transação se data futura", async () => {
-    await seedCategory("cat-1", "Internet");
-    const future = new Date();
-    future.setDate(future.getDate() + 60);
-
-    await seedRecurring({
-      id: "rec-1",
-      description: "Internet",
-      amount: 100,
-      nextDueDate: formatDateLocal(future),
-      startDate: "2025-01-01",
       categoryId: "cat-1",
     });
 
     const created = await processRecurringDue();
     expect(created).toBe(0);
+
+    const db = await getDb();
+    const rows = await db.getAllAsync<{ amount: number; status: string; date: string }>(
+      "SELECT amount, status, date FROM transactions WHERE description = 'Internet' ORDER BY date"
+    );
+    expect(rows.length).toBeGreaterThanOrEqual(1);
+    expect(rows[0].date).toBe(today);
+    expect(rows[0].amount).toBe(100);
+    expect(rows.every((r) => r.status === "PENDING")).toBe(true);
   });
 
-  it("processRecurringDue desativa após atingir end_date", async () => {
+  it("createRecurring não gera parcelas depois de end_date", async () => {
     await seedCategory("cat-1", "Internet");
-    const today = formatDateLocal(new Date());
+    const start = new Date(2026, 0, 10);
+    const end = new Date(2026, 2, 10);
 
-    await seedRecurring({
-      id: "rec-1",
+    await createRecurring({
       description: "Internet",
       amount: 100,
-      nextDueDate: today,
-      startDate: "2025-01-01",
+      type: "EXPENSE",
+      frequency: "MONTHLY",
+      startDate: formatDateLocal(start),
+      nextDueDate: formatDateLocal(start),
+      endDate: formatDateLocal(end),
       categoryId: "cat-1",
     });
 
-    // Set end_date to today so the next advance will exceed it
     const db = await getDb();
-    await db.runAsync(
-      "UPDATE recurring_transactions SET end_date = ? WHERE id = ?",
-      [today, "rec-1"]
+    const rows = await db.getAllAsync<{ date: string }>(
+      "SELECT date FROM transactions WHERE description = 'Internet' ORDER BY date"
     );
-
-    const created = await processRecurringDue();
-    expect(created).toBe(1); // creates the transaction for the current period
-
-    const rows = await db.getAllAsync("SELECT * FROM recurring_transactions WHERE id = ?", ["rec-1"]);
-    expect((rows[0] as any).is_active).toBe(0); // then deactivates
+    expect(rows.map((r) => r.date)).toEqual(["2026-01-10", "2026-02-10", "2026-03-10"]);
   });
 });
 

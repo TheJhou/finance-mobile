@@ -1,4 +1,4 @@
-import { resetMockDatabase } from "@/__mocks__/expo-sqlite";
+import * as SecureStore from "expo-secure-store";
 import {
   authFetch,
   getAccessToken,
@@ -9,7 +9,6 @@ import {
   logout,
   register,
 } from "@/lib/auth";
-import { getDb } from "@/lib/db";
 
 // Helper to create a valid JWT with a future exp
 function createMockToken(expInSeconds: number): string {
@@ -27,17 +26,9 @@ function createExpiredToken(): string {
 describe("auth", () => {
   let originalFetch: typeof fetch;
 
-  beforeEach(async () => {
-    resetMockDatabase();
+  beforeEach(() => {
     originalFetch = global.fetch;
     global.fetch = jest.fn();
-    const db = await getDb();
-    await db.execAsync(`
-      CREATE TABLE IF NOT EXISTS settings (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      );
-    `);
   });
 
   afterEach(() => {
@@ -48,10 +39,7 @@ describe("auth", () => {
   describe("decodePayload / isTokenExpired", () => {
     it("returns valid token when not expired", async () => {
       const token = createMockToken(3600);
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", token]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", token);
 
       const result = await getAccessToken();
       expect(result).toBe(token);
@@ -61,14 +49,8 @@ describe("auth", () => {
       const expired = createExpiredToken();
       const fresh = createMockToken(3600);
 
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", expired]
-      );
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_refresh_token", createMockToken(3600)]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", expired);
+      await SecureStore.setItemAsync("jwt_refresh_token", createMockToken(3600));
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         ok: true,
@@ -82,14 +64,8 @@ describe("auth", () => {
 
     it("returns null when both tokens are expired/missing", async () => {
       const expired = createExpiredToken();
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", expired]
-      );
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_refresh_token", expired]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", expired);
+      await SecureStore.setItemAsync("jwt_refresh_token", expired);
 
       const result = await getAccessToken();
       expect(result).toBeNull();
@@ -105,14 +81,8 @@ describe("auth", () => {
     it("returns tokens when both exist", async () => {
       const access = createMockToken(3600);
       const refresh = createMockToken(7200);
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", access]
-      );
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_refresh_token", refresh]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", access);
+      await SecureStore.setItemAsync("jwt_refresh_token", refresh);
 
       const result = await getStoredTokens();
       expect(result).toEqual({ accessToken: access, refreshToken: refresh });
@@ -125,10 +95,7 @@ describe("auth", () => {
     });
 
     it("returns true with valid token", async () => {
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", createMockToken(3600)]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", createMockToken(3600));
       expect(await isAuthenticated()).toBe(true);
     });
   });
@@ -209,18 +176,9 @@ describe("auth", () => {
 
   describe("logout", () => {
     it("removes all auth data", async () => {
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", createMockToken(3600)]
-      );
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_refresh_token", createMockToken(7200)]
-      );
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["user_name", "João"]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", createMockToken(3600));
+      await SecureStore.setItemAsync("jwt_refresh_token", createMockToken(7200));
+      await SecureStore.setItemAsync("user_name", "João");
 
       await logout();
 
@@ -232,10 +190,7 @@ describe("auth", () => {
   describe("authFetch", () => {
     it("adds Authorization header", async () => {
       const token = createMockToken(3600);
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", token]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", token);
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         status: 200,
@@ -249,18 +204,13 @@ describe("auth", () => {
     });
 
     it("retries with refreshed token on 401", async () => {
-      const expired = createExpiredToken();
+      // Token ainda válido localmente, mas rejeitado pelo servidor (ex.: revogado)
+      const rejected = createMockToken(3600);
       const fresh = createMockToken(3600);
       const refresh = createMockToken(7200);
 
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", expired]
-      );
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_refresh_token", refresh]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", rejected);
+      await SecureStore.setItemAsync("jwt_refresh_token", refresh);
 
       (global.fetch as jest.Mock)
         .mockResolvedValueOnce({ status: 401, ok: false })
@@ -285,14 +235,8 @@ describe("auth", () => {
       const expired = createExpiredToken();
       const refresh = createExpiredToken();
 
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", expired]
-      );
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_refresh_token", refresh]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", expired);
+      await SecureStore.setItemAsync("jwt_refresh_token", refresh);
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         status: 401,
@@ -304,10 +248,7 @@ describe("auth", () => {
 
     it("does not retry on non-401 errors", async () => {
       const token = createMockToken(3600);
-      await (await getDb()).runAsync(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)",
-        ["jwt_access_token", token]
-      );
+      await SecureStore.setItemAsync("jwt_access_token", token);
 
       (global.fetch as jest.Mock).mockResolvedValueOnce({
         status: 500,
