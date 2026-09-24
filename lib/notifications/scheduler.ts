@@ -1,3 +1,4 @@
+import { withoutAutoLock } from "@/lib/biometric";
 import { getGoals } from "@/lib/backend";
 import { getUpcomingBills } from "@/lib/repositories/dashboard";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -34,7 +35,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   let finalStatus = existingStatus;
 
   if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
+    const { status } = await withoutAutoLock(() => Notifications.requestPermissionsAsync());
     finalStatus = status;
   }
 

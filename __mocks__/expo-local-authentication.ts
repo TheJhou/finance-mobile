@@ -9,4 +9,5 @@ export enum AuthenticationType {
 export const hasHardwareAsync = jest.fn(async () => true);
 export const isEnrolledAsync = jest.fn(async () => true);
 export const supportedAuthenticationTypesAsync = jest.fn(async () => [AuthenticationType.FINGERPRINT]);
-export const authenticateAsync = jest.fn(async () => ({ success: true }));
+export const authenticateAsync = jest.fn(async (): Promise<{ success: boolean; error?: string }> => ({ success: true }));
+export const cancelAuthenticate = jest.fn(async () => {});

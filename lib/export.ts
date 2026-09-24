@@ -1,3 +1,4 @@
+import { withoutAutoLock } from "@/lib/biometric";
 import type { DreData } from "@/lib/repositories/dre";
 import { File, Paths } from "expo-file-system";
 import * as Print from "expo-print";
@@ -60,7 +61,7 @@ export async function exportDreCSV(data: DreData): Promise<void> {
   file.write(combined);
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, { mimeType: "text/csv", dialogTitle: `Exportar DRE — ${data.period.label}` });
+    await withoutAutoLock(() => Sharing.shareAsync(file.uri, { mimeType: "text/csv", dialogTitle: `Exportar DRE — ${data.period.label}` }));
   }
 }
 
@@ -128,10 +129,10 @@ export async function exportDreXLSX(data: DreData): Promise<void> {
   file.write(wbout, { encoding: "base64" });
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(file.uri, {
+    await withoutAutoLock(() => Sharing.shareAsync(file.uri, {
       mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       dialogTitle: `Exportar DRE — ${data.period.label}`,
-    });
+    }));
   }
 }
 
@@ -261,6 +262,6 @@ export async function exportDrePDF(data: DreData): Promise<void> {
   new File(pdfUri).move(dest);
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(dest.uri, { mimeType: "application/pdf", dialogTitle: `Exportar DRE — ${data.period.label}` });
+    await withoutAutoLock(() => Sharing.shareAsync(dest.uri, { mimeType: "application/pdf", dialogTitle: `Exportar DRE — ${data.period.label}` }));
   }
 }

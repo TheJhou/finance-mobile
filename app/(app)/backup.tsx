@@ -1,3 +1,4 @@
+import { withoutAutoLock } from "@/lib/biometric";
 import { useAppDialog } from "@/hooks/use-app-dialog";
 import { BackupMetadata, BackupSystem, CloudBackupEntry } from "@/lib/backup";
 import { BackupScheduler } from "@/lib/backup-scheduler";
@@ -295,10 +296,10 @@ export default function BackupScreen() {
 
   const handleImportBackup = async () => {
     try {
-      const result = await DocumentPicker.getDocumentAsync({
+      const result = await withoutAutoLock(() => DocumentPicker.getDocumentAsync({
         type: ["application/json"],
         copyToCacheDirectory: true,
-      });
+      }));
 
       if (result.canceled || !result.assets[0]) return;
 
@@ -326,10 +327,10 @@ export default function BackupScreen() {
       const filePath = BackupSystem.getBackupFilePathFromMetadata(backup);
       
       if (new File(filePath).exists) {
-        await Sharing.shareAsync(filePath, {
+        await withoutAutoLock(() => Sharing.shareAsync(filePath, {
           mimeType: "application/json",
           dialogTitle: "Compartilhar Backup",
-        });
+        }));
       } else {
         alert("Erro", "Arquivo de backup não encontrado", { variant: "danger" });
       }

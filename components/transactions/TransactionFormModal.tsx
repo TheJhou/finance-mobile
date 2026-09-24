@@ -1,3 +1,4 @@
+import { withoutAutoLock } from "@/lib/biometric";
 import { DatePicker } from "@/components/date-picker";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -158,12 +159,12 @@ export function TransactionFormModal({
         setInfoDialog({ title: "Login necessário", message: "Faça login na aba Importar para usar o escaneamento por IA.", variant: "warning" });
         return;
       }
-      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      const permission = await withoutAutoLock(() => ImagePicker.requestCameraPermissionsAsync());
       if (!permission.granted) {
         setInfoDialog({ title: "Permissão", message: "Precisamos de acesso à câmera para escanear recibos.", variant: "warning" });
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ base64: true, quality: 0.7, mediaTypes: ["images"] });
+      const result = await withoutAutoLock(() => ImagePicker.launchCameraAsync({ base64: true, quality: 0.7, mediaTypes: ["images"] }));
       if (result.canceled || !result.assets?.[0]?.base64) return;
 
       setScanning(true);
