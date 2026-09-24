@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { useAppDialog } from "@/hooks/use-app-dialog";
 import {
     changePassword,
+    confirmEmailChange,
+    requestEmailChange,
     updateProfile,
 } from "@/lib/account-service";
 import { getStoredUserName, setStoredUserName } from "@/lib/auth";
@@ -53,6 +55,10 @@ export default function AccountScreen() {
   const [modalLoading, setModalLoading] = useState(false);
   const [editName, setEditName] = useState("");
   const [editEmail, setEditEmail] = useState("");
+  const [editEmailPassword, setEditEmailPassword] = useState("");
+  const [emailStep, setEmailStep] = useState<"form" | "code">("form");
+  const [emailCode, setEmailCode] = useState("");
+  const [emailChangeMessage, setEmailChangeMessage] = useState("");
   const [editCurrentPassword, setEditCurrentPassword] = useState("");
   const [editNewPassword, setEditNewPassword] = useState("");
   const [editConfirmPassword, setEditConfirmPassword] = useState("");
@@ -159,7 +165,12 @@ export default function AccountScreen() {
 
   const openModal = (type: ModalType) => {
     if (type === "name") setEditName(user?.name ?? "");
-    if (type === "email") setEditEmail(user?.email ?? "");
+    if (type === "email") {
+      setEditEmail(user?.email ?? "");
+      setEditEmailPassword("");
+      setEmailCode("");
+      setEmailStep("form");
+    }
     if (type === "password") {
       setEditCurrentPassword("");
       setEditNewPassword("");
@@ -194,31 +205,51 @@ export default function AccountScreen() {
     }
   };
 
+  // Troca de e-mail em duas etapas: senha + novo e-mail → código enviado ao novo endereço
   const handleSaveEmail = async () => {
-    if (!editEmail.trim() || !editEmail.includes("@")) {
+    const newEmail = editEmail.trim().toLowerCase();
+    if (!newEmail || !newEmail.includes("@")) {
       alert("Erro", "Digite um e-mail válido", { variant: "danger" });
       return;
     }
-    confirm(
-      "Confirmar alteração",
-      "Você está prestes a alterar seu e-mail. Um link de confirmação será enviado.",
-      {
-        confirmText: "Confirmar",
-        onConfirm: async () => {
-          try {
-            setModalLoading(true);
-            await updateProfile({ email: editEmail.trim().toLowerCase() });
-            setUser((prev) => prev ? { ...prev, email: editEmail.trim().toLowerCase() } : null);
-            closeModal();
-            alert("Sucesso", "E-mail atualizado. Verifique sua caixa de entrada para confirmar.", { variant: "success" });
-          } catch (err) {
-            alert("Erro", err instanceof Error ? err.message : "Erro ao atualizar e-mail", { variant: "danger" });
-          } finally {
-            setModalLoading(false);
-          }
-        },
-      }
-    );
+    if (newEmail === user?.email) {
+      alert("Erro", "Esse já é o seu e-mail atual", { variant: "danger" });
+      return;
+    }
+    if (!editEmailPassword) {
+      alert("Erro", "Digite sua senha atual", { variant: "danger" });
+      return;
+    }
+    try {
+      setModalLoading(true);
+      const { message } = await requestEmailChange(newEmail, editEmailPassword);
+      setEmailChangeMessage(message);
+      setEditEmailPassword("");
+      setEmailCode("");
+      setEmailStep("code");
+    } catch (err) {
+      alert("Erro", err instanceof Error ? err.message : "Erro ao solicitar troca de e-mail", { variant: "danger" });
+    } finally {
+      setModalLoading(false);
+    }
+  };
+
+  const handleConfirmEmail = async () => {
+    if (!/^\d{6}$/.test(emailCode.trim())) {
+      alert("Erro", "Digite o código de 6 dígitos", { variant: "danger" });
+      return;
+    }
+    try {
+      setModalLoading(true);
+      const updated = await confirmEmailChange(emailCode.trim());
+      setUser((prev) => prev ? { ...prev, email: updated.email } : null);
+      closeModal();
+      alert("Sucesso", "E-mail alterado com sucesso", { variant: "success" });
+    } catch (err) {
+      alert("Erro", err instanceof Error ? err.message : "Erro ao confirmar e-mail", { variant: "danger" });
+    } finally {
+      setModalLoading(false);
+    }
   };
 
   const handleSavePassword = async () => {
@@ -226,8 +257,9 @@ export default function AccountScreen() {
       alert("Erro", "Preencha todos os campos", { variant: "danger" });
       return;
     }
-    if (editNewPassword.length < 6) {
-      alert("Erro", "A nova senha deve ter no mínimo 6 caracteres", { variant: "danger" });
+    // Mesma regra do backend
+    if (editNewPassword.length < 8 || !/[a-zA-Z]/.test(editNewPassword) || !/\d/.test(editNewPassword)) {
+      alert("Erro", "A nova senha deve ter no mínimo 8 caracteres, com pelo menos 1 letra e 1 número", { variant: "danger" });
       return;
     }
     if (editNewPassword !== editConfirmPassword) {
@@ -441,19 +473,40 @@ export default function AccountScreen() {
 
       <EditModal
         visible={activeModal === "email"}
-        title="Alterar e-mail"
+        title={emailStep === "form" ? "Alterar e-mail" : "Confirmar novo e-mail"}
         onClose={closeModal}
         footer={
           <>
-            <Button title="Salvar" onPress={handleSaveEmail} loading={modalLoading} />
+            {emailStep === "form" ? (
+              <Button title="Enviar código" onPress={handleSaveEmail} loading={modalLoading} />
+            ) : (
+              <Button title="Confirmar" onPress={handleConfirmEmail} loading={modalLoading} />
+            )}
             <Button title="Cancelar" onPress={closeModal} variant="ghost" />
           </>
         }
       >
-        <Input label="Novo e-mail" value={editEmail} onChangeText={setEditEmail} placeholder="seu@email.com" keyboardType="email-address" autoCapitalize="none" />
-        <Text style={styles.modalHint}>
-          Um link de confirmação será enviado para o novo e-mail. Sua conta só será atualizada após a confirmação.
-        </Text>
+        {emailStep === "form" ? (
+          <>
+            <Input label="Novo e-mail" value={editEmail} onChangeText={setEditEmail} placeholder="seu@email.com" keyboardType="email-address" autoCapitalize="none" />
+            <Input label="Senha atual" value={editEmailPassword} onChangeText={setEditEmailPassword} secureTextEntry autoCapitalize="none" placeholder="••••••••" />
+            <Text style={styles.modalHint}>
+              Enviaremos um código de confirmação para o novo e-mail. Sua conta só muda depois que você digitar o código.
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.modalHint}>{emailChangeMessage}</Text>
+            <Input
+              label="Código de 6 dígitos"
+              value={emailCode}
+              onChangeText={(text) => setEmailCode(text.replace(/\D/g, "").slice(0, 6))}
+              keyboardType="number-pad"
+              placeholder="000000"
+              autoComplete="one-time-code"
+            />
+          </>
+        )}
       </EditModal>
 
       <EditModal

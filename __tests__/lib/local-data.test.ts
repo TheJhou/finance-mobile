@@ -6,6 +6,7 @@ import {
   backupThenSignOut,
   claimLocalDataFor,
   clearLocalUserData,
+  signOutAndClearLocalData,
 } from "@/lib/local-data";
 import { createRecurring } from "@/lib/repositories/recurring";
 import { createTransaction } from "@/lib/repositories/transactions";
@@ -46,10 +47,10 @@ function createToken(expInSeconds: number): string {
 const ACCESS_TOKEN = createToken(3600);
 const REFRESH_TOKEN = createToken(7200);
 
-function mockLoginResponse(email: string) {
+function mockLoginResponse(email: string, id = `id-${email}`) {
   (global.fetch as jest.Mock).mockResolvedValueOnce({
     ok: true,
-    json: async () => ({ accessToken: ACCESS_TOKEN, refreshToken: REFRESH_TOKEN, user: { name: "X", email } }),
+    json: async () => ({ accessToken: ACCESS_TOKEN, refreshToken: REFRESH_TOKEN, user: { id, name: "X", email } }),
   });
 }
 
@@ -111,29 +112,50 @@ describe("clearLocalUserData", () => {
 });
 
 describe("claimLocalDataFor", () => {
-  it("mantém os dados quando é a mesma conta (e-mail sem diferenciar maiúsculas)", async () => {
-    await claimLocalDataFor("ana@test.com");
+  const ana = { id: "user-ana", email: "ana@test.com" };
+
+  it("mantém os dados quando é a mesma conta", async () => {
+    await claimLocalDataFor(ana);
     await seedUserData();
 
-    await claimLocalDataFor("  ANA@test.com ");
+    await claimLocalDataFor(ana);
+
+    expect(await countRows("transactions")).toBeGreaterThan(0);
+  });
+
+  it("mantém os dados quando a mesma conta troca de e-mail", async () => {
+    await claimLocalDataFor(ana);
+    await seedUserData();
+
+    await claimLocalDataFor({ id: "user-ana", email: "ana.nova@test.com" });
 
     expect(await countRows("transactions")).toBeGreaterThan(0);
   });
 
   it("apaga os dados quando outra conta entra no aparelho", async () => {
-    await claimLocalDataFor("ana@test.com");
+    await claimLocalDataFor(ana);
     await seedUserData();
 
-    await claimLocalDataFor("bruno@test.com");
+    await claimLocalDataFor({ id: "user-bruno", email: "bruno@test.com" });
 
     expect(await countRows("transactions")).toBe(0);
-    expect(await SecureStore.getItemAsync("local_data_owner")).toBe("bruno@test.com");
+    expect(await SecureStore.getItemAsync("local_data_owner")).toBe("user-bruno");
+  });
+
+  it("reconhece o dono gravado como e-mail pela versão anterior e migra para o id", async () => {
+    await SecureStore.setItemAsync("local_data_owner", "ana@test.com");
+    await seedUserData();
+
+    await claimLocalDataFor({ id: "user-ana", email: "  ANA@test.com " });
+
+    expect(await countRows("transactions")).toBeGreaterThan(0);
+    expect(await SecureStore.getItemAsync("local_data_owner")).toBe("user-ana");
   });
 
   it("não apaga nada no primeiro login do aparelho", async () => {
     await seedUserData();
 
-    await claimLocalDataFor("ana@test.com");
+    await claimLocalDataFor(ana);
 
     expect(await countRows("transactions")).toBeGreaterThan(0);
   });
@@ -154,14 +176,20 @@ describe("login", () => {
 
 describe("adoptLocalDataOwnerIfMissing", () => {
   it("adota o usuário logado em instalações antigas sem dono registrado", async () => {
-    await adoptLocalDataOwnerIfMissing("Ana@Test.com");
+    await adoptLocalDataOwnerIfMissing({ id: null, email: "Ana@Test.com" });
     expect(await SecureStore.getItemAsync("local_data_owner")).toBe("ana@test.com");
   });
 
-  it("não sobrescreve um dono já registrado", async () => {
-    await claimLocalDataFor("ana@test.com");
-    await adoptLocalDataOwnerIfMissing("bruno@test.com");
-    expect(await SecureStore.getItemAsync("local_data_owner")).toBe("ana@test.com");
+  it("troca o dono gravado como e-mail pelo id quando ele está disponível", async () => {
+    await SecureStore.setItemAsync("local_data_owner", "ana@test.com");
+    await adoptLocalDataOwnerIfMissing({ id: "user-ana", email: "ana@test.com" });
+    expect(await SecureStore.getItemAsync("local_data_owner")).toBe("user-ana");
+  });
+
+  it("não sobrescreve um dono de outra conta", async () => {
+    await claimLocalDataFor({ id: "user-ana", email: "ana@test.com" });
+    await adoptLocalDataOwnerIfMissing({ id: "user-bruno", email: "bruno@test.com" });
+    expect(await SecureStore.getItemAsync("local_data_owner")).toBe("user-ana");
   });
 });
 
@@ -176,5 +204,33 @@ describe("backupThenSignOut", () => {
 
     expect(await countRows("transactions")).toBeGreaterThan(0);
     expect(await SecureStore.getItemAsync("jwt_refresh_token")).toBe(REFRESH_TOKEN);
+  });
+});
+
+describe("signOutAndClearLocalData", () => {
+  it("encerra a sessão no servidor antes de apagar os tokens", async () => {
+    mockLoginResponse("ana@test.com");
+    await login("ana@test.com", "senha1234");
+    (global.fetch as jest.Mock).mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({}) });
+
+    await signOutAndClearLocalData();
+
+    const [url, init] = (global.fetch as jest.Mock).mock.calls.at(-1);
+    expect(url).toMatch(/\/auth\/logout$/);
+    expect(init.method).toBe("POST");
+    expect(new Headers(init.headers).get("Authorization")).toBe(`Bearer ${ACCESS_TOKEN}`);
+    expect(await SecureStore.getItemAsync("jwt_refresh_token")).toBeNull();
+  });
+
+  it("sai normalmente mesmo sem internet", async () => {
+    mockLoginResponse("ana@test.com");
+    await login("ana@test.com", "senha1234");
+    await seedUserData();
+    (global.fetch as jest.Mock).mockRejectedValueOnce(new TypeError("Network request failed"));
+
+    await signOutAndClearLocalData();
+
+    expect(await SecureStore.getItemAsync("jwt_refresh_token")).toBeNull();
+    expect(await countRows("transactions")).toBe(0);
   });
 });

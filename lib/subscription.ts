@@ -21,15 +21,18 @@ async function handleSubscriptionError(response: Response): Promise<never> {
   throw new ApiError(msg, response.status, code);
 }
 
+/** Consulta o plano no backend; lança em falha de rede (sem fallback). */
+async function fetchSubscriptionStatus(): Promise<SubscriptionStatus> {
+  const response = await authFetch(`${BACKEND_URL}/subscription/status`);
+  if (!response.ok) {
+    await handleSubscriptionError(response);
+  }
+  return response.json();
+}
+
 export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
   try {
-    const response = await authFetch(`${BACKEND_URL}/subscription/status`);
-
-    if (!response.ok) {
-      await handleSubscriptionError(response);
-    }
-
-    return response.json();
+    return await fetchSubscriptionStatus();
   } catch (error) {
     // If it's an ApiError, re-throw it
     if (error instanceof ApiError) {
@@ -60,7 +63,9 @@ let cachedIsPro: boolean | null = null;
 export async function isProUser(): Promise<boolean> {
   if (cachedIsPro !== null) return cachedIsPro;
   try {
-    const status = await getSubscriptionStatus();
+    // Sem o fallback "FREE" de getSubscriptionStatus: uma falha de rede não
+    // pode ficar em cache e tratar um assinante como FREE até reiniciar o app
+    const status = await fetchSubscriptionStatus();
     cachedIsPro = status.plan.code === "PRO";
     return cachedIsPro;
   } catch {

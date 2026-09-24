@@ -288,6 +288,8 @@ export async function autoSaveTransaction(transaction: {
   categoryId?: string;
   notes?: string;
   source?: "TEXT" | "DOCUMENT" | "AUDIO" | "PHOTO" | "VOICE" | "BANK_NOTIFICATION";
+  /** Id local da transação, para o backend não duplicar reenvios */
+  externalId?: string;
 }) {
   const response = await authFetch(`${BACKEND_URL}/imports/auto-save`, {
     method: "POST",
