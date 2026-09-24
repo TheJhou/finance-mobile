@@ -1,50 +1,49 @@
-# Welcome to your Expo app 👋
+# Kilun — app mobile
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App de finanças pessoais (Expo / React Native) com dados **locais primeiro**: as
+transações ficam num SQLite criptografado (SQLCipher) no aparelho e o app funciona
+offline. O backend ([backend-final](https://github.com/TheJhou/backend-final)) cuida
+de autenticação, IA (OCR, áudio, categorização), assinaturas e backup na nuvem.
 
-## Get started
+## Estrutura
 
-1. Install dependencies
+| Pasta | Conteúdo |
+|---|---|
+| `app/` | Telas (expo-router). `(app)/` é a área autenticada, com as abas. |
+| `components/` | Componentes de UI, incluindo a tela de bloqueio biométrico. |
+| `lib/` | Regras e acesso a dados: `db.ts` (schema/migrações), `repositories/`, `auth.ts` (sessão e rede), `backup.ts`, `iap.ts` (Google Play), `local-data.ts` (limpeza ao sair/trocar de conta). |
+| `hooks/` | Inclui o listener de notificações bancárias (`use-notification-listener.ts`). |
+| `modules/bank-notifications/` | Módulo nativo Android que lê notificações dos apps de banco. |
+| `__tests__/`, `__mocks__/` | Testes Jest. O SQLite dos testes é real (`node:sqlite`). |
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Rodando
 
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env        # ajuste EXPO_PUBLIC_API_BASE_URL
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+O app usa módulos nativos (SQLCipher, biometria, leitor de notificações, compras),
+então precisa de um **development build** — o Expo Go não basta:
 
-## Learn more
+```bash
+eas build --profile development --platform android
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Testes
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+```bash
+npm test          # Jest — requer Node 22.5+ (usa node:sqlite)
+npx tsc --noEmit  # typecheck
+npm run lint
+```
 
-## Join the community
+## Build e publicação
 
-Join our community of developers creating universal apps.
+Perfis em `eas.json` (`development`, `preview`, `production`); a URL do backend de
+cada perfil também está lá. Compras só funcionam em builds instalados pela faixa de
+teste da Google Play.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Ao publicar mudanças que dependem do backend (ex.: exclusão de conta apagando os
+backups na nuvem), publique o backend primeiro.
