@@ -9,6 +9,8 @@ interface DialogOptions {
   cancelText?: string | null;
   onConfirm?: () => void | Promise<void>;
   onCancel?: () => void;
+  secondaryText?: string;
+  onSecondary?: () => void | Promise<void>;
 }
 
 interface DialogState extends DialogOptions {
@@ -19,7 +21,12 @@ interface DialogState extends DialogOptions {
 export function useAppDialog() {
   const [state, setState] = useState<DialogState | null>(null);
 
-  const close = useCallback(() => setState(null), []);
+  // Fecha só o diálogo que disparou a ação: se o callback abriu outro
+  // diálogo (ex.: alerta de sucesso), ele precisa continuar visível.
+  const closeIfCurrent = useCallback(
+    (current: DialogState) => setState((s) => (s === current ? null : s)),
+    []
+  );
 
   const alert = useCallback(
     (title: string, message: string, options?: DialogOptions) => {
@@ -31,6 +38,8 @@ export function useAppDialog() {
         cancelText: options?.cancelText ?? null,
         onConfirm: options?.onConfirm,
         onCancel: options?.onCancel,
+        secondaryText: options?.secondaryText,
+        onSecondary: options?.onSecondary,
       });
     },
     []
@@ -46,6 +55,8 @@ export function useAppDialog() {
         cancelText: options?.cancelText ?? "Cancelar",
         onConfirm: options?.onConfirm,
         onCancel: options?.onCancel,
+        secondaryText: options?.secondaryText,
+        onSecondary: options?.onSecondary,
       });
     },
     []
@@ -59,14 +70,23 @@ export function useAppDialog() {
       variant={state.variant}
       confirmText={state.confirmText}
       cancelText={state.cancelText ?? undefined}
+      secondaryText={state.secondaryText}
       onConfirm={async () => {
         await state.onConfirm?.();
-        close();
+        closeIfCurrent(state);
       }}
       onCancel={() => {
         state.onCancel?.();
-        close();
+        closeIfCurrent(state);
       }}
+      onSecondary={
+        state.onSecondary
+          ? async () => {
+              await state.onSecondary?.();
+              closeIfCurrent(state);
+            }
+          : undefined
+      }
     />
   ) : null;
 

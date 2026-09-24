@@ -22,6 +22,9 @@ interface ConfirmDialogProps {
   variant?: ConfirmVariant;
   onConfirm: () => void | Promise<void>;
   onCancel?: () => void;
+  /** Terceira ação opcional, exibida como link abaixo dos botões. */
+  secondaryText?: string;
+  onSecondary?: () => void | Promise<void>;
 }
 
 export function ConfirmDialog({
@@ -33,6 +36,8 @@ export function ConfirmDialog({
   variant = "default",
   onConfirm,
   onCancel,
+  secondaryText,
+  onSecondary,
 }: Readonly<ConfirmDialogProps>) {
   const { isDark } = useTheme();
   const styles = useMemo(() => createStyles(), [isDark]);
@@ -65,9 +70,19 @@ export function ConfirmDialog({
     }
   };
 
+  const handleSecondary = async () => {
+    if (!onSecondary) return;
+    setLoading(true);
+    try {
+      await onSecondary();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <Pressable style={styles.overlay} onPress={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={loading ? undefined : onCancel}>
+      <Pressable style={styles.overlay} onPress={loading ? undefined : onCancel}>
         <Pressable style={styles.card} onPress={(e) => e.stopPropagation()}>
           <View style={[styles.iconWrap, { backgroundColor: variantColor + "22" }]}>
             <Ionicons name={iconName} size={28} color={variantColor} />
@@ -96,6 +111,11 @@ export function ConfirmDialog({
               )}
             </Pressable>
           </View>
+          {secondaryText && onSecondary ? (
+            <Pressable onPress={handleSecondary} disabled={loading} hitSlop={8}>
+              <Text style={[styles.secondaryLink, { color: variantColor }]}>{secondaryText}</Text>
+            </Pressable>
+          ) : null}
         </Pressable>
       </Pressable>
     </Modal>
@@ -166,6 +186,12 @@ function createStyles() {
       color: "#fff",
       fontWeight: "700",
       fontSize: 15,
+    },
+    secondaryLink: {
+      fontSize: 14,
+      fontWeight: "600",
+      textAlign: "center",
+      paddingVertical: spacing.xs,
     },
   });
 }
