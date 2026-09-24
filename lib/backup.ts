@@ -390,6 +390,15 @@ export class BackupSystem {
     }
   }
 
+  // Remove todos os arquivos de backup locais (usado ao sair da conta)
+  static deleteAllLocalBackups(): void {
+    const dir = this.BACKUP_DIR;
+    if (!dir.exists) return;
+    for (const item of dir.list()) {
+      if (item instanceof File) item.delete();
+    }
+  }
+
   // Clean old backups (keep only last N days)
   private static async cleanOldBackups(userId: string): Promise<void> {
     try {

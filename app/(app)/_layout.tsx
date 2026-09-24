@@ -1,7 +1,8 @@
 import { AppHeader } from "@/components/app-header";
 import { useNotificationListener } from "@/hooks/use-notification-listener";
-import { isAuthenticated } from "@/lib/auth";
+import { getStoredUserEmail, isAuthenticated } from "@/lib/auth";
 import { BackupScheduler } from "@/lib/backup-scheduler";
+import { adoptLocalDataOwnerIfMissing } from "@/lib/local-data";
 import { colors } from "@/lib/theme";
 import { useTheme } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -53,6 +54,11 @@ export default function AppLayout() {
     isAuthenticated().then((auth) => {
       setAuthed(auth);
       setAuthChecking(false);
+      if (auth) {
+        getStoredUserEmail()
+          .then(adoptLocalDataOwnerIfMissing)
+          .catch((error) => console.warn("[AppLayout] Falha ao registrar dono dos dados locais:", error));
+      }
     });
   }, []);
 

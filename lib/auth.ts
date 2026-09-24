@@ -88,6 +88,24 @@ export async function hasStoredSession(): Promise<boolean> {
   return !!accessToken && !!refreshToken;
 }
 
+interface SessionResponse {
+  accessToken: string;
+  refreshToken: string;
+  user?: { name?: string | null; email?: string | null };
+}
+
+async function storeSession(data: SessionResponse, fallbackEmail: string): Promise<void> {
+  // Antes de liberar a sessão, garante que os dados locais pertencem a esta conta.
+  // Import dinâmico evita ciclo auth → local-data → backup → auth.
+  const { claimLocalDataFor } = await import("@/lib/local-data");
+  await claimLocalDataFor(data.user?.email ?? fallbackEmail);
+
+  await setStoredValue("jwt_access_token", data.accessToken);
+  await setStoredValue("jwt_refresh_token", data.refreshToken);
+  if (data.user?.name) await setStoredValue("user_name", data.user.name);
+  if (data.user?.email) await setStoredValue("user_email", data.user.email);
+}
+
 export async function register(name: string, email: string, password: string): Promise<void> {
   const response = await fetch(`${BACKEND_URL}/auth/register`, {
     method: "POST",
@@ -106,11 +124,7 @@ export async function register(name: string, email: string, password: string): P
     throw new Error(msg);
   }
 
-  const data = await response.json();
-  await setStoredValue("jwt_access_token", data.accessToken);
-  await setStoredValue("jwt_refresh_token", data.refreshToken);
-  if (data.user?.name) await setStoredValue("user_name", data.user.name);
-  if (data.user?.email) await setStoredValue("user_email", data.user.email);
+  await storeSession(await response.json(), email);
 }
 
 export async function login(email: string, password: string): Promise<void> {
@@ -131,11 +145,7 @@ export async function login(email: string, password: string): Promise<void> {
     throw new Error(msg);
   }
 
-  const data = await response.json();
-  await setStoredValue("jwt_access_token", data.accessToken);
-  await setStoredValue("jwt_refresh_token", data.refreshToken);
-  if (data.user?.name) await setStoredValue("user_name", data.user.name);
-  if (data.user?.email) await setStoredValue("user_email", data.user.email);
+  await storeSession(await response.json(), email);
 }
 
 export async function forgotPassword(email: string): Promise<{ message: string }> {
@@ -206,6 +216,10 @@ export async function logout(): Promise<void> {
 
 export async function getStoredUserName(): Promise<string | null> {
   return getStoredValue("user_name");
+}
+
+export async function getStoredUserEmail(): Promise<string | null> {
+  return getStoredValue("user_email");
 }
 
 export async function setStoredUserName(name: string): Promise<void> {

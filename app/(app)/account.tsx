@@ -9,8 +9,9 @@ import {
     changePassword,
     updateProfile,
 } from "@/lib/account-service";
-import { getStoredUserName, logout, setStoredUserName } from "@/lib/auth";
+import { getStoredUserName, setStoredUserName } from "@/lib/auth";
 import { getMe } from "@/lib/backend";
+import { backupThenSignOut, signOutAndClearLocalData } from "@/lib/local-data";
 import { deleteProfilePhoto, getProfilePhotoUri, onProfilePhotoChange, saveProfilePhoto } from "@/lib/profile-photo";
 import { getSubscriptionStatus } from "@/lib/subscription";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -133,14 +134,28 @@ export default function AccountScreen() {
   };
 
   const handleLogout = () => {
-    confirm("Sair da conta", "Tem certeza que deseja sair?", {
-      variant: "danger",
-      confirmText: "Sair",
-      onConfirm: async () => {
-        await logout();
+    const signOut = async (action: () => Promise<void>) => {
+      try {
+        await action();
         router.replace("/" as any);
-      },
-    });
+      } catch (err) {
+        alert("Não foi possível sair", err instanceof Error ? err.message : "Erro ao sair da conta", {
+          variant: "danger",
+        });
+      }
+    };
+
+    confirm(
+      "Sair da conta",
+      "Ao sair, os dados financeiros deste aparelho serão apagados. Faça um backup na nuvem para recuperá-los quando entrar novamente.",
+      {
+        variant: "warning",
+        confirmText: "Backup e sair",
+        onConfirm: () => signOut(backupThenSignOut),
+        secondaryText: "Sair sem backup",
+        onSecondary: () => signOut(signOutAndClearLocalData),
+      }
+    );
   };
 
   const openModal = (type: ModalType) => {

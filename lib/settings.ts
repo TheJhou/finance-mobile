@@ -38,6 +38,10 @@ export function getCachedMonthStartDay(): number {
   return cachedStartDay;
 }
 
+export function resetMonthStartDayCache(): void {
+  cachedStartDay = 1;
+}
+
 export async function getSetting(key: string): Promise<string | null> {
   try {
     const db = await getDb();
