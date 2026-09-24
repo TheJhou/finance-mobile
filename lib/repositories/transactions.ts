@@ -211,6 +211,15 @@ export async function updateTransaction(
     `UPDATE transactions SET ${sets.join(", ")} WHERE id = ?`,
     params as (string | number | null)[]
   );
+
+  // Vencimento adiado para hoje ou depois: deixa de estar vencida.
+  // (O caminho inverso é feito por markOverdueTransactions.)
+  if (data.date !== undefined && data.status === undefined) {
+    await db.runAsync(
+      `UPDATE transactions SET status = 'PENDING' WHERE id = ? AND status = 'OVERDUE' AND date >= ?`,
+      [id, formatDateLocal(new Date())]
+    );
+  }
 }
 
 export async function deleteTransaction(id: string): Promise<void> {
