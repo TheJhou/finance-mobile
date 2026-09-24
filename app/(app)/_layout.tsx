@@ -10,8 +10,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { Redirect, Tabs, useSegments } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const PUBLIC_SCREENS = new Set(["terms", "forgot-password", "privacy"]);
+
+/** Altura útil da barra de abas (ícone + rótulo), sem o espaço dos botões do sistema. */
+const TAB_BAR_CONTENT_HEIGHT = 54;
+const TAB_BAR_MIN_BOTTOM_PADDING = 6;
 
 export default function AppLayout() {
   const [authChecking, setAuthChecking] = useState(true);
@@ -19,16 +24,20 @@ export default function AppLayout() {
   const segments = useSegments();
   const { isDark } = useTheme();
   const styles = useThemedStyles(createStyles);
+  const insets = useSafeAreaInsets();
 
+  // No SDK 54 o app desenha até a borda da tela (edge-to-edge): a altura fixa
+  // anterior (60 com paddingBottom 6) deixava as abas por baixo dos botões de
+  // navegação do Android. O espaço inferior agora vem do inset do sistema.
   const tabBarStyle = useMemo(() => ({
     backgroundColor: isDark ? "#2a2740" : "#e5e7eb",
     borderTopColor: colors.border,
     borderTopWidth: 1,
     elevation: 0,
     shadowOpacity: 0,
-    height: 60,
-    paddingBottom: 6,
-  }), [isDark]);
+    height: TAB_BAR_CONTENT_HEIGHT + Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM_PADDING),
+    paddingBottom: Math.max(insets.bottom, TAB_BAR_MIN_BOTTOM_PADDING),
+  }), [isDark, insets.bottom]);
 
   const screenOptions = useMemo(() => ({
     headerShown: false,
@@ -40,6 +49,10 @@ export default function AppLayout() {
       fontWeight: "600" as const,
     },
     safeAreaInsets: { top: 0 },
+    // Sem fundo definido, a troca de aba mostrava o fundo padrão por um instante
+    sceneStyle: { backgroundColor: colors.background },
+    // Transição curta: telas como Conta e Segurança apareciam "de supetão"
+    animation: "fade" as const,
     // isDark sinaliza a troca de tema: `colors` é mutado por applyTheme (ver useThemedStyles)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [isDark, tabBarStyle]);
@@ -91,6 +104,9 @@ export default function AppLayout() {
       <AppHeader />
       <Tabs
         screenOptions={screenOptions}
+        // Conta, Segurança, Backup etc. são abas ocultas: com o padrão
+        // ("firstRoute") o voltar do Android pulava direto para o Dashboard
+        backBehavior="history"
       >
       <Tabs.Screen
         name="dashboard"

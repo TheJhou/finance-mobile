@@ -1,6 +1,7 @@
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeRoot, type Theme as NavigationTheme } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -137,7 +138,7 @@ function RootNavigator() {
     );
   } else {
     content = (
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="(app)" />
@@ -169,13 +170,39 @@ function ThemedStatusBar() {
   return <StatusBar style={isDark ? "light" : "dark"} />;
 }
 
+/**
+ * Passa as cores do app para o React Navigation. Sem isso ele usa o tema
+ * claro padrão (fundo #f2f2f2), que aparece como um clarão durante as
+ * transições de tela no tema escuro.
+ */
+function NavigationThemeProvider({ children }: { children: ReactNode }) {
+  const { isDark } = useTheme();
+  const navigationTheme = useMemo<NavigationTheme>(() => {
+    const base = isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.primary,
+        background: colors.background,
+        card: colors.surface,
+        text: colors.textPrimary,
+        border: colors.border,
+      },
+    };
+  }, [isDark]);
+  return <NavigationThemeRoot value={navigationTheme}>{children}</NavigationThemeRoot>;
+}
+
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <SafeAreaProvider>
-        <ThemedStatusBar />
-        <RootNavigator />
-      </SafeAreaProvider>
+      <NavigationThemeProvider>
+        <SafeAreaProvider>
+          <ThemedStatusBar />
+          <RootNavigator />
+        </SafeAreaProvider>
+      </NavigationThemeProvider>
     </ThemeProvider>
   );
 }
