@@ -206,7 +206,7 @@ export class BackupSystem {
       return {
         success: false,
         backupId: generateId(),
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }
@@ -247,9 +247,10 @@ export class BackupSystem {
       let totalRestored = 0;
       const restoredTables: string[] = [];
 
-      // Explicit order: categories must exist before transactions (FK)
+      // Ordem das foreign keys: transactions referencia categories E
+      // recurring_transactions (recurring_id), então ambas vêm antes.
       // notification_queue and processed_notifications have no FK deps
-      const INSERT_ORDER = ['categories', 'transactions', 'recurring_transactions', 'settings', 'notification_queue', 'processed_notifications'];
+      const INSERT_ORDER = ['categories', 'recurring_transactions', 'transactions', 'settings', 'notification_queue', 'processed_notifications'];
       const DELETE_ORDER = [...INSERT_ORDER].reverse();
 
       // Begin transaction
@@ -309,7 +310,7 @@ export class BackupSystem {
         success: false,
         restoredTables: [],
         recordsRestored: 0,
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
+        error: error instanceof Error ? error.message : String(error)
       };
     }
   }
