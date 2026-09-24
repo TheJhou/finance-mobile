@@ -1,3 +1,4 @@
+import { isValidPassword, PASSWORD_HINT, PASSWORD_RULE_MESSAGE } from "@/lib/password-rules";
 import { suspendAutoLockFor, withoutAutoLock } from "@/lib/biometric";
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, register } from "@/lib/auth";
@@ -318,8 +319,8 @@ export default function NotificationsScreen() {
       showToast("error", "Preencha e-mail e senha");
       return;
     }
-    if (loginPassword.length < 6) {
-      showToast("error", "A senha deve ter no mínimo 6 caracteres");
+    if (!isValidPassword(loginPassword)) {
+      showToast("error", PASSWORD_RULE_MESSAGE);
       return;
     }
     if (loginPassword !== loginPasswordConfirm) {
@@ -1029,7 +1030,7 @@ export default function NotificationsScreen() {
                 style={styles.modalInput}
                 value={loginPassword}
                 onChangeText={setLoginPassword}
-                placeholder={authMode === "register" ? "Mínimo 6 caracteres" : "Sua senha"}
+                placeholder={authMode === "register" ? PASSWORD_HINT : "Sua senha"}
                 placeholderTextColor={colors.textMuted}
                 secureTextEntry
                 autoCapitalize="none"

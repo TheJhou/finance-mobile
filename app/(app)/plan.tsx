@@ -1,3 +1,4 @@
+import { isValidPassword, PASSWORD_HINT, PASSWORD_RULE_MESSAGE } from "@/lib/password-rules";
 import { Button } from "@/components/ui/button";
 import { useAppDialog } from "@/hooks/use-app-dialog";
 import { isAuthenticated, login, register } from "@/lib/auth";
@@ -92,6 +93,10 @@ export default function PlanScreen() {
     }
     if (isRegister && !authName.trim()) {
       alert("Erro", "Preencha seu nome", { variant: "danger" });
+      return;
+    }
+    if (isRegister && !isValidPassword(authPassword.trim())) {
+      alert("Erro", PASSWORD_RULE_MESSAGE, { variant: "danger" });
       return;
     }
     setAuthLoading(true);
@@ -318,7 +323,7 @@ export default function PlanScreen() {
               style={styles.modalInput}
               value={authPassword}
               onChangeText={setAuthPassword}
-              placeholder={isRegister ? "Mínimo 6 caracteres" : "Sua senha"}
+              placeholder={isRegister ? PASSWORD_HINT : "Sua senha"}
               secureTextEntry
               autoCapitalize="none"
               autoCorrect={false}
