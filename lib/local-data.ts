@@ -1,5 +1,6 @@
 import { logout } from "@/lib/auth";
 import { BackupSystem } from "@/lib/backup";
+import { setBiometricEnabled } from "@/lib/biometric";
 import { wipeUserData } from "@/lib/db";
 import { deleteProfilePhoto } from "@/lib/profile-photo";
 import { resetMonthStartDayCache } from "@/lib/settings";
@@ -40,6 +41,7 @@ export async function clearLocalUserData(): Promise<void> {
 
   // As etapas abaixo são limpeza complementar: uma falha não deve impedir as demais.
   const steps: [string, () => Promise<unknown> | void][] = [
+    ["biometria", () => setBiometricEnabled(false)],
     ["backups locais", () => BackupSystem.deleteAllLocalBackups()],
     ["foto de perfil", () => deleteProfilePhoto()],
     ["AsyncStorage", () => AsyncStorage.multiRemove(USER_ASYNC_STORAGE_KEYS)],

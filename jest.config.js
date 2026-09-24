@@ -13,6 +13,7 @@ module.exports = {
     "^@react-native-community/netinfo$": "<rootDir>/__mocks__/@react-native-community/netinfo.ts",
     "^react-native$": "<rootDir>/__mocks__/react-native.ts",
     "^expo-notifications$": "<rootDir>/__mocks__/expo-notifications.ts",
+    "^expo-local-authentication$": "<rootDir>/__mocks__/expo-local-authentication.ts",
     "^@react-native-async-storage/async-storage$": "<rootDir>/node_modules/@react-native-async-storage/async-storage/jest/async-storage-mock.js",
   },
   transform: {
