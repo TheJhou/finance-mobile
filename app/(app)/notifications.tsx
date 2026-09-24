@@ -1,3 +1,4 @@
+import { suspendAutoLockFor, withoutAutoLock } from "@/lib/biometric";
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, register } from "@/lib/auth";
 import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
@@ -271,6 +272,8 @@ export default function NotificationsScreen() {
         return;
       }
       
+      // Configurações do sistema: o usuário ativa a permissão e volta; não pede a digital
+      suspendAutoLockFor(5 * 60_000);
       BankNotifications?.openPermissionSettings();
       showToast("warning", "Abra as configurações e ative 'Kilun'");
       
@@ -414,9 +417,9 @@ export default function NotificationsScreen() {
       return;
     }
     try {
-      const result = await DocumentPicker.getDocumentAsync({
+      const result = await withoutAutoLock(() => DocumentPicker.getDocumentAsync({
         type: ["application/pdf", "image/png", "image/jpeg", "image/jpg"],
-      });
+      }));
 
       if (result.canceled || !result.assets[0]) return;
 
@@ -486,7 +489,7 @@ export default function NotificationsScreen() {
     // Activity pausa/retoma no Android e pode disparar um checkAuth falso.
     audioInProgressRef.current = true;
     try {
-      const { granted } = await AudioModule.requestRecordingPermissionsAsync();
+      const { granted } = await withoutAutoLock(() => AudioModule.requestRecordingPermissionsAsync());
       if (!granted) {
         audioInProgressRef.current = false;
         showToast("error", "Permissão de microfone negada");
@@ -662,6 +665,7 @@ export default function NotificationsScreen() {
               style={[styles.statusBtn, { backgroundColor: colors.warning }]}
               onPress={() => {
                 try {
+                  suspendAutoLockFor(5 * 60_000);
                   BankNotifications?.requestIgnoreBatteryOptimizations();
                 } catch {
                   showToast("error", "Falha ao solicitar isenção de bateria");

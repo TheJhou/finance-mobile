@@ -1,3 +1,4 @@
+import { withoutAutoLock } from "@/lib/biometric";
 import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
 import { EditModal } from "@/components/account/edit-modal";
@@ -104,18 +105,18 @@ export default function AccountScreen() {
   const handlePickPhoto = async () => {
     try {
       setPhotoLoading(true);
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const perm = await withoutAutoLock(() => ImagePicker.requestMediaLibraryPermissionsAsync());
       if (!perm.granted) {
         alert("Permissão necessária", "Permita o acesso à galeria para alterar sua foto de perfil.", { variant: "warning" });
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({
+      const result = await withoutAutoLock(() => ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
         base64: true,
-      });
+      }));
       if (result.canceled || !result.assets[0]) return;
       const asset = result.assets[0];
       const uri = await saveProfilePhoto(asset.uri, asset.base64 ?? undefined);

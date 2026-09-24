@@ -1,3 +1,4 @@
+import { resumeAutoLock, suspendAutoLockFor, withoutAutoLock } from "@/lib/biometric";
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { clearProCache } from "@/lib/subscription";
@@ -78,14 +79,19 @@ export async function requestProSubscription(): Promise<void> {
       throw new Error("Produto de assinatura não encontrado na Google Play Store.");
     }
 
-    await requestPurchase({
-      request: {
-        google: {
-          skus: [PRO_PRODUCT_ID],
+    // A tela de pagamento do Google Play leva o app ao segundo plano e pode
+    // demorar (cadastro de cartão): não exige a digital na volta
+    suspendAutoLockFor(5 * 60_000);
+    await withoutAutoLock(() =>
+      requestPurchase({
+        request: {
+          google: {
+            skus: [PRO_PRODUCT_ID],
+          },
         },
-      },
-      type: "subs",
-    });
+        type: "subs",
+      })
+    );
   } catch (err) {
     console.error("[IAP] requestProSubscription error:", err);
     throw err instanceof Error ? err : new Error("Erro ao iniciar compra");
@@ -211,8 +217,13 @@ export async function syncUnacknowledgedPurchases(): Promise<void> {
  */
 export function startGlobalPurchaseHandling(): EventSubscription {
   const sub = startPurchaseListener(
-    (purchase) => { void handlePurchaseUpdate(purchase); },
+    (purchase) => {
+      // Fluxo do Google Play terminou: volta a exigir a digital normalmente
+      resumeAutoLock();
+      void handlePurchaseUpdate(purchase);
+    },
     (message) => {
+      resumeAutoLock();
       const cancelled = /cancel/i.test(message);
       emitPurchaseEvent(cancelled ? { type: "cancelled" } : { type: "error", message });
     }

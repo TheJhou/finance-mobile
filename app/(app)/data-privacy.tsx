@@ -1,3 +1,4 @@
+import { withoutAutoLock } from "@/lib/biometric";
 import { AccountRow } from "@/components/account/account-row";
 import { AccountSection } from "@/components/account/account-section";
 import { EditModal } from "@/components/account/edit-modal";
@@ -86,10 +87,10 @@ export default function DataPrivacyScreen() {
       });
       const file = new File(Paths.cache, `lgpd-export-${Date.now()}.json`);
       file.write(atob(base64));
-      await Sharing.shareAsync(file.uri, {
+      await withoutAutoLock(() => Sharing.shareAsync(file.uri, {
         mimeType: "application/json",
         dialogTitle: "Exportação de dados (LGPD)",
-      });
+      }));
     } catch (err) {
       alert("Erro", err instanceof Error ? err.message : "Erro ao exportar dados", { variant: "danger" });
     } finally {

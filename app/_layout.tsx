@@ -1,6 +1,7 @@
+import { DarkTheme, DefaultTheme, ThemeProvider as NavigationThemeRoot, type Theme as NavigationTheme } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, Text, View } from "react-native";
 import "react-native-reanimated";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -8,6 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { LockScreen } from "@/components/lock-screen";
 import { isAuthenticated } from "@/lib/auth";
 import {
+  isAutoLockSuppressed,
   isBiometricEnabled,
   onBiometricEnabledChange,
   onBiometricUnlockChange,
@@ -30,6 +32,7 @@ function RootNavigator() {
   // Cobre o conteúdo enquanto o app está em segundo plano (miniatura de apps recentes)
   const [covered, setCovered] = useState(false);
   const backgroundedAtRef = useRef<number | null>(null);
+  const leftForExternalFlowRef = useRef(false);
 
   // ── Fase 2: inicialização do DB + auth (pode demorar mais) ───────────
   const [appReady, setAppReady] = useState(false);
@@ -83,8 +86,8 @@ function RootNavigator() {
   }, []);
 
   // Só "background" conta: "inactive" dispara com o prompt de Face ID e a central
-  // de notificações. Câmera, seletores e a compra no Google Play levam o app ao
-  // background brevemente — por isso a tolerância antes de exigir biometria.
+  // de notificações. Voltar ao app pede a digital, exceto quando a saída foi
+  // um fluxo externo do próprio app (câmera, seletores, compra — withoutAutoLock).
   useEffect(() => {
     if (!biometricEnabled) {
       setCovered(false);
@@ -93,13 +96,16 @@ function RootNavigator() {
     const handler = (nextState: AppStateStatus) => {
       if (nextState === "background") {
         backgroundedAtRef.current = Date.now();
+        leftForExternalFlowRef.current = isAutoLockSuppressed();
         setCovered(true);
       } else if (nextState === "active") {
-        if (shouldLockAfterBackground(backgroundedAtRef.current, Date.now())) {
+        const suppressed = leftForExternalFlowRef.current || isAutoLockSuppressed();
+        if (shouldLockAfterBackground(backgroundedAtRef.current, Date.now(), suppressed)) {
           void setBiometricUnlocked(false);
           setLocked(true);
         }
         backgroundedAtRef.current = null;
+        leftForExternalFlowRef.current = false;
         setCovered(false);
       }
     };
@@ -137,7 +143,7 @@ function RootNavigator() {
     );
   } else {
     content = (
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="index" />
         <Stack.Screen name="login" />
         <Stack.Screen name="(app)" />
@@ -155,7 +161,9 @@ function RootNavigator() {
       </View>
       {locked ? (
         <View style={StyleSheet.absoluteFill}>
-          <LockScreen />
+          {/* Só pede a digital depois que o app terminou de montar: montar a
+              navegação junto com o prompt o cancelava na hora no Android */}
+          <LockScreen canPrompt={appReady} />
         </View>
       ) : covered ? (
         <View style={[StyleSheet.absoluteFill, styles.cover]} />
@@ -169,13 +177,39 @@ function ThemedStatusBar() {
   return <StatusBar style={isDark ? "light" : "dark"} />;
 }
 
+/**
+ * Passa as cores do app para o React Navigation. Sem isso ele usa o tema
+ * claro padrão (fundo #f2f2f2), que aparece como um clarão durante as
+ * transições de tela no tema escuro.
+ */
+function NavigationThemeProvider({ children }: { children: ReactNode }) {
+  const { isDark } = useTheme();
+  const navigationTheme = useMemo<NavigationTheme>(() => {
+    const base = isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.primary,
+        background: colors.background,
+        card: colors.surface,
+        text: colors.textPrimary,
+        border: colors.border,
+      },
+    };
+  }, [isDark]);
+  return <NavigationThemeRoot value={navigationTheme}>{children}</NavigationThemeRoot>;
+}
+
 export default function RootLayout() {
   return (
     <ThemeProvider>
-      <SafeAreaProvider>
-        <ThemedStatusBar />
-        <RootNavigator />
-      </SafeAreaProvider>
+      <NavigationThemeProvider>
+        <SafeAreaProvider>
+          <ThemedStatusBar />
+          <RootNavigator />
+        </SafeAreaProvider>
+      </NavigationThemeProvider>
     </ThemeProvider>
   );
 }

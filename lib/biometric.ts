@@ -40,14 +40,62 @@ export async function setBiometricEnabled(enabled: boolean): Promise<void> {
 }
 
 /**
- * Tempo em segundo plano tolerado antes de exigir biometria de novo.
- * Cobre câmera, galeria, seletor de arquivos, permissões e a tela de
- * pagamento do Google Play, que colocam o app em background.
+ * Folga mínima em segundo plano antes de exigir biometria de novo (absorve
+ * piscadas de background do sistema). Com a biometria ativada, sair do app e
+ * voltar pede a digital; a exceção são as telas externas abertas pelo
+ * próprio app, marcadas com withoutAutoLock.
  */
-export const BIOMETRIC_LOCK_GRACE_MS = 30_000;
+export const BIOMETRIC_LOCK_GRACE_MS = 2_000;
 
-export function shouldLockAfterBackground(backgroundedAt: number | null, now: number): boolean {
-  return backgroundedAt !== null && now - backgroundedAt >= BIOMETRIC_LOCK_GRACE_MS;
+/**
+ * Depois de um fluxo externo terminar, o evento "active" do AppState pode
+ * chegar um pouco depois do resultado; essa janela evita bloquear nesse meio.
+ */
+const EXTERNAL_FLOW_TAIL_MS = 3_000;
+
+let activeExternalFlows = 0;
+let lastExternalFlowEndedAt = 0;
+
+/**
+ * Executa um fluxo que leva o app para segundo plano por iniciativa dele
+ * mesmo (câmera, galeria, seletor de arquivos, compartilhar, pagamento,
+ * permissões, o próprio prompt de biometria) sem exigir a digital na volta.
+ */
+export async function withoutAutoLock<T>(task: () => Promise<T>): Promise<T> {
+  activeExternalFlows++;
+  try {
+    return await task();
+  } finally {
+    activeExternalFlows--;
+    lastExternalFlowEndedAt = Math.max(lastExternalFlowEndedAt, Date.now());
+  }
+}
+
+/** Versão para chamadas síncronas que abrem outra tela (ex.: configurações do sistema). */
+export function suspendAutoLockFor(ms: number): void {
+  lastExternalFlowEndedAt = Math.max(lastExternalFlowEndedAt, Date.now() + ms - EXTERNAL_FLOW_TAIL_MS);
+}
+
+/** Encerra uma janela aberta por suspendAutoLockFor (ex.: a compra terminou). */
+export function resumeAutoLock(): void {
+  lastExternalFlowEndedAt = Date.now();
+}
+
+export function isAutoLockSuppressed(now = Date.now()): boolean {
+  return activeExternalFlows > 0 || now - lastExternalFlowEndedAt < EXTERNAL_FLOW_TAIL_MS;
+}
+
+/**
+ * Decide, na volta para o app, se é preciso pedir a digital.
+ * `suppressed` indica se havia um fluxo externo do app quando ele saiu de cena.
+ */
+export function shouldLockAfterBackground(
+  backgroundedAt: number | null,
+  now: number,
+  suppressed = false
+): boolean {
+  if (backgroundedAt === null || suppressed) return false;
+  return now - backgroundedAt >= BIOMETRIC_LOCK_GRACE_MS;
 }
 
 const BIOMETRIC_UNLOCKED_KEY = "biometric_unlocked";
@@ -78,47 +126,66 @@ export async function setBiometricUnlocked(unlocked: boolean): Promise<void> {
   notifyUnlockChange(unlocked);
 }
 
+export interface BiometricResult {
+  success: boolean;
+  /** Mensagem para o usuário */
+  error?: string;
+  /** Código da biblioteca (user_cancel, system_cancel, app_cancel, lockout...) */
+  code?: string;
+}
+
+const ERROR_MESSAGES: Record<string, string> = {
+  user_cancel: "Autenticação cancelada",
+  user_fallback: "Autenticação cancelada",
+  system_cancel: "Autenticação interrompida pelo sistema",
+  app_cancel: "Autenticação interrompida",
+  not_available: "Biometria não disponível",
+  not_enrolled: "Nenhuma biometria ou bloqueio de tela cadastrado no aparelho",
+  lockout: "Muitas tentativas. Use a senha do aparelho ou tente mais tarde",
+  timeout: "Tempo esgotado",
+  unable_to_process: "Não foi possível ler a biometria. Tente de novo",
+  authentication_failed: "Autenticação falhou",
+};
+
 export async function authenticateWithBiometrics(
   promptMessage = "Autentique-se para acessar o app"
-): Promise<{ success: boolean; error?: string }> {
+): Promise<BiometricResult> {
   try {
     const availability = await isBiometricAvailable();
     if (!availability.hasHardware) {
-      return { success: false, error: "Biometria não disponível neste dispositivo" };
+      return { success: false, error: "Biometria não disponível neste dispositivo", code: "not_available" };
     }
     if (!availability.enrolled) {
-      return { success: false, error: "Nenhuma biometria cadastrada no dispositivo" };
+      return { success: false, error: "Nenhuma biometria cadastrada no dispositivo", code: "not_enrolled" };
     }
 
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage,
-      fallbackLabel: "Usar senha do dispositivo",
-      cancelLabel: "Cancelar",
-      disableDeviceFallback: false,
-    });
+    // Em alguns aparelhos o prompt é uma tela do sistema e leva o app para
+    // segundo plano: sem isso, a volta do prompt bloquearia o app de novo.
+    const result = await withoutAutoLock(() =>
+      LocalAuthentication.authenticateAsync({
+        promptMessage,
+        fallbackLabel: "Usar senha do dispositivo",
+        cancelLabel: "Cancelar",
+        disableDeviceFallback: false,
+      })
+    );
 
     if (result.success) {
       return { success: true };
     }
-
-    const errorMessages: Record<string, string> = {
-      user_cancel: "Autenticação cancelada",
-      user_fallback: "Autenticação cancelada",
-      not_available: "Biometria não disponível",
-      not_enrolled: "Nenhuma biometria cadastrada no dispositivo",
-      lockout: "Muitas tentativas. Tente novamente mais tarde",
-      timeout: "Tempo esgotado",
-      system_cancel: "Autenticação cancelada pelo sistema",
-      authentication_failed: "Autenticação falhou",
-    };
-
     return {
       success: false,
-      error: errorMessages[result.error] ?? "Falha na autenticação",
+      error: ERROR_MESSAGES[result.error] ?? "Falha na autenticação",
+      code: result.error,
     };
   } catch {
-    return { success: false, error: "Erro ao iniciar autenticação biométrica" };
+    return { success: false, error: "Erro ao iniciar autenticação biométrica", code: "exception" };
   }
+}
+
+/** Fecha um prompt de biometria aberto (ex.: a tela de bloqueio saiu). */
+export function cancelBiometricPrompt(): void {
+  LocalAuthentication.cancelAuthenticate().catch(() => {});
 }
 
 export function getBiometricTypeName(types: LocalAuthentication.AuthenticationType[]): string {

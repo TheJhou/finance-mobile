@@ -24,22 +24,44 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Dimensions,
+  type LayoutChangeEvent,
   Modal,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View
 } from "react-native";
 import { BarChart, LineChart, PieChart } from "react-native-gifted-charts";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { buildTrendScale, fitBars, thinLabels } from "@/lib/chart-scale";
 import Svg, { Circle as SvgCircle } from "react-native-svg";
 
-const SCREEN_WIDTH = Dimensions.get("window").width;
 const CARD_PADDING = spacing.lg;
-const HALF_WIDTH = (SCREEN_WIDTH - CARD_PADDING * 2 - spacing.md) / 2;
+/** Abaixo desta largura, as grades de dois cartões viram uma coluna. */
+const NARROW_SCREEN_WIDTH = 360;
+/** Largura reservada aos rótulos do eixo Y nos gráficos de linha. */
+const Y_AXIS_LABEL_WIDTH = 36;
+const MAX_FUTURE_BILLS = 4;
+
+/** Valores monetários em uma linha, reduzindo a fonte em vez de quebrar. */
+const SINGLE_LINE_FIT = { numberOfLines: 1, adjustsFontSizeToFit: true, minimumFontScale: 0.6 } as const;
+
+/**
+ * Largura real de um contêiner. Os gráficos usavam larguras calculadas uma vez
+ * a partir da tela, que não batiam com o cartão e vazavam para fora dele.
+ */
+function useMeasuredWidth(): [number, (event: LayoutChangeEvent) => void] {
+  const [width, setWidth] = useState(0);
+  const onLayout = useCallback((event: LayoutChangeEvent) => {
+    const measured = Math.floor(event.nativeEvent.layout.width);
+    setWidth((previous) => (previous === measured ? previous : measured));
+  }, []);
+  return [width, onLayout];
+}
+
 
 const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
 
@@ -94,6 +116,15 @@ export default function DashboardScreen() {
   const [selectedMonth, setSelectedMonth] = useState(() => getCurrentPeriod().month);
   const [monthStartDay, setMonthStartDay] = useState(1);
   const userNavigatedRef = useRef(false);
+
+  // Medidas reais (mudam com tamanho de exibição, fonte, tela dividida, dobráveis)
+  const { width: windowWidth } = useWindowDimensions();
+  const isNarrowScreen = windowWidth < NARROW_SCREEN_WIDTH;
+  const halfWidth = (windowWidth - CARD_PADDING * 2 - spacing.md) / 2;
+  const gridCardWidth = isNarrowScreen ? ("100%" as const) : halfWidth;
+  const modalChartWidth = windowWidth - spacing.lg * 2;
+  const [dailyChartWidth, onDailyChartLayout] = useMeasuredWidth();
+  const [trendChartWidth, onTrendChartLayout] = useMeasuredWidth();
 
   const selectPeriod = useCallback((year: number, month: number, byUser: boolean) => {
     if (byUser) userNavigatedRef.current = true;
@@ -310,6 +341,7 @@ export default function DashboardScreen() {
   const netTrendChartData = data && data.monthlyTrend.length > 0
     ? data.monthlyTrend.map((m: { month: string; income: number; expense: number }) => ({ label: m.month.slice(5), value: m.income - m.expense }))
     : [{ value: 0, label: "-" }];
+  const trendScale = buildTrendScale(netTrendChartData.map((point: { value: number }) => point.value));
 
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right"]}>
@@ -368,47 +400,47 @@ export default function DashboardScreen() {
               <View style={styles.balanceDualRow}>
                 <View style={styles.balanceDualItem}>
                   <Text style={styles.balanceDualLabel}>Saldo do mês</Text>
-                  <Text style={[styles.balanceDualValue, { color: (data.monthlyIncome - data.monthlyExpense) >= 0 ? colors.success : colors.danger }]}>
+                  <Text {...SINGLE_LINE_FIT} style={[styles.balanceDualValue, { color: (data.monthlyIncome - data.monthlyExpense) >= 0 ? colors.success : colors.danger }]}>
                     {formatCurrency(data.monthlyIncome - data.monthlyExpense)}
                   </Text>
                 </View>
                 <View style={styles.balanceDualDivider} />
                 <View style={styles.balanceDualItem}>
                   <Text style={styles.balanceDualLabel}>Caixa</Text>
-                  <Text style={styles.balanceDualValue}>{formatCurrency(data.balance)}</Text>
+                  <Text style={styles.balanceDualValue} {...SINGLE_LINE_FIT}>{formatCurrency(data.balance)}</Text>
                 </View>
               </View>
               <View style={styles.balanceSubRow}>
-                <View>
+                <View style={styles.balanceSubItem}>
                   <Text style={styles.balanceSubLabel}>Receitas do mês</Text>
-                  <Text style={[styles.balanceSubValue, { color: colors.success }]}>{formatCurrency(data.monthlyIncome)}</Text>
+                  <Text {...SINGLE_LINE_FIT} style={[styles.balanceSubValue, { color: colors.success }]}>{formatCurrency(data.monthlyIncome)}</Text>
                 </View>
-                <View>
+                <View style={styles.balanceSubItem}>
                   <Text style={styles.balanceSubLabel}>Gastos do mês</Text>
-                  <Text style={[styles.balanceSubValue, { color: colors.danger }]}>{formatCurrency(data.monthlyExpense)}</Text>
+                  <Text {...SINGLE_LINE_FIT} style={[styles.balanceSubValue, { color: colors.danger }]}>{formatCurrency(data.monthlyExpense)}</Text>
                 </View>
               </View>
               <View style={[styles.balanceSubRow, { marginTop: spacing.sm, paddingTop: spacing.sm, borderTopWidth: 1, borderTopColor: colors.border }]}>
-                <View>
+                <View style={styles.balanceSubItem}>
                   <Text style={styles.balanceSubLabel}>A receber</Text>
-                  <Text style={[styles.balanceSubValue, { color: colors.success }]}>{formatCurrency(data.pendingReceivables)}</Text>
+                  <Text {...SINGLE_LINE_FIT} style={[styles.balanceSubValue, { color: colors.success }]}>{formatCurrency(data.pendingReceivables)}</Text>
                 </View>
-                <View>
+                <View style={styles.balanceSubItem}>
                   <Text style={styles.balanceSubLabel}>A pagar</Text>
-                  <Text style={[styles.balanceSubValue, { color: colors.danger }]}>{formatCurrency(data.pendingPayables)}</Text>
+                  <Text {...SINGLE_LINE_FIT} style={[styles.balanceSubValue, { color: colors.danger }]}>{formatCurrency(data.pendingPayables)}</Text>
                 </View>
               </View>
             </View>
 
             {/* ── 4 Summary Mini-Cards (horizontal scroll) ── */}
-            <HorizontalScrollFade showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -CARD_PADDING }} contentContainerStyle={{ paddingHorizontal: CARD_PADDING, gap: spacing.md }}>
+            <HorizontalScrollFade showsHorizontalScrollIndicator={false} containerStyle={{ marginHorizontal: -CARD_PADDING }} contentContainerStyle={{ paddingHorizontal: CARD_PADDING, gap: spacing.md }}>
               {/* Receitas */}
               <View style={styles.miniCard}>
                 <View style={[styles.miniCardIcon, { backgroundColor: colors.incomeBg }]}>
                   <Ionicons name="arrow-down" size={16} color={colors.success} />
                 </View>
                 <Text style={styles.miniCardLabel}>Receitas</Text>
-                <Text style={styles.miniCardValue}>{formatCurrency(data.monthlyIncome)}</Text>
+                <Text style={styles.miniCardValue} {...SINGLE_LINE_FIT}>{formatCurrency(data.monthlyIncome)}</Text>
                 <Text style={styles.miniCardSub}>Este mês</Text>
                 {incomeChange !== null ? (
                   <><Text style={[styles.miniCardChange, { color: incomeChange >= 0 ? colors.success : colors.danger }]}>{incomeChange >= 0 ? "↑" : "↓"} {Math.abs(incomeChange)}%</Text>
@@ -423,7 +455,7 @@ export default function DashboardScreen() {
                   <Ionicons name="arrow-up" size={16} color={colors.danger} />
                 </View>
                 <Text style={styles.miniCardLabel}>Gastos</Text>
-                <Text style={styles.miniCardValue}>{formatCurrency(data.monthlyExpense)}</Text>
+                <Text style={styles.miniCardValue} {...SINGLE_LINE_FIT}>{formatCurrency(data.monthlyExpense)}</Text>
                 <Text style={styles.miniCardSub}>Este mês</Text>
                 {expenseChange !== null ? (
                   <><Text style={[styles.miniCardChange, { color: expenseChange > 0 ? colors.danger : colors.success }]}>{expenseChange > 0 ? "↑" : "↓"} {Math.abs(expenseChange)}%</Text>
@@ -438,7 +470,7 @@ export default function DashboardScreen() {
                   <Ionicons name="trending-up" size={16} color={colors.info} />
                 </View>
                 <Text style={styles.miniCardLabel}>Economia</Text>
-                <Text style={styles.miniCardValue}>{formatCurrency(Math.max(0, economia))}</Text>
+                <Text style={styles.miniCardValue} {...SINGLE_LINE_FIT}>{formatCurrency(Math.max(0, economia))}</Text>
                 <Text style={styles.miniCardSub}>Este mês</Text>
                 <Text style={[styles.miniCardChange, { color: economia >= 0 ? colors.success : colors.danger }]}>{economia >= 0 ? "↑" : "↓"} {Math.abs(economiaPercent)}%</Text>
                 <Text style={styles.miniCardNote}>da renda</Text>
@@ -449,7 +481,7 @@ export default function DashboardScreen() {
                   <Ionicons name="wallet" size={16} color={colors.primary} />
                 </View>
                 <Text style={styles.miniCardLabel}>Caixa</Text>
-                <Text style={styles.miniCardValue}>{formatCurrency(data.balance)}</Text>
+                <Text style={styles.miniCardValue} {...SINGLE_LINE_FIT}>{formatCurrency(data.balance)}</Text>
                 <Text style={styles.miniCardSub}>Total</Text>
                 {balanceChange !== null ? (
                   <><Text style={[styles.miniCardChange, { color: balanceChange >= 0 ? colors.success : colors.danger }]}>{balanceChange >= 0 ? "↑" : "↓"} {Math.abs(balanceChange)}%</Text>
@@ -464,7 +496,7 @@ export default function DashboardScreen() {
                   <Ionicons name="download-outline" size={16} color={colors.success} />
                 </View>
                 <Text style={styles.miniCardLabel}>A receber</Text>
-                <Text style={styles.miniCardValue}>{formatCurrency(data.pendingReceivables)}</Text>
+                <Text style={styles.miniCardValue} {...SINGLE_LINE_FIT}>{formatCurrency(data.pendingReceivables)}</Text>
                 <Text style={styles.miniCardSub}>Pendente</Text>
                 {receivablesChange !== null ? (
                   <><Text style={[styles.miniCardChange, { color: receivablesChange >= 0 ? colors.success : colors.danger }]}>{receivablesChange >= 0 ? "↑" : "↓"} {Math.abs(receivablesChange)}%</Text>
@@ -479,7 +511,7 @@ export default function DashboardScreen() {
                   <Ionicons name="arrow-up" size={16} color={colors.danger} />
                 </View>
                 <Text style={styles.miniCardLabel}>A pagar</Text>
-                <Text style={styles.miniCardValue}>{formatCurrency(data.pendingPayables)}</Text>
+                <Text style={styles.miniCardValue} {...SINGLE_LINE_FIT}>{formatCurrency(data.pendingPayables)}</Text>
                 <Text style={styles.miniCardSub}>Pendente</Text>
                 {payablesChange !== null ? (
                   <><Text style={[styles.miniCardChange, { color: payablesChange > 0 ? colors.danger : colors.success }]}>{payablesChange > 0 ? "↑" : "↓"} {Math.abs(payablesChange)}%</Text>
@@ -596,7 +628,7 @@ export default function DashboardScreen() {
             </View>
 
             {/* ── Two-column: Gastos por categoria + Gastos ao longo do mês ── */}
-            <View style={{ flexDirection: "row", gap: spacing.md }}>
+            <View style={{ flexDirection: isNarrowScreen ? "column" : "row", gap: spacing.md }}>
               {data.expensesByCategory.length > 0 && (
                 <View style={[styles.sectionCard, { flex: 1 }]}>
                   <View style={styles.sectionHeader}>
@@ -641,15 +673,23 @@ export default function DashboardScreen() {
                   <Text style={styles.sectionTitleSm}>Gastos ao longo do mês</Text>
                   <TouchableOpacity style={styles.linkButtonSm} onPress={() => setChartModal("bar")}><Text style={styles.linkButtonTextSm}>Ver mais {">"}</Text></TouchableOpacity>
                 </View>
-                <BarChart
-                  data={dailyExpenseChartData}
-                  width={HALF_WIDTH - spacing.lg * 2 - 20}
-                  barWidth={12} spacing={6} roundedTop roundedBottom hideYAxisText
-                  yAxisThickness={0} xAxisThickness={0}
-                  xAxisLabelTextStyle={{ fontSize: 8, color: colors.textMuted }}
-                  noOfSections={3} height={120}
-                  rulesColor={colors.border} rulesType="dashed" backgroundColor="transparent"
-                />
+                {/* Largura medida no cartão; yAxisLabelWidth 0 porque a biblioteca
+                    reserva 35 px para o eixo Y mesmo com o texto oculto */}
+                <View onLayout={onDailyChartLayout} style={styles.dailyChartBox}>
+                  {dailyChartWidth > 0 && (
+                    <BarChart
+                      data={thinLabels(dailyExpenseChartData, 6)}
+                      width={dailyChartWidth}
+                      {...fitBars(dailyExpenseChartData.length, dailyChartWidth)}
+                      initialSpacing={0} endSpacing={0} yAxisLabelWidth={0} disableScroll
+                      roundedTop roundedBottom hideYAxisText
+                      yAxisThickness={0} xAxisThickness={0}
+                      xAxisLabelTextStyle={{ fontSize: 8, color: colors.textMuted }}
+                      noOfSections={3} height={120}
+                      rulesColor={colors.border} rulesType="dashed" backgroundColor="transparent"
+                    />
+                  )}
+                </View>
                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
                   <View>
                     <Text style={{ fontSize: 9, color: colors.textMuted }}>Média semanal</Text>
@@ -710,19 +750,26 @@ export default function DashboardScreen() {
                 </View>
               )}
 
-              <View style={{ height: 100, overflow: "hidden", marginTop: spacing.sm }}>
-                <LineChart
-                  data={netTrendChartData}
-                  width={SCREEN_WIDTH - CARD_PADDING * 2 - spacing.lg * 2 - 30} height={90}
-                  color={colors.success} thickness={2}
-                  hideDataPoints={netTrendChartData.length <= 1} dataPointsColor={colors.success} dataPointsRadius={3}
-                  curved areaChart
-                  startFillColor={colors.success} endFillColor="transparent" startOpacity={0.3} endOpacity={0}
-                  yAxisTextStyle={{ fontSize: 9, color: colors.textMuted }}
-                  xAxisLabelTextStyle={{ fontSize: 9, color: colors.textMuted }}
-                  yAxisColor="transparent" xAxisColor={colors.border}
-                  noOfSections={3} rulesColor={colors.border} rulesType="dashed"
-                />
+              {/* Sem altura fixa com overflow: hidden, que cortava os meses negativos */}
+              <View onLayout={onTrendChartLayout} style={{ marginTop: spacing.sm, minHeight: 110 }}>
+                {trendChartWidth > 0 && (
+                  <LineChart
+                    data={netTrendChartData}
+                    width={trendChartWidth - Y_AXIS_LABEL_WIDTH}
+                    yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
+                    height={90}
+                    adjustToWidth disableScroll initialSpacing={10} endSpacing={10}
+                    {...trendScale}
+                    color={colors.success} thickness={2}
+                    hideDataPoints={netTrendChartData.length <= 1} dataPointsColor={colors.success} dataPointsRadius={3}
+                    curved areaChart
+                    startFillColor={colors.success} endFillColor="transparent" startOpacity={0.3} endOpacity={0}
+                    yAxisTextStyle={{ fontSize: 9, color: colors.textMuted }}
+                    xAxisLabelTextStyle={{ fontSize: 9, color: colors.textMuted }}
+                    yAxisColor="transparent" xAxisColor={colors.border}
+                    rulesColor={colors.border} rulesType="dashed"
+                  />
+                )}
               </View>
               {data.balance < data.upcomingAmount && (
                 <View style={styles.warningBanner}>
@@ -765,27 +812,38 @@ export default function DashboardScreen() {
             {/* ── Bottom Grid ── */}
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
               {/* Contas futuras previstas */}
-              <View style={[styles.sectionCard, { width: HALF_WIDTH }]}>
+              <View style={[styles.sectionCard, { width: gridCardWidth }]}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.sectionTitleSm}>Contas futuras{"\n"}previstas</Text>
                   <TouchableOpacity style={styles.linkButtonSm} onPress={() => router.push("/recurring")}><Text style={styles.linkButtonTextSm}>Ver todos {">"}</Text></TouchableOpacity>
                 </View>
                 <View style={{ gap: 8 }}>
-                  {futureBills.length > 0 ? futureBills.map((bill: UpcomingBill) => (
-                    <View key={bill.id} style={styles.billItem}>
-                      <View style={[styles.billDot, { backgroundColor: bill.color }]} />
-                      <Text style={styles.billName} numberOfLines={1}>{bill.name}</Text>
-                      <Text style={styles.billDate}>{bill.date}</Text>
-                      <Text style={styles.billValue}>{formatCurrency(bill.amount)}</Text>
-                    </View>
-                  )) : (
+                  {/* Poucas contas, com a data sob o nome: na coluna estreita,
+                      nome + data + valor na mesma linha espremiam o nome até sumir */}
+                  {futureBills.length > 0 ? (
+                    <>
+                      {futureBills.slice(0, MAX_FUTURE_BILLS).map((bill: UpcomingBill) => (
+                        <View key={bill.id} style={styles.billItem}>
+                          <View style={[styles.billDot, { backgroundColor: bill.color }]} />
+                          <View style={styles.billInfo}>
+                            <Text style={styles.billName} numberOfLines={1}>{bill.name}</Text>
+                            <Text style={styles.billDate}>{bill.date}</Text>
+                          </View>
+                          <Text style={styles.billValue} {...SINGLE_LINE_FIT}>{formatCurrency(bill.amount)}</Text>
+                        </View>
+                      ))}
+                      {futureBills.length > MAX_FUTURE_BILLS && (
+                        <Text style={styles.billMore}>+{futureBills.length - MAX_FUTURE_BILLS} contas</Text>
+                      )}
+                    </>
+                  ) : (
                     <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: "center" }}>Nenhuma conta futura</Text>
                   )}
                 </View>
               </View>
 
               {/* Metas */}
-              <TouchableOpacity style={[styles.sectionCard, { width: HALF_WIDTH }]} onPress={() => router.push("/plan")} activeOpacity={0.8}>
+              <TouchableOpacity style={[styles.sectionCard, { width: gridCardWidth }]} onPress={() => router.push("/plan")} activeOpacity={0.8}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                   <Text style={styles.sectionTitleSm}>Metas</Text>
                   <Text style={styles.linkButtonTextSm}>Ver todas {">"}</Text>
@@ -814,7 +872,7 @@ export default function DashboardScreen() {
               </TouchableOpacity>
 
               {/* Streak financeiro */}
-              <View style={[styles.sectionCard, { width: HALF_WIDTH }]}>
+              <View style={[styles.sectionCard, { width: gridCardWidth }]}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Text style={{ fontSize: 16 }}>🔥</Text>
                   <Text style={styles.sectionTitleSm}>Streak financeiro</Text>
@@ -831,7 +889,7 @@ export default function DashboardScreen() {
               </View>
 
               {/* Score financeiro */}
-              <View style={[styles.sectionCard, { width: HALF_WIDTH, alignItems: "center" }]}>
+              <View style={[styles.sectionCard, { width: gridCardWidth, alignItems: "center" }]}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", width: "100%" }}>
                   <Text style={styles.sectionTitleSm}>Score financeiro</Text>
                   <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
@@ -885,7 +943,7 @@ export default function DashboardScreen() {
               {chartModal === "bar" && data && (
                 <BarChart
                   data={dailyExpenseChartData}
-                  width={SCREEN_WIDTH - spacing.lg * 4 - 40} height={250}
+                  width={modalChartWidth - Y_AXIS_LABEL_WIDTH} yAxisLabelWidth={0} height={250}
                   barWidth={20} spacing={14} roundedTop roundedBottom
                   yAxisThickness={0} xAxisThickness={0} hideYAxisText
                   xAxisLabelTextStyle={{ fontSize: 10, color: colors.textMuted }}
@@ -896,7 +954,11 @@ export default function DashboardScreen() {
               {chartModal === "line" && data && (
                 <LineChart
                   data={netTrendChartData}
-                  width={SCREEN_WIDTH - spacing.lg * 4 - 40} height={250}
+                  width={modalChartWidth - Y_AXIS_LABEL_WIDTH * 2}
+                  yAxisLabelWidth={Y_AXIS_LABEL_WIDTH}
+                  height={250}
+                  adjustToWidth disableScroll initialSpacing={12} endSpacing={12}
+                  {...buildTrendScale(netTrendChartData.map((point: { value: number }) => point.value), 5)}
                   color={colors.success} thickness={2}
                   hideDataPoints={false} dataPointsColor={colors.success} dataPointsRadius={4}
                   curved areaChart
@@ -904,7 +966,7 @@ export default function DashboardScreen() {
                   yAxisTextStyle={{ fontSize: 10, color: colors.textMuted }}
                   xAxisLabelTextStyle={{ fontSize: 10, color: colors.textMuted }}
                   yAxisColor="transparent" xAxisColor={colors.border}
-                  noOfSections={5} rulesColor={colors.border} rulesType="dashed"
+                  rulesColor={colors.border} rulesType="dashed"
                 />
               )}
 
@@ -1002,8 +1064,12 @@ function createStyles() {
   balanceDualValue: { fontSize: 22, fontWeight: "800", color: colors.textPrimary, marginTop: 2 },
   balanceDualDivider: { width: 1, backgroundColor: colors.border },
   balanceSubRow: { flexDirection: "row", gap: spacing.xl, marginTop: 4 },
+  balanceSubItem: { flex: 1 },
   balanceSubLabel: { fontSize: 11, color: colors.textMuted },
   balanceSubValue: { fontSize: 14, fontWeight: "700", color: colors.textPrimary },
+
+  /* Gráfico diário (largura medida) */
+  dailyChartBox: { width: "100%", minHeight: 150 },
 
   /* Mini Cards */
   miniCard: { width: 130, backgroundColor: colors.surface, borderRadius: radius.lg, padding: spacing.md, gap: 4 },
@@ -1061,9 +1127,11 @@ function createStyles() {
   /* Bills */
   billItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   billDot: { width: 5, height: 5, borderRadius: 2.5 },
-  billName: { flex: 1, fontSize: 10, color: colors.textPrimary },
+  billInfo: { flex: 1, minWidth: 0 },
+  billName: { fontSize: 11, fontWeight: "600", color: colors.textPrimary },
   billDate: { fontSize: 9, color: colors.textMuted },
-  billValue: { fontSize: 10, fontWeight: "700", color: colors.textPrimary },
+  billValue: { fontSize: 10, fontWeight: "700", color: colors.textPrimary, maxWidth: "55%" },
+  billMore: { fontSize: 10, color: colors.textMuted, textAlign: "right" },
 
   /* Streak */
   streakDay: { width: 16, height: 16, borderRadius: 8, backgroundColor: colors.surfaceElevated, alignItems: "center", justifyContent: "center" },
