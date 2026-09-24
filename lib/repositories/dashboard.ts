@@ -12,11 +12,30 @@ export interface UpcomingBill {
   color: string;
 }
 
-function monthRange(year?: number, month?: number, monthStartDay?: number): { first: string; last: string } {
+/**
+ * Período financeiro em andamento hoje. Com início no dia 5, o dia 03/09
+ * ainda pertence ao período de agosto (05/08 a 04/09).
+ * `month` é 0-based, como em Date.
+ */
+export function getCurrentPeriod(monthStartDay = getCachedMonthStartDay()): { year: number; month: number } {
   const now = new Date();
-  const y = year ?? now.getFullYear();
-  const m = month ?? now.getMonth();
+  const shifted = new Date(now.getFullYear(), now.getMonth() - (now.getDate() < monthStartDay ? 1 : 0), 1);
+  return { year: shifted.getFullYear(), month: shifted.getMonth() };
+}
+
+/** Período pedido pela tela, ou o atual quando não informado. */
+function resolvePeriod(opts: { year?: number; month?: number } | undefined, startDay: number) {
+  const current = getCurrentPeriod(startDay);
+  const year = opts?.year ?? current.year;
+  const month = opts?.month ?? current.month;
+  return { year, month, isCurrent: year === current.year && month === current.month };
+}
+
+function monthRange(year?: number, month?: number, monthStartDay?: number): { first: string; last: string } {
   const startDay = monthStartDay ?? getCachedMonthStartDay();
+  const current = getCurrentPeriod(startDay);
+  const y = year ?? current.year;
+  const m = month ?? current.month;
 
   if (startDay === 1) {
     const first = new Date(y, m, 1);
@@ -44,31 +63,23 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
   }
   const db = await getDb();
   const startDay = opts?.monthStartDay ?? getCachedMonthStartDay();
-  const { first, last } = monthRange(opts?.year, opts?.month, startDay);
-  const { first: prevFirst, last: prevLast } = monthRange(
-    opts?.year,
-    (opts?.month ?? new Date().getMonth()) - 1,
-    startDay
-  );
+  // Não usar `!opts.month`: janeiro é 0 e era tratado como "mês atual"
+  const period = resolvePeriod(opts, startDay);
+  const { first, last } = monthRange(period.year, period.month, startDay);
+  const { first: prevFirst, last: prevLast } = monthRange(period.year, period.month - 1, startDay);
   const today = formatDateLocal(new Date());
   const in7Days = formatDateLocal(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
 
   // For filtered month, overdue = pending transactions with date < first day of selected month
   // and upcoming = pending transactions within the selected month
-  const isCurrentMonth = !opts?.year || !opts?.month
-    ? true
-    : (opts.year === new Date().getFullYear() && opts.month === new Date().getMonth());
+  const isCurrentMonth = period.isCurrent;
 
   const overdueDate = isCurrentMonth ? today : first;
   const upcomingStart = isCurrentMonth ? today : first;
   const upcomingEnd = isCurrentMonth ? in7Days : last;
 
   // Monthly trend: 6 months ending at the selected month (respecting monthStartDay)
-  const trendStart = formatDateLocal(new Date(
-    (opts?.year ?? new Date().getFullYear()),
-    (opts?.month ?? new Date().getMonth()) - 5,
-    startDay
-  ));
+  const trendStart = formatDateLocal(new Date(period.year, period.month - 5, startDay));
   // Shift days so strftime groups by custom month period (e.g. day 5 → 1st of that period's month)
   const trendShift = startDay - 1;
 
@@ -97,19 +108,21 @@ export async function getDashboard(opts?: { year?: number; month?: number; month
       `SELECT COUNT(*) as count FROM transactions WHERE status = 'PENDING' AND date BETWEEN ? AND ?`,
       [first, last]
     ),
+    // "Contas vencidas" são só despesas: receita atrasada não é conta a pagar
     db.getFirstAsync<{ total: number | null }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-       WHERE status IN ('PENDING', 'OVERDUE') AND date < ?`,
+       WHERE type = 'EXPENSE' AND status IN ('PENDING', 'OVERDUE') AND date < ?`,
       [overdueDate]
     ),
     db.getFirstAsync<{ count: number }>(
       `SELECT COUNT(*) as count FROM transactions
-       WHERE status IN ('PENDING', 'OVERDUE') AND date < ?`,
+       WHERE type = 'EXPENSE' AND status IN ('PENDING', 'OVERDUE') AND date < ?`,
       [overdueDate]
     ),
+    // Contas a pagar em breve (subtraídas do saldo na tela) — só despesas
     db.getFirstAsync<{ total: number | null }>(
       `SELECT COALESCE(SUM(amount), 0) as total FROM transactions
-       WHERE status = 'PENDING' AND date >= ? AND date <= ?`,
+       WHERE type = 'EXPENSE' AND status = 'PENDING' AND date >= ? AND date <= ?`,
       [upcomingStart, upcomingEnd]
     ),
     db.getFirstAsync<{ count: number }>(
@@ -200,11 +213,11 @@ export async function getUpcomingBills(opts?: { year?: number; month?: number; m
   const today = formatDateLocal(new Date());
   const in30Days = formatDateLocal(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
 
-  const isCurrentMonth = !opts?.year || !opts?.month
-    ? true
-    : (opts.year === new Date().getFullYear() && opts.month === new Date().getMonth());
+  const startDay = opts?.monthStartDay ?? getCachedMonthStartDay();
+  const period = resolvePeriod(opts, startDay);
+  const isCurrentMonth = period.isCurrent;
 
-  const { first, last } = monthRange(opts?.year, opts?.month, opts?.monthStartDay);
+  const { first, last } = monthRange(period.year, period.month, startDay);
   const startDate = isCurrentMonth ? today : first;
   const endDate = isCurrentMonth ? in30Days : last;
 

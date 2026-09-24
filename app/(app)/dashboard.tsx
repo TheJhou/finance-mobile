@@ -5,7 +5,7 @@ import { checkinStreak, getAiForecast, getDashboardScore, getGoals, getMe, getSt
 import { calculateHealthScore } from "@/lib/health-score";
 import { scheduleDailyCommitmentCheck, scheduleGoalAlerts, scheduleUpcomingBillsAlerts } from "@/lib/notifications/scheduler";
 import type { UpcomingBill } from "@/lib/repositories/dashboard";
-import { getDashboard, getFutureBills, getUpcomingBills } from "@/lib/repositories/dashboard";
+import { getCurrentPeriod, getDashboard, getFutureBills, getUpcomingBills } from "@/lib/repositories/dashboard";
 import { processRecurringDue } from "@/lib/repositories/recurring";
 import { loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
@@ -90,9 +90,18 @@ export default function DashboardScreen() {
   const [notificationsScheduled, setNotificationsScheduled] = useState(false);
   const [aiForecast, setAiForecast] = useState<AiForecast | null>(null);
   const [forecastLoading, setForecastLoading] = useState(false);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+  // Período financeiro (respeita o dia de início do mês), não o mês do calendário
+  const [selectedYear, setSelectedYear] = useState(() => getCurrentPeriod().year);
+  const [selectedMonth, setSelectedMonth] = useState(() => getCurrentPeriod().month);
   const [monthStartDay, setMonthStartDay] = useState(1);
+  const userNavigatedRef = useRef(false);
+
+  const selectPeriod = useCallback((year: number, month: number, byUser: boolean) => {
+    if (byUser) userNavigatedRef.current = true;
+    const normalized = new Date(year, month, 1);
+    setSelectedYear(normalized.getFullYear());
+    setSelectedMonth(normalized.getMonth());
+  }, []);
 
   const fetchingRef = useRef(false);
   const fetchIdRef = useRef(0);
@@ -157,6 +166,16 @@ export default function DashboardScreen() {
       if (fetchIdRef.current !== fetchId) return;
       setMonthStartDay(startDay);
 
+      // O estado inicial usou o dia de início em cache; se o configurado muda o
+      // período atual, corrige (a mudança de mês dispara um novo fetch).
+      if (!userNavigatedRef.current) {
+        const current = getCurrentPeriod(startDay);
+        if (current.year !== selectedYear || current.month !== selectedMonth) {
+          selectPeriod(current.year, current.month, false);
+          return;
+        }
+      }
+
       // Process due recurring transactions so next_due_date is current before fetching bills
       await processRecurringDue();
       if (fetchIdRef.current !== fetchId) return;
@@ -219,7 +238,7 @@ export default function DashboardScreen() {
         setRefreshing(false);
       }
     }
-  }, [refreshing, notificationsScheduled, selectedYear, selectedMonth, loadAiForecast]);
+  }, [refreshing, notificationsScheduled, selectedYear, selectedMonth, loadAiForecast, selectPeriod]);
 
   useFocusEffect(
     useCallback(() => {
@@ -253,6 +272,7 @@ export default function DashboardScreen() {
   const pieColors = [colors.primary, "#f472b6", colors.info, colors.warning, colors.success, "#fb923c"];
 
   // Use selected month for comparison, not always the real current month
+  const currentPeriod = getCurrentPeriod(monthStartDay);
   const selectedMonthStr = `${selectedYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
   const prevMonthDate = new Date(selectedYear, selectedMonth - 1, 1);
   const prevMonthStr = toDateInputValue(prevMonthDate).slice(0, 7);
@@ -308,11 +328,7 @@ export default function DashboardScreen() {
         {/* ── Month selector ── */}
         <View style={styles.monthSelector}>
           <TouchableOpacity
-            onPress={() => {
-              const prev = new Date(selectedYear, selectedMonth - 1, 1);
-              setSelectedMonth(prev.getMonth());
-              setSelectedYear(prev.getFullYear());
-            }}
+            onPress={() => selectPeriod(selectedYear, selectedMonth - 1, true)}
             hitSlop={8}
           >
             <Ionicons name="chevron-back" size={22} color={colors.primary} />
@@ -321,21 +337,13 @@ export default function DashboardScreen() {
             {MONTH_NAMES[selectedMonth]} {selectedYear}
           </Text>
           <TouchableOpacity
-            onPress={() => {
-              const next = new Date(selectedYear, selectedMonth + 1, 1);
-              setSelectedMonth(next.getMonth());
-              setSelectedYear(next.getFullYear());
-            }}
+            onPress={() => selectPeriod(selectedYear, selectedMonth + 1, true)}
             hitSlop={8}
           >
             <Ionicons name="chevron-forward" size={22} color={colors.primary} />
           </TouchableOpacity>
-          {!(selectedYear === new Date().getFullYear() && selectedMonth === new Date().getMonth()) && (
-            <TouchableOpacity style={styles.todayBtn} onPress={() => {
-              const now = new Date();
-              setSelectedMonth(now.getMonth());
-              setSelectedYear(now.getFullYear());
-            }}>
+          {!(selectedYear === currentPeriod.year && selectedMonth === currentPeriod.month) && (
+            <TouchableOpacity style={styles.todayBtn} onPress={() => selectPeriod(currentPeriod.year, currentPeriod.month, false)}>
               <Text style={styles.todayBtnText}>Hoje</Text>
             </TouchableOpacity>
           )}
