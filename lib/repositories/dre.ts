@@ -2,7 +2,7 @@ import { getDb } from "@/lib/db";
 import { processRecurringDue } from "@/lib/repositories/recurring";
 import { formatDateLocal } from "@/lib/utils";
 
-export type DrePeriod = "month" | "quarter" | "semester" | "year" | "custom";
+export type DrePeriod = "month" | "quarter" | "semester" | "year" | "custom" | "months";
 
 export interface DrePeriodRange {
   type: DrePeriod;
@@ -76,6 +76,8 @@ export function buildPeriodRange(
   }
 
   switch (type) {
+    // "months" (intervalo) é montado por buildMonthRange; aqui equivale a um mês
+    case "months":
     case "month": {
       const { from, to } = customMonthRange(y, m);
       return { type, from, to, label: `${MONTH_NAMES_SHORT[m]} ${y}` };
@@ -102,6 +104,87 @@ export function buildPeriodRange(
       const to = customTo ?? formatDateLocal(new Date(y, m + 1, 0));
       return { type, from, to, label: `${from} → ${to}` };
     }
+  }
+}
+
+// ─── Intervalo de meses (filtro único do Relatório) ──────────────────────────
+
+/** Mês financeiro de referência. `month` é 0-based, como em Date. */
+export interface MonthRef {
+  year: number;
+  month: number;
+}
+
+export interface MonthRange {
+  start: MonthRef;
+  end: MonthRef;
+}
+
+export function shiftMonth(ref: MonthRef, delta: number): MonthRef {
+  const date = new Date(ref.year, ref.month + delta, 1);
+  return { year: date.getFullYear(), month: date.getMonth() };
+}
+
+/** Diferença em meses (b - a). */
+export function monthDiff(a: MonthRef, b: MonthRef): number {
+  return (b.year - a.year) * 12 + (b.month - a.month);
+}
+
+/** Quantidade de meses no intervalo, contando os dois extremos. */
+export function monthCount(range: MonthRange): number {
+  return monthDiff(range.start, range.end) + 1;
+}
+
+/** Aceita os meses em qualquer ordem. */
+export function toMonthRange(a: MonthRef, b: MonthRef = a): MonthRange {
+  return monthDiff(a, b) >= 0 ? { start: a, end: b } : { start: b, end: a };
+}
+
+/** Anda o intervalo inteiro pelo próprio tamanho (3 meses → próximos 3). */
+export function shiftMonthRange(range: MonthRange, direction: 1 | -1): MonthRange {
+  const step = monthCount(range) * direction;
+  return { start: shiftMonth(range.start, step), end: shiftMonth(range.end, step) };
+}
+
+export function formatMonthRangeLabel(range: MonthRange): string {
+  const { start, end } = range;
+  const startLabel = MONTH_NAMES_SHORT[start.month];
+  const endLabel = `${MONTH_NAMES_SHORT[end.month]} ${end.year}`;
+  if (monthDiff(start, end) === 0) return endLabel;
+  if (start.year === end.year) return `${startLabel} – ${endLabel}`;
+  return `${startLabel} ${start.year} – ${endLabel}`;
+}
+
+/**
+ * Datas do intervalo respeitando o dia de início do mês financeiro:
+ * com início no dia 5, "Jul – Set" vai de 05/07 a 04/10.
+ */
+export function buildMonthRange(range: MonthRange, monthStartDay = 1): DrePeriodRange {
+  const { start, end } = toMonthRange(range.start, range.end);
+  const startDay = Math.min(Math.max(monthStartDay, 1), 28);
+  const from = new Date(start.year, start.month, startDay);
+  const to = new Date(end.year, end.month + 1, startDay - 1);
+  return {
+    type: "months",
+    from: formatDateLocal(from),
+    to: formatDateLocal(to),
+    label: formatMonthRangeLabel({ start, end }),
+  };
+}
+
+export type MonthRangePreset = "current" | "last3" | "last6" | "yearToDate";
+
+/** Atalhos do seletor, calculados a partir do mês financeiro atual. */
+export function monthRangePreset(preset: MonthRangePreset, current: MonthRef): MonthRange {
+  switch (preset) {
+    case "current":
+      return { start: current, end: current };
+    case "last3":
+      return { start: shiftMonth(current, -2), end: current };
+    case "last6":
+      return { start: shiftMonth(current, -5), end: current };
+    case "yearToDate":
+      return { start: { year: current.year, month: 0 }, end: current };
   }
 }
 
@@ -151,16 +234,18 @@ export async function getDreData(period: DrePeriodRange): Promise<DreData> {
     [from, to]
   );
 
-  // Monthly evolution within period
+  // Evolução por mês financeiro: com início no dia 5, 05/07–04/08 conta como
+  // julho (o período começa no dia de início; desloca as datas antes de agrupar)
+  const startDayShift = Math.max(0, Number(from.slice(8, 10)) - 1);
   const monthlyRows = await db.getAllAsync<{ month: string; income: number; expense: number }>(
-    `SELECT strftime('%Y-%m', date) as month,
+    `SELECT strftime('%Y-%m', date(date, '-' || ? || ' days')) as month,
        SUM(CASE WHEN type = 'INCOME' THEN amount ELSE 0 END) as income,
        SUM(CASE WHEN type = 'EXPENSE' THEN amount ELSE 0 END) as expense
      FROM transactions
      WHERE status = 'PAID' AND date BETWEEN ? AND ?
-     GROUP BY strftime('%Y-%m', date)
+     GROUP BY month
      ORDER BY month ASC`,
-    [from, to]
+    [startDayShift, from, to]
   );
 
   // Detailed transactions

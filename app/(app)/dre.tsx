@@ -1,15 +1,15 @@
-import { DatePicker } from "@/components/date-picker";
+import { MonthRangePicker } from "@/components/month-range-picker";
 import { useAppDialog } from "@/hooks/use-app-dialog";
 import { exportDreCSV, exportDrePDF, exportDreXLSX } from "@/lib/export";
-import type { DreData, DrePeriod, DrePeriodRange } from "@/lib/repositories/dre";
-import { buildPeriodRange, getDreData } from "@/lib/repositories/dre";
+import type { DreData, DrePeriodRange, MonthRange } from "@/lib/repositories/dre";
+import { buildMonthRange, getDreData, monthCount, monthDiff, shiftMonthRange } from "@/lib/repositories/dre";
 import { getCachedMonthStartDay, getCurrentPeriod, loadMonthStartDay } from "@/lib/settings";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useThemedStyles } from "@/lib/theme-context";
 import { formatCurrency } from "@/lib/utils";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     ActivityIndicator,
     Dimensions,
@@ -29,14 +29,6 @@ const SCREEN_WIDTH = Dimensions.get("window").width;
 const CHART_WIDTH = SCREEN_WIDTH - spacing.lg * 2 - spacing.lg * 2 - 16;
 
 // ─── Period selector ──────────────────────────────────────────────────────────
-
-const PERIOD_OPTIONS: { key: DrePeriod; label: string }[] = [
-  { key: "month", label: "Mês" },
-  { key: "quarter", label: "Trimestre" },
-  { key: "semester", label: "Semestre" },
-  { key: "year", label: "Ano" },
-  { key: "custom", label: "Personalizado" },
-];
 
 // ─── Category row ─────────────────────────────────────────────────────────────
 
@@ -76,23 +68,20 @@ function CategoryRow({
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-
 export default function DreScreen() {
   const styles = useThemedStyles(createStyles);
-  const [selectedPeriod, setSelectedPeriod] = useState<DrePeriod>("month");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
-  const [showCustomModal, setShowCustomModal] = useState(false);
+  // Filtro único: um mês ou um intervalo de meses financeiros
+  const [range, setRange] = useState<MonthRange>(() => {
+    const current = getCurrentPeriod();
+    return { start: current, end: current };
+  });
+  const [showRangePicker, setShowRangePicker] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [data, setData] = useState<DreData | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Período financeiro (respeita o dia de início do mês), não o mês do calendário
-  const [selectedYear, setSelectedYear] = useState(() => getCurrentPeriod().year);
-  const [selectedMonth, setSelectedMonth] = useState(() => getCurrentPeriod().month);
   const [monthStartDay, setMonthStartDay] = useState(getCachedMonthStartDay);
   const userNavigatedRef = useRef(false);
 
@@ -103,12 +92,13 @@ export default function DreScreen() {
       setMonthStartDay(startDay);
       if (userNavigatedRef.current) return;
       const current = getCurrentPeriod(startDay);
-      setSelectedYear(current.year);
-      setSelectedMonth(current.month);
+      setRange({ start: current, end: current });
     });
   }, []);
-  const [period, setPeriod] = useState<DrePeriodRange>(buildPeriodRange("month"));
+  // Datas e rótulo derivados do intervalo (respeitando o dia de início do mês)
+  const period = useMemo(() => buildMonthRange(range, monthStartDay), [range, monthStartDay]);
   const periodRef = useRef<DrePeriodRange>(period);
+  periodRef.current = period;
   const { alert, dialog } = useAppDialog();
 
   const fetchData = useCallback(async (p?: DrePeriodRange) => {
@@ -127,66 +117,25 @@ export default function DreScreen() {
     }
   }, []);
 
-  const rebuildPeriod = useCallback(async (type: DrePeriod, from?: string, to?: string) => {
-    const startDay = await loadMonthStartDay();
-    const p = buildPeriodRange(type, from, to, { year: selectedYear, month: selectedMonth, monthStartDay: startDay });
-    periodRef.current = p;
-    setPeriod(p);
-    return p;
-  }, [selectedYear, selectedMonth]);
-
+  // Busca ao focar a tela e sempre que o período muda
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      rebuildPeriod(selectedPeriod).then(p => fetchData(p));
-    }, [fetchData, rebuildPeriod, selectedPeriod])
+      fetchData(period);
+    }, [fetchData, period])
   );
 
-  function selectPeriod(key: DrePeriod) {
-    if (key === "custom") {
-      setShowCustomModal(true);
-      return;
-    }
-    setSelectedPeriod(key);
-    setLoading(true);
-    rebuildPeriod(key).then(p => fetchData(p));
-  }
-
-  function applyCustomPeriod() {
-    if (!customFrom || !customTo) {
-      alert("Período inválido", "Preencha as datas de início e fim.", { variant: "danger" });
-      return;
-    }
-    if (customFrom > customTo) {
-      alert("Período inválido", "A data inicial deve ser anterior à data final.", { variant: "danger" });
-      return;
-    }
-    setSelectedPeriod("custom");
-    setShowCustomModal(false);
-    const p = buildPeriodRange("custom", customFrom, customTo);
-    periodRef.current = p;
-    setPeriod(p);
-    setLoading(true);
-    fetchData(p);
-  }
-
-  function changeMonth(delta: number) {
+  /** As setas andam o intervalo inteiro pelo próprio tamanho. */
+  function shiftRange(direction: 1 | -1) {
     userNavigatedRef.current = true;
-    const next = new Date(selectedYear, selectedMonth + delta, 1);
-    setSelectedMonth(next.getMonth());
-    setSelectedYear(next.getFullYear());
+    setRange((current) => shiftMonthRange(current, direction));
   }
 
-  // Rebuild period and fetch when month/year changes (not custom period)
-  useEffect(() => {
-    if (selectedPeriod === "custom") return;
-    let cancelled = false;
-    setLoading(true);
-    rebuildPeriod(selectedPeriod).then(p => {
-      if (!cancelled) fetchData(p);
-    });
-    return () => { cancelled = true; };
-  }, [selectedMonth, selectedYear, selectedPeriod, rebuildPeriod, fetchData]);
+  function applyRange(next: MonthRange) {
+    userNavigatedRef.current = true;
+    setRange(next);
+    setShowRangePicker(false);
+  }
 
   async function handleExport(format: "csv" | "xlsx" | "pdf") {
     if (!data) return;
@@ -226,6 +175,7 @@ export default function DreScreen() {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   const currentPeriod = getCurrentPeriod(monthStartDay);
+  const isCurrentMonthOnly = monthCount(range) === 1 && monthDiff(range.start, currentPeriod) === 0;
 
   return (
     <SafeAreaView style={styles.container} edges={["left", "right"]}>
@@ -248,43 +198,30 @@ export default function DreScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Period selector */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.periodScroll} contentContainerStyle={styles.periodContainer}>
-        {PERIOD_OPTIONS.map((opt) => (
-          <TouchableOpacity
-            key={opt.key}
-            style={[styles.periodChip, selectedPeriod === opt.key && styles.periodChipActive]}
-            onPress={() => selectPeriod(opt.key)}
-          >
-            <Text style={[styles.periodChipText, selectedPeriod === opt.key && styles.periodChipTextActive]}>
-              {opt.label}
-            </Text>
+      {/* Filtro de período: um mês ou um intervalo de meses */}
+      <View style={styles.monthSelector}>
+        <TouchableOpacity onPress={() => shiftRange(-1)} hitSlop={8} accessibilityLabel="Período anterior">
+          <Ionicons name="chevron-back" size={22} color={colors.primary} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.rangeButton}
+          onPress={() => setShowRangePicker(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Período: ${period.label}. Toque para escolher`}
+        >
+          <Ionicons name="calendar-outline" size={16} color={colors.primary} />
+          <Text style={styles.monthSelectorText} numberOfLines={1}>{period.label}</Text>
+          <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => shiftRange(1)} hitSlop={8} accessibilityLabel="Próximo período">
+          <Ionicons name="chevron-forward" size={22} color={colors.primary} />
+        </TouchableOpacity>
+        {!isCurrentMonthOnly && (
+          <TouchableOpacity style={styles.todayBtn} onPress={() => applyRange({ start: currentPeriod, end: currentPeriod })}>
+            <Text style={styles.todayBtnText}>Hoje</Text>
           </TouchableOpacity>
-        ))}
-      </ScrollView>
-
-      {/* Month selector */}
-      {selectedPeriod !== "custom" && (
-        <View style={styles.monthSelector}>
-          <TouchableOpacity onPress={() => changeMonth(-1)} hitSlop={8}>
-            <Ionicons name="chevron-back" size={22} color={colors.primary} />
-          </TouchableOpacity>
-          <Text style={styles.monthSelectorText}>
-            {MONTH_NAMES[selectedMonth]} {selectedYear}
-          </Text>
-          <TouchableOpacity onPress={() => changeMonth(1)} hitSlop={8}>
-            <Ionicons name="chevron-forward" size={22} color={colors.primary} />
-          </TouchableOpacity>
-          {!(selectedYear === currentPeriod.year && selectedMonth === currentPeriod.month) && (
-            <TouchableOpacity style={styles.todayBtn} onPress={() => {
-              setSelectedMonth(currentPeriod.month);
-              setSelectedYear(currentPeriod.year);
-            }}>
-              <Text style={styles.todayBtnText}>Hoje</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
+        )}
+      </View>
 
       {loading ? (
         <View style={styles.centered}>
@@ -474,29 +411,13 @@ export default function DreScreen() {
         </ScrollView>
       )}
 
-      {/* Custom period modal */}
-      <Modal visible={showCustomModal} transparent animationType="slide" onRequestClose={() => setShowCustomModal(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setShowCustomModal(false)}>
-          <Pressable style={styles.modalSheet} onPress={(e) => e.stopPropagation()}>
-            <Text style={styles.modalTitle}>Período Personalizado</Text>
-            <DatePicker
-              label="Data inicial"
-              value={customFrom}
-              onChange={setCustomFrom}
-              maxDate={customTo || undefined}
-            />
-            <DatePicker
-              label="Data final"
-              value={customTo}
-              onChange={setCustomTo}
-              minDate={customFrom || undefined}
-            />
-            <TouchableOpacity style={styles.applyBtn} onPress={applyCustomPeriod}>
-              <Text style={styles.applyBtnText}>Aplicar</Text>
-            </TouchableOpacity>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <MonthRangePicker
+        visible={showRangePicker}
+        value={range}
+        current={currentPeriod}
+        onApply={applyRange}
+        onClose={() => setShowRangePicker(false)}
+      />
 
       {/* Export modal */}
       <Modal visible={showExportModal} transparent animationType="slide" onRequestClose={() => setShowExportModal(false)}>
@@ -608,38 +529,7 @@ function createStyles() {
     justifyContent: "center",
   },
 
-  // Period chips
-  periodScroll: {
-    maxHeight: 48,
-  },
-  periodContainer: {
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm,
-    alignItems: "center",
-  },
-  periodChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs + 2,
-    borderRadius: radius.full,
-    backgroundColor: colors.surfaceElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  periodChipActive: {
-    backgroundColor: colors.primary + "22",
-    borderColor: colors.primary,
-  },
-  periodChipText: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    fontWeight: "500",
-  },
-  periodChipTextActive: {
-    color: colors.primary,
-    fontWeight: "700",
-  },
-
-  // Month selector
+  // Filtro de período
   monthSelector: {
     flexDirection: "row",
     alignItems: "center",
@@ -648,7 +538,20 @@ function createStyles() {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
   },
+  rangeButton: {
+    flexShrink: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs + 2,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceElevated,
+  },
   monthSelectorText: {
+    flexShrink: 1,
     fontSize: 16,
     fontWeight: "700",
     color: colors.textPrimary,
@@ -917,19 +820,6 @@ function createStyles() {
     color: colors.textPrimary,
     fontSize: 14,
   },
-  applyBtn: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    paddingVertical: spacing.md,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  applyBtnText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 15,
-  },
-
   // Export options
   exportOptionBtn: {
     flexDirection: "row",
