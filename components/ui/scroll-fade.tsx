@@ -2,7 +2,7 @@ import { colors } from "@/lib/theme";
 import { useThemedStyles } from "@/lib/theme-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
-import { type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps, ScrollView, StyleSheet, View } from "react-native";
+import { type NativeScrollEvent, type NativeSyntheticEvent, type ScrollViewProps, type StyleProp, type ViewStyle, ScrollView, StyleSheet, View } from "react-native";
 
 interface ScrollFadeProps {
   height?: number;
@@ -25,6 +25,8 @@ export function ScrollFade({ height = 40, fadeColor }: Readonly<ScrollFadeProps>
 
 interface HorizontalScrollFadeProps extends ScrollViewProps {
   fadeColor?: string;
+  /** Estilo do contêiner externo (ex.: margem negativa para ir até a borda da tela) */
+  containerStyle?: StyleProp<ViewStyle>;
   fadeWidth?: number;
   children: React.ReactNode;
 }
@@ -34,6 +36,7 @@ export function HorizontalScrollFade({
   fadeWidth = 40,
   children,
   style,
+  containerStyle,
   ...scrollViewProps
 }: Readonly<HorizontalScrollFadeProps>) {
   const styles = useThemedStyles(createStyles);
@@ -42,7 +45,9 @@ export function HorizontalScrollFade({
   const [showRight, setShowRight] = useState(true);
 
   return (
-    <View style={{ position: "relative", width: "100%" }}>
+    // Sem width fixa: o contêiner estica, e margens negativas em containerStyle o
+    // alargam até as bordas (com width 100% elas só deslocavam o carrossel)
+    <View style={[{ position: "relative" }, containerStyle]}>
       <ScrollView
         horizontal
         onScroll={(e: NativeSyntheticEvent<NativeScrollEvent>) => {
