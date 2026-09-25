@@ -216,20 +216,54 @@ export async function getGoals(): Promise<GoalData[]> {
   return response.json();
 }
 
-export async function createGoal(data: { name: string; targetValue: number; savedValue?: number; deadline?: string; icon?: string; color?: string }) {
+export interface GoalInput {
+  name: string;
+  targetValue: number;
+  savedValue?: number;
+  /** ISO 8601; null remove o prazo (só na edição) */
+  deadline?: string | null;
+  icon?: string;
+  color?: string;
+}
+
+/**
+ * Cria a meta. `idempotencyKey` deve ser a mesma em novas tentativas da mesma
+ * ação (ex.: o usuário toca de novo depois de um erro de rede): o backend
+ * devolve a meta já criada em vez de criar outra.
+ */
+export async function createGoal(data: GoalInput, idempotencyKey?: string) {
   const response = await authFetch(`${BACKEND_URL}/goals`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }) },
     body: JSON.stringify(data),
   });
   if (!response.ok) await handleError(response, "Erro ao criar meta");
   return response.json();
 }
 
-export async function depositGoal(id: string, amount: number) {
-  const response = await authFetch(`${BACKEND_URL}/goals/${id}/deposit`, {
-    method: "POST",
+export async function updateGoal(id: string, data: Partial<GoalInput>) {
+  const response = await authFetch(`${BACKEND_URL}/goals/${encodeURIComponent(id)}`, {
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) await handleError(response, "Erro ao atualizar meta");
+  return response.json();
+}
+
+export async function deleteGoal(id: string): Promise<void> {
+  const response = await authFetch(`${BACKEND_URL}/goals/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) await handleError(response, "Erro ao excluir meta");
+}
+
+/**
+ * Soma um valor à meta. Com `idempotencyKey` (a mesma em novas tentativas),
+ * uma resposta perdida seguida de novo toque não deposita duas vezes.
+ */
+export async function depositGoal(id: string, amount: number, idempotencyKey?: string) {
+  const response = await authFetch(`${BACKEND_URL}/goals/${encodeURIComponent(id)}/deposit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(idempotencyKey && { "Idempotency-Key": idempotencyKey }) },
     body: JSON.stringify({ amount }),
   });
   if (!response.ok) await handleError(response, "Erro ao depositar na meta");

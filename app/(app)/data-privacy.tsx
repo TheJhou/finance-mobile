@@ -108,6 +108,24 @@ export default function DataPrivacyScreen() {
         </Text>
       </View>
 
+      {/* A política continua em tela própria: é pública (abre sem login, a partir dos Termos) */}
+      <AccountSection title="Política e Termos">
+        <AccountRow
+          icon="shield-checkmark-outline"
+          iconColor={colors.success}
+          label="Política de Privacidade"
+          subtitle="Como coletamos e usamos seus dados, e seus direitos"
+          onPress={() => router.push("/(app)/privacy" as any)}
+        />
+        <RowSeparator />
+        <AccountRow
+          icon="document-outline"
+          iconColor={colors.primary}
+          label="Termos de Uso"
+          onPress={() => router.push("/(app)/terms" as any)}
+        />
+      </AccountSection>
+
       <AccountSection title="Exportar Dados">
         <AccountRow
           icon="download-outline"
@@ -122,22 +140,6 @@ export default function DataPrivacyScreen() {
           label="Baixar todos os meus dados (LGPD)"
           subtitle="Exportação completa conforme Art. 18 da LGPD"
           onPress={handleExportLgpd}
-        />
-      </AccountSection>
-
-      <AccountSection title="Documentos">
-        <AccountRow
-          icon="shield-outline"
-          iconColor={colors.primary}
-          label="Política de Privacidade"
-          onPress={() => router.push("/(app)/privacy" as any)}
-        />
-        <RowSeparator />
-        <AccountRow
-          icon="document-outline"
-          iconColor={colors.primary}
-          label="Termos de Uso"
-          onPress={() => router.push("/(app)/terms" as any)}
         />
       </AccountSection>
 

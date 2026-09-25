@@ -2,16 +2,18 @@ import { colors, spacing } from "@/lib/theme";
 import { useThemedStyles } from "@/lib/theme-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { type ReactNode } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { type ReactElement, type ReactNode } from "react";
+import { type RefreshControlProps, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 interface ScreenLayoutProps {
   title: string;
   children: ReactNode;
+  /** Ex.: <RefreshControl /> para "puxar para atualizar" */
+  refreshControl?: ReactElement<RefreshControlProps>;
 }
 
-export function ScreenLayout({ title, children }: ScreenLayoutProps) {
+export function ScreenLayout({ title, children, refreshControl }: ScreenLayoutProps) {
   const router = useRouter();
   const styles = useThemedStyles(createStyles);
 
@@ -24,7 +26,7 @@ export function ScreenLayout({ title, children }: ScreenLayoutProps) {
         <Text style={styles.headerTitle}>{title}</Text>
         <View style={{ width: 24 }} />
       </View>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false} refreshControl={refreshControl}>
         {children}
       </ScrollView>
     </SafeAreaView>

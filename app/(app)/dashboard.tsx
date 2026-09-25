@@ -813,9 +813,9 @@ export default function DashboardScreen() {
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
               {/* Contas futuras previstas */}
               <View style={[styles.sectionCard, { width: gridCardWidth }]}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={styles.sectionTitleSm}>Contas futuras{"\n"}previstas</Text>
-                  <TouchableOpacity style={styles.linkButtonSm} onPress={() => router.push("/recurring")}><Text style={styles.linkButtonTextSm}>Ver todos {">"}</Text></TouchableOpacity>
+                <View style={styles.gridCardHeader}>
+                  <Text style={styles.gridCardTitle}>Contas futuras previstas</Text>
+                  <TouchableOpacity style={styles.gridCardButton} onPress={() => router.push("/recurring")}><Text style={styles.linkButtonTextSm}>Ver todos {">"}</Text></TouchableOpacity>
                 </View>
                 <View style={{ gap: 8 }}>
                   {/* Poucas contas, com a data sob o nome: na coluna estreita,
@@ -843,10 +843,13 @@ export default function DashboardScreen() {
               </View>
 
               {/* Metas */}
-              <TouchableOpacity style={[styles.sectionCard, { width: gridCardWidth }]} onPress={() => router.push("/plan")} activeOpacity={0.8}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                  <Text style={styles.sectionTitleSm}>Metas</Text>
-                  <Text style={styles.linkButtonTextSm}>Ver todas {">"}</Text>
+              <TouchableOpacity style={[styles.sectionCard, { width: gridCardWidth }]} onPress={() => router.push("/goals" as any)} activeOpacity={0.8}>
+                <View style={styles.gridCardHeader}>
+                  <Text style={styles.gridCardTitle}>Metas</Text>
+                  {/* O card inteiro já abre as metas: aqui é só a aparência do botão */}
+                  <View style={styles.gridCardButton}>
+                    <Text style={styles.linkButtonTextSm}>{goals.length > 0 ? "Ver todas" : "Criar"} {">"}</Text>
+                  </View>
                 </View>
                 {goals.length > 0 ? (
                   <View style={{ gap: 6 }}>
@@ -867,7 +870,7 @@ export default function DashboardScreen() {
                     {goals.length > 1 && <Text style={{ fontSize: 9, color: colors.textMuted }}>+{goals.length - 1} {goals.length - 1 === 1 ? "meta" : "metas"}</Text>}
                   </View>
                 ) : (
-                  <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: "center" }}>Nenhuma meta cadastrada</Text>
+                  <Text style={{ fontSize: 11, color: colors.textMuted, textAlign: "center" }}>Nenhuma meta ainda. Toque para criar a primeira.</Text>
                 )}
               </TouchableOpacity>
 
@@ -1091,6 +1094,11 @@ function createStyles() {
   linkButtonText: { fontSize: 12, color: "#000000", fontWeight: "700" },
   linkButtonSm: { backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
   linkButtonTextSm: { fontSize: 10, color: "#000000", fontWeight: "700" },
+  // Cabeçalho dos cards da grade (meia largura): o título encolhe e quebra linha,
+  // o botão mantém o tamanho — antes o botão era empurrado para fora do card
+  gridCardHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: spacing.sm },
+  gridCardTitle: { flex: 1, flexShrink: 1, fontSize: 13, fontWeight: "700", color: colors.textPrimary },
+  gridCardButton: { flexShrink: 0, backgroundColor: colors.primary, borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4 },
 
   /* Health Scores */
   healthScoresRow: { flexDirection: "row", justifyContent: "space-between" },
