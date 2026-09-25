@@ -2,7 +2,8 @@ import { resumeAutoLock, suspendAutoLockFor, withoutAutoLock } from "@/lib/biome
 import { authFetch } from "@/lib/auth";
 import { BACKEND_URL } from "@/lib/config";
 import { clearProCache } from "@/lib/subscription";
-import { Platform } from "react-native";
+import Constants from "expo-constants";
+import { Linking, Platform } from "react-native";
 import {
     type EventSubscription,
     type Purchase,
@@ -18,6 +19,7 @@ import {
 } from "react-native-iap";
 
 const PRO_PRODUCT_ID = "finance_pro_monthly";
+const DEFAULT_PACKAGE_NAME = "com.thejhou.kilun";
 
 let initialized = false;
 
@@ -96,6 +98,71 @@ export async function requestProSubscription(): Promise<void> {
     console.error("[IAP] requestProSubscription error:", err);
     throw err instanceof Error ? err : new Error("Erro ao iniciar compra");
   }
+}
+
+/** Preço da assinatura como a Google Play mostra ao usuário (moeda e impostos locais). */
+export async function getProProductPrice(): Promise<string | null> {
+  if (Platform.OS !== "android") return null;
+  try {
+    await initIAP();
+    const products = await fetchProducts({ skus: [PRO_PRODUCT_ID], type: "subs" });
+    const product = Array.isArray(products) ? products.find((p) => p.id === PRO_PRODUCT_ID) ?? products[0] : null;
+    return product?.displayPrice ?? null;
+  } catch (err) {
+    console.warn("[IAP] Não foi possível obter o preço na Google Play:", err);
+    return null;
+  }
+}
+
+/**
+ * Abre a assinatura na Google Play. É lá que o usuário cancela, reativa ou
+ * troca a forma de pagamento: a Google não permite cancelar dentro do app.
+ */
+export async function openPlayStoreSubscription(): Promise<void> {
+  const packageName = Constants.expoConfig?.android?.package ?? DEFAULT_PACKAGE_NAME;
+  const url = `https://play.google.com/store/account/subscriptions?sku=${PRO_PRODUCT_ID}&package=${packageName}`;
+  // A Google Play leva o app ao segundo plano: não exige a digital na volta
+  suspendAutoLockFor(10 * 60_000);
+  await Linking.openURL(url);
+}
+
+export type RestoreResult =
+  | { type: "restored" }
+  | { type: "none" }
+  | { type: "pending" }
+  | { type: "error"; message: string };
+
+/**
+ * Procura assinaturas ativas desta conta Google na Play Store e as vincula de
+ * novo à conta do app (troca de aparelho, reinstalação, compra não ativada).
+ */
+export async function restorePurchases(): Promise<RestoreResult> {
+  if (Platform.OS !== "android") {
+    return { type: "error", message: "Assinaturas disponíveis apenas no Android via Google Play." };
+  }
+  await initIAP();
+  let purchases: Purchase[];
+  try {
+    purchases = await getAvailablePurchases();
+  } catch (err) {
+    return { type: "error", message: err instanceof Error ? err.message : "Não foi possível consultar a Google Play" };
+  }
+
+  const pro = purchases.filter((p) => p.productId === PRO_PRODUCT_ID);
+  if (pro.length === 0) return { type: "none" };
+
+  let pending = false;
+  let lastError: string | null = null;
+  for (const purchase of pro) {
+    const result = await activatePurchase(purchase).catch(
+      (err): PurchaseEvent => ({ type: "error", message: err instanceof Error ? err.message : "Falha ao restaurar" })
+    );
+    if (result.type === "activated") return { type: "restored" };
+    if (result.type === "pending") pending = true;
+    if (result.type === "error") lastError = result.message;
+  }
+  if (pending) return { type: "pending" };
+  return lastError ? { type: "error", message: lastError } : { type: "none" };
 }
 
 export async function getActivePurchases(): Promise<Purchase[]> {

@@ -26,6 +26,22 @@ export interface PlanConfig {
   popular?: boolean;
 }
 
+/**
+ * Recursos de cada plano. Só o que o app entrega: o que é PRO aqui é bloqueado
+ * pelo backend para o FREE (assertProPlan), e vice-versa.
+ */
+const PLAN_FEATURES: PlanFeature[] = [
+  { label: 'Transações, categorias e relatórios', free: true, pro: true, icon: 'wallet' },
+  { label: 'Importação automática das notificações do banco', free: true, pro: true, icon: 'notifications' },
+  { label: 'Análise de texto com IA', free: 'Limite mensal', pro: 'Limite 300× maior', icon: 'sparkles' },
+  { label: 'Exportar CSV', free: true, pro: true, icon: 'document' },
+  { label: 'OCR de documentos (boletos, notas, comprovantes)', free: false, pro: true, icon: 'scan' },
+  { label: 'Importação por áudio', free: false, pro: true, icon: 'mic' },
+  { label: 'Previsão financeira com IA', free: false, pro: true, icon: 'trending-up' },
+  { label: 'Exportar Excel e PDF', free: false, pro: true, icon: 'grid' },
+  { label: 'Backups na nuvem', free: '3', pro: '30', icon: 'cloud-upload' },
+];
+
 // Configurações padronizadas para Google Play Store
 export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
   FREE: {
@@ -37,26 +53,13 @@ export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
     period: 'para sempre',
     tokenLimit: Number(process.env.EXPO_PUBLIC_FREE_TOKEN_LIMIT ?? 100000),
     color: '#6b7280',
-    features: [
-      { label: 'Transações ilimitadas', free: true, pro: true },
-      { label: 'Categorias ilimitadas', free: true, pro: true },
-      { label: 'Relatório DRE', free: true, pro: true },
-      { label: 'Exportar CSV', free: true, pro: true },
-      { label: 'Backup automático', free: true, pro: true },
-      { label: 'IA para importar por foto', free: '300/mês', pro: 'Ilimitado', icon: 'camera' },
-      { label: 'IA para importar por texto', free: '150/mês', pro: 'Ilimitado', icon: 'text' },
-      { label: 'Transcrição de áudio', free: '100/mês', pro: 'Ilimitado', icon: 'mic' },
-      { label: 'OCR de documentos', free: false, pro: true, icon: 'document' },
-      { label: 'Exportar Excel (XLSX)', free: false, pro: true, icon: 'grid' },
-      { label: 'Exportar PDF', free: false, pro: true, icon: 'document-text' },
-      { label: 'Suporte por e-mail', free: true, pro: true, icon: 'mail' },
-      { label: 'Suporte prioritário', free: false, pro: true, icon: 'star' },
-    ],
+    features: PLAN_FEATURES,
   },
   PRO: {
     code: 'PRO',
     name: 'Kilun Pro',
-    description: 'Recursos avançados com IA ilimitada para controle financeiro completo',
+    description: 'OCR, áudio, previsão com IA, exportação premium e muito mais uso de IA',
+    // Referência: o preço exibido na compra vem da Google Play (getProProductPrice)
     price: 3.00,
     priceDisplay: 'R$ 3,00',
     period: 'por mês',
@@ -64,23 +67,14 @@ export const PLANS: Record<'FREE' | 'PRO', PlanConfig> = {
     color: '#f472b6',
     badge: 'PRO',
     popular: true,
-    features: [
-      { label: 'Transações ilimitadas', free: true, pro: true },
-      { label: 'Categorias ilimitadas', free: true, pro: true },
-      { label: 'Relatório DRE', free: true, pro: true },
-      { label: 'Exportar CSV', free: true, pro: true },
-      { label: 'Backup automático', free: true, pro: true },
-      { label: 'IA para importar por foto', free: '300/mês', pro: 'Ilimitado', icon: 'camera' },
-      { label: 'IA para importar por texto', free: '150/mês', pro: 'Ilimitado', icon: 'text' },
-      { label: 'Transcrição de áudio', free: '100/mês', pro: 'Ilimitado', icon: 'mic' },
-      { label: 'OCR de documentos', free: false, pro: true, icon: 'document' },
-      { label: 'Exportar Excel (XLSX)', free: false, pro: true, icon: 'grid' },
-      { label: 'Exportar PDF', free: false, pro: true, icon: 'document-text' },
-      { label: 'Suporte por e-mail', free: true, pro: true, icon: 'mail' },
-      { label: 'Suporte prioritário', free: false, pro: true, icon: 'star' },
-    ],
+    features: PLAN_FEATURES,
   },
 };
+
+/** Recursos que só o PRO tem, para a lista "o que você ganha". */
+export function getProOnlyFeatures(): PlanFeature[] {
+  return PLAN_FEATURES.filter((f) => f.free !== true);
+}
 
 // URLs e links para Google Play Store
 export const SUBSCRIPTION_CONFIG = {
@@ -121,10 +115,11 @@ O Kilun é a solução completa para controle financeiro pessoal com inteligênc
 
 💎 **KILUN PRO - R$ 3,00/mês**
 • ${PLANS.PRO.tokenLimit.toLocaleString('pt-BR')} tokens de IA por mês (uso intensivo)
-• Importação por foto, texto e áudio ilimitados
+• Importação por áudio
 • OCR de documentos (boleto, nota fiscal, etc.)
+• Previsão financeira com IA
 • Exportação em Excel e PDF
-• Suporte prioritário
+• 30 backups na nuvem
 
 🔒 **SEGURANÇA E PRIVACIDADE**
 • Seus dados são criptografados e armazenados com segurança
@@ -143,12 +138,11 @@ Perfeito para:
   
   // Textos de assinatura para Google Play Billing
   subscriptionTitle: 'Kilun Pro',
-  subscriptionDescription: 'Recursos avançados com IA ilimitada e exportação premium',
+  subscriptionDescription: 'OCR, áudio, previsão com IA e exportação premium',
   subscriptionPrice: 'R$ 3,00/mês',
   
   // Textos de conformidade
   autoRenewing: 'Assinatura recorrente. Cancela a qualquer momento.',
-  freeTrial: 'Experimente gratuitamente por 7 dias.',
   cancellation: 'Cancele a qualquer momento nas configurações do Google Play.',
   
   // Aviso de tokens

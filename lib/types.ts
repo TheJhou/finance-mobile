@@ -20,10 +20,42 @@ export interface UsageInfo {
   resetsAt: string;
 }
 
+/**
+ * - ACTIVE: renova automaticamente
+ * - CANCELED_PENDING_END: cancelada na Google Play, PRO até o fim do período
+ * - GRACE: renovação com pagamento pendente (a Google mantém o acesso por alguns dias)
+ */
+export type SubscriptionState = "ACTIVE" | "CANCELED_PENDING_END" | "GRACE";
+
+export interface SubscriptionDetails {
+  state: SubscriptionState;
+  provider: string | null;
+  currentPeriodEnd: string | null;
+  autoRenewing: boolean;
+}
+
+/** O que o plano libera — mesma regra usada pelo backend para bloquear. */
+export interface Entitlements {
+  textAnalysis: boolean;
+  ocr: boolean;
+  transcribe: boolean;
+  extractPhoto: boolean;
+  extractText: boolean;
+  aiForecast: boolean;
+  premiumExport: boolean;
+  cloudBackupLimit: number;
+}
+
 export interface SubscriptionStatus {
   plan: PlanInfo;
   usage: UsageInfo;
+  /** Só para PRO; ausente em backends antigos */
+  subscription?: SubscriptionDetails | null;
+  entitlements?: Entitlements;
+  backups?: { used: number; limit: number };
   upgradeUrl?: string;
+  /** Sem conexão: dados padrão do plano FREE, não o plano real do usuário */
+  offline?: boolean;
 }
 
 export interface Category {
