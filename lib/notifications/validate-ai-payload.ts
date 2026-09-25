@@ -11,7 +11,7 @@ export const VALID_PAYMENT_METHODS = [
   "OTHER",
 ] as const;
 
-export type ValidateOrigin = "processNotification" | "retryPendingAiEnrichment";
+export type ValidateOrigin = "processNotification" | "retryPendingAiEnrichment" | "enrichPendingNotifications";
 
 export interface ValidationResult {
   valid: boolean;

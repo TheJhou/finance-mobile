@@ -1,10 +1,20 @@
 import { NativeModule, requireNativeModule } from "expo";
-import type { BankNotificationsModuleEvents } from "./BankNotifications.types";
+import type { BankNotificationsModuleEvents, InboxItem, ListenerStatus } from "./BankNotifications.types";
 
 declare class BankNotificationsModule extends NativeModule<BankNotificationsModuleEvents> {
   isPermissionGranted(): boolean;
   isListenerConnected(): boolean;
-  requestRebind(): void;
+  getListenerStatus(): ListenerStatus;
+  getMonitoredPackages(): string[];
+  /** Pedido leve de reconexão ao sistema */
+  requestRebind(): boolean;
+  /** Reparo forçado (desliga e religa o serviço). Só por ação do usuário. */
+  repairConnection(): boolean;
+  getInbox(limit: number): Promise<InboxItem[]>;
+  ackInbox(ids: number[]): Promise<void>;
+  /** Conta uma tentativa malsucedida de gravar os itens (vão para o fim da fila) */
+  failInbox(ids: number[]): Promise<void>;
+  clearInbox(): Promise<void>;
   openPermissionSettings(): void;
   isBatteryOptimizationIgnored(): boolean;
   requestIgnoreBatteryOptimizations(): boolean;

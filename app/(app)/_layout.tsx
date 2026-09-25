@@ -183,6 +183,7 @@ export default function AppLayout() {
       <Tabs.Screen name="terms" options={{ href: null }} />
       <Tabs.Screen name="forgot-password" options={{ href: null }} />
       <Tabs.Screen name="health" options={{ href: null }} />
+      <Tabs.Screen name="notification-diagnostics" options={{ href: null }} />
     </Tabs>
     </View>
   );

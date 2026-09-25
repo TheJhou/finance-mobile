@@ -5,6 +5,7 @@ import { wipeUserData } from "@/lib/db";
 import { deleteProfilePhoto } from "@/lib/profile-photo";
 import { resetMonthStartDayCache } from "@/lib/settings";
 import { resetTokenLimitStatus } from "@/lib/token-limit";
+import BankNotifications from "@/modules/bank-notifications";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import * as SecureStore from "expo-secure-store";
@@ -46,6 +47,8 @@ export async function clearLocalUserData(): Promise<void> {
     ["foto de perfil", () => deleteProfilePhoto()],
     ["AsyncStorage", () => AsyncStorage.multiRemove(USER_ASYNC_STORAGE_KEYS)],
     ["notificações agendadas", () => Notifications.cancelAllScheduledNotificationsAsync()],
+    // Notificações de banco capturadas e ainda não gravadas pertencem à conta que sai
+    ["fila de notificações bancárias", () => BankNotifications?.clearInbox()],
     ["dono dos dados", () => SecureStore.deleteItemAsync(LOCAL_DATA_OWNER_KEY)],
   ];
   for (const [label, step] of steps) {
