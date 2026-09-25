@@ -74,8 +74,9 @@ class BankNotificationsModule : Module() {
     }
 
     AsyncFunction("clearInbox") {
-      val context = appContext.reactContext ?: return@AsyncFunction
+      val context = appContext.reactContext ?: return@AsyncFunction null
       BankInbox.get(context).clear()
+      null
     }
 
     Function("openPermissionSettings") {
