@@ -162,15 +162,9 @@ export default function AppLayout() {
           ),
         }}
       />
-      <Tabs.Screen
-        name="plan"
-        options={{
-          title: "Plano",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="diamond-outline" size={size} color={color} />
-          ),
-        }}
-      />
+      {/* Fora da barra de abas: acessível pelo menu lateral (Assinatura) e pelo aviso de limite */}
+      <Tabs.Screen name="plan" options={{ href: null }} />
+      <Tabs.Screen name="goals" options={{ href: null }} />
       <Tabs.Screen name="account" options={{ href: null }} />
       <Tabs.Screen name="security" options={{ href: null }} />
       <Tabs.Screen name="preferences" options={{ href: null }} />

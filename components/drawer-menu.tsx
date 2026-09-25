@@ -90,6 +90,13 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail, prof
       color: colors.primary,
     },
     {
+      icon: "flag-outline",
+      label: "Metas",
+      sublabel: "Objetivos e depósitos",
+      route: "/goals",
+      color: colors.success,
+    },
+    {
       icon: "shield-outline",
       label: "Segurança",
       sublabel: "Biometria, senha e sessões",
@@ -106,7 +113,7 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail, prof
     {
       icon: "lock-closed-outline",
       label: "Dados e Privacidade",
-      sublabel: "LGPD e exclusão de conta",
+      sublabel: "Política, LGPD e exclusão de conta",
       route: "/data-privacy",
       color: colors.danger,
     },
@@ -123,13 +130,6 @@ export default function DrawerMenu({ visible, onClose, userName, userEmail, prof
       sublabel: "Gerencie seus backups",
       route: "/backup",
       color: colors.warning,
-    },
-    {
-      icon: "shield-checkmark-outline",
-      label: "Política de Privacidade",
-      sublabel: "LGPD e direitos",
-      route: "/privacy",
-      color: colors.success,
     },
     {
       icon: "diamond-outline",
