@@ -5,6 +5,8 @@ module.exports = {
   roots: ["<rootDir>"],
   modulePaths: ["<rootDir>"],
   moduleNameMapper: {
+    // Antes do alias genérico "@/": o módulo nativo não carrega fora do Android
+    "^@/modules/bank-notifications$": "<rootDir>/__mocks__/bank-notifications.ts",
     "^@/(.*)$": "<rootDir>/$1",
     "^expo-sqlite$": "<rootDir>/__mocks__/expo-sqlite.ts",
     "^expo-secure-store$": "<rootDir>/__mocks__/expo-secure-store.ts",

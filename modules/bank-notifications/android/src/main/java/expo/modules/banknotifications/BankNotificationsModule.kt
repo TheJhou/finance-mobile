@@ -2,7 +2,6 @@ package expo.modules.banknotifications
 
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -14,7 +13,7 @@ class BankNotificationsModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("BankNotifications")
 
-    Events("onNotification", "onConnectionChange")
+    Events("onInboxChanged", "onConnectionChange")
 
     Function("isPermissionGranted") {
       val context = appContext.reactContext ?: return@Function false
@@ -31,10 +30,52 @@ class BankNotificationsModule : Module() {
       BankNotificationListenerService.isConnected
     }
 
+    Function("getListenerStatus") {
+      mapOf(
+        "connected" to BankNotificationListenerService.isConnected,
+        "lastConnectedAt" to BankNotificationListenerService.lastConnectedAt,
+        "lastDisconnectedAt" to BankNotificationListenerService.lastDisconnectedAt,
+        "lastNotificationAt" to BankNotificationListenerService.lastNotificationAt,
+      )
+    }
+
+    Function("getMonitoredPackages") {
+      val context = appContext.reactContext ?: return@Function emptyList<String>()
+      BankNotificationListenerService.monitoredPackages(context)
+    }
+
     Function("requestRebind") {
       val context = appContext.reactContext ?: return@Function false
       BankNotificationListenerService.requestRebind(context)
       true
+    }
+
+    Function("repairConnection") {
+      val context = appContext.reactContext ?: return@Function false
+      BankNotificationListenerService.repairConnection(context)
+      true
+    }
+
+    // ── Fila de entrada: o JS lê, grava no banco do app e só então confirma ──
+
+    AsyncFunction("getInbox") { limit: Int ->
+      val context = appContext.reactContext ?: return@AsyncFunction emptyList<Map<String, Any?>>()
+      BankInbox.get(context).pending(limit.coerceIn(1, 200))
+    }
+
+    AsyncFunction("ackInbox") { ids: List<Double> ->
+      val context = appContext.reactContext ?: return@AsyncFunction
+      BankInbox.get(context).ack(ids.map { it.toLong() })
+    }
+
+    AsyncFunction("failInbox") { ids: List<Double> ->
+      val context = appContext.reactContext ?: return@AsyncFunction
+      BankInbox.get(context).fail(ids.map { it.toLong() })
+    }
+
+    AsyncFunction("clearInbox") {
+      val context = appContext.reactContext ?: return@AsyncFunction
+      BankInbox.get(context).clear()
     }
 
     Function("openPermissionSettings") {
@@ -68,31 +109,32 @@ class BankNotificationsModule : Module() {
 
     OnStartObserving {
       val weakModule = WeakReference(this@BankNotificationsModule)
-      BankNotificationListenerService.listener = { payload ->
-        weakModule.get()?.sendEvent("onNotification", payload)
+      BankNotificationListenerService.inboxListener = {
+        weakModule.get()?.sendEvent("onInboxChanged", emptyMap<String, Any?>())
       }
       BankNotificationListenerService.connectionCallback = { connected ->
         weakModule.get()?.sendEvent("onConnectionChange", mapOf("connected" to connected))
       }
 
-      // Drain any notifications that were buffered while JS wasn't observing
+      // Itens capturados enquanto o JS não observava: avisa para o JS ler a fila
       val context = appContext.reactContext
-      if (context != null) {
-        val buffered = BankNotificationListenerService.drainBufferedNotifications(context)
-        for (payload in buffered) {
-          weakModule.get()?.sendEvent("onNotification", payload)
-        }
+      val pending = try {
+        if (context != null) BankInbox.get(context).count() else 0
+      } catch (e: Throwable) {
+        Log.e("BankNotifications", "Falha ao contar a fila de entrada", e)
+        0
+      }
+      if (pending > 0) {
+        weakModule.get()?.sendEvent("onInboxChanged", emptyMap<String, Any?>())
       }
 
-      // If the service is already connected, notify JS immediately so it
-      // doesn't wait for the first health check to discover the state.
       if (BankNotificationListenerService.isConnected) {
         weakModule.get()?.sendEvent("onConnectionChange", mapOf("connected" to true))
       }
     }
 
     OnStopObserving {
-      BankNotificationListenerService.listener = null
+      BankNotificationListenerService.inboxListener = null
       BankNotificationListenerService.connectionCallback = null
     }
   }

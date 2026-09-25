@@ -1,3 +1,4 @@
+import { resetBankNotificationsMock } from "@/__mocks__/bank-notifications";
 import { resetNetInfoMock } from "@/__mocks__/@react-native-community/netinfo";
 import { resetFileSystemMock } from "@/__mocks__/expo-file-system";
 import { resetSecureStoreMock } from "@/__mocks__/expo-secure-store";
@@ -11,4 +12,5 @@ beforeEach(() => {
   resetSecureStoreMock();
   resetFileSystemMock();
   resetNetInfoMock();
+  resetBankNotificationsMock();
 });

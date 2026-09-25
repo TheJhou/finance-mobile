@@ -162,7 +162,7 @@ export function resetDbCache(): void {
   dbPromise = null;
 }
 
-const CURRENT_DB_VERSION = 4;
+const CURRENT_DB_VERSION = 5;
 
 async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
   await db.execAsync(`
@@ -439,6 +439,26 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
     `);
   }
 
+  if (currentVersion < 5) {
+    // Registro de toda notificação de banco capturada e do que aconteceu com ela.
+    // content_hash vem do módulo nativo e garante que cada uma é processada uma vez.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS notification_log (
+        id TEXT PRIMARY KEY,
+        content_hash TEXT NOT NULL UNIQUE,
+        package_name TEXT NOT NULL,
+        raw_text TEXT NOT NULL,
+        post_time INTEGER NOT NULL,
+        outcome TEXT NOT NULL CHECK(outcome IN ('QUEUED','IGNORED','UNRECOGNIZED','DUPLICATE')),
+        reason TEXT,
+        queue_id TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_notification_log_outcome ON notification_log(outcome, created_at);
+    `);
+  }
+
   await db.execAsync(`PRAGMA user_version = ${CURRENT_DB_VERSION}`);
 
   await seedDefaultCategories(db);
@@ -475,8 +495,6 @@ async function cleanupOldNotificationQueue(db: SQLite.SQLiteDatabase): Promise<v
   await db.execAsync(`
     DELETE FROM notification_queue
     WHERE status IN ('REJECTED', 'APPROVED') AND created_at < datetime('now', '-30 days');
-    DELETE FROM notification_queue
-    WHERE status = 'PENDING_AI' AND ai_retry_count >= 3 AND created_at < datetime('now', '-7 days');
     DELETE FROM sync_queue
     WHERE status IN ('SYNCED', 'FAILED') AND created_at < datetime('now', '-30 days');
   `);
@@ -551,6 +569,7 @@ export async function wipeUserData(): Promise<void> {
       DELETE FROM categories;
       DELETE FROM settings;
       DELETE FROM notification_queue;
+      DELETE FROM notification_log;
       DELETE FROM processed_notifications;
       DELETE FROM sync_queue;
       DELETE FROM backup_metadata;

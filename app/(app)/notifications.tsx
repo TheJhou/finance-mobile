@@ -1,11 +1,12 @@
 import { isValidPassword, PASSWORD_HINT, PASSWORD_RULE_MESSAGE } from "@/lib/password-rules";
 import { suspendAutoLockFor, withoutAutoLock } from "@/lib/biometric";
+import { UnrecognizedNotifications } from "@/components/notifications/unrecognized-notifications";
 import { Button } from "@/components/ui/button";
 import { isAuthenticated, login, register } from "@/lib/auth";
 import { ApiError, analyzeText, ocrDocument, transcribeAudio } from "@/lib/backend";
 import {
+    approveNotification,
     getPendingApprovalNotifications,
-    markApproved,
     markRejected,
     type NotificationQueueItem,
 } from "@/lib/notification-queue";
@@ -190,10 +191,9 @@ export default function NotificationsScreen() {
         bankOrigin: item.bank || null,
       };
 
-      const created = await createTransaction(txData);
-
-      await markApproved(item.id);
+      const created = await approveNotification(item.id, () => createTransaction(txData));
       await loadPending();
+      if (!created) return; // já aprovada ou descartada (toque duplo)
       showToast('success', `Transação aprovada: ${item.description}`);
 
       const syncPayload: SyncPayload = {
@@ -651,6 +651,14 @@ export default function NotificationsScreen() {
               <Text style={styles.statusBtnText}>Ativar</Text>
             </Pressable>
           )}
+          {granted && moduleAvailable && (
+            <Pressable
+              style={[styles.statusBtn, { backgroundColor: colors.surfaceElevated }]}
+              onPress={() => router.push("/notification-diagnostics" as any)}
+            >
+              <Text style={[styles.statusBtnText, { color: colors.textPrimary }]}>Diagnóstico</Text>
+            </Pressable>
+          )}
         </View>
 
         {granted && connected && moduleAvailable && BankNotifications && !BankNotifications.isBatteryOptimizationIgnored() && (
@@ -692,7 +700,8 @@ export default function NotificationsScreen() {
               style={[styles.statusBtn, { backgroundColor: colors.primary }]}
               onPress={async () => {
                 try {
-                  BankNotifications?.requestRebind();
+                  // Ação do usuário: pode usar o reparo forçado (religa o serviço)
+                  BankNotifications?.repairConnection();
                   showToast("success", "Tentando reconectar...");
                   let reconnected = false;
                   for (let i = 0; i < 3; i++) {
@@ -912,6 +921,8 @@ export default function NotificationsScreen() {
             />
           )}
         </View>
+
+        <UnrecognizedNotifications onToast={showToast} />
       </ScrollView>
 
       {/* Toast feedback */}
