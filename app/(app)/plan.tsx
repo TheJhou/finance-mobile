@@ -1,490 +1,224 @@
-import { isValidPassword, PASSWORD_HINT, PASSWORD_RULE_MESSAGE } from "@/lib/password-rules";
+import { AccountRow } from "@/components/account/account-row";
+import { AccountSection } from "@/components/account/account-section";
+import { RowSeparator } from "@/components/account/row-separator";
+import { ScreenLayout } from "@/components/account/screen-layout";
+import { SubscriptionHeroCard } from "@/components/subscription/subscription-hero-card";
+import { UsageSection } from "@/components/subscription/usage-section";
 import { Button } from "@/components/ui/button";
 import { useAppDialog } from "@/hooks/use-app-dialog";
-import { isAuthenticated, login, register } from "@/lib/auth";
-import { onPurchaseEvent, requestProSubscription } from "@/lib/iap";
-import { clearProCache, getSubscriptionStatus } from "@/lib/subscription";
-import { PLANS, PLAY_STORE_TEXTS, formatPrice, getTokenDisplayText } from "@/lib/subscription-plans";
-import { colors, radius, spacing } from "@/lib/theme";
+import { useSubscription } from "@/hooks/use-subscription";
+import type { PurchaseEvent } from "@/lib/iap";
+import { describeSubscription, getCancelDialogMessage } from "@/lib/subscription-display";
+import { PLANS, PLAY_STORE_TEXTS, getProOnlyFeatures } from "@/lib/subscription-plans";
+import { colors, spacing } from "@/lib/theme";
 import { useThemedStyles } from "@/lib/theme-context";
-import { handleTokenLimitError, resetTokenLimitStatus } from "@/lib/token-limit";
-import type { SubscriptionStatus } from "@/lib/types";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import {
-    ActivityIndicator,
-    Modal,
-    Pressable,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
+import { useCallback } from "react";
+import { ActivityIndicator, RefreshControl, StyleSheet, Text, View } from "react-native";
 
-export default function PlanScreen() {
+export default function SubscriptionScreen() {
   const router = useRouter();
   const styles = useThemedStyles(createStyles);
-  const [loggedIn, setLoggedIn] = useState(false);
-  const [status, setStatus] = useState<SubscriptionStatus | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { alert, confirm, dialog } = useAppDialog();
 
-  // Auth modal
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
-  const [authName, setAuthName] = useState("");
-  const [authEmail, setAuthEmail] = useState("");
-  const [authPassword, setAuthPassword] = useState("");
-  const [authLoading, setAuthLoading] = useState(false);
-  const [purchasing, setPurchasing] = useState(false);
-  const { alert, dialog } = useAppDialog();
-
-  const fetchStatus = useCallback(async () => {
-    clearProCache();
-    try {
-      const authed = await isAuthenticated();
-      setLoggedIn(authed);
-      if (authed) {
-        const s = await getSubscriptionStatus();
-        setStatus(s);
-        setError(null); // Clear any previous errors
-      } else {
-        setStatus(null);
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao carregar";
-      if (msg.toLowerCase().includes("sessão expirada") || msg.toLowerCase().includes("faça login")) {
-        setLoggedIn(false);
-        setStatus(null);
-      } else if (handleTokenLimitError(err)) {
-        setError("Limite de tokens atingido. Veja seu plano atual.");
-      } else {
-        setError(msg);
-        console.error("[Plan] Error fetching subscription status:", err);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchStatus();
-    }, [fetchStatus])
-  );
-
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    resetTokenLimitStatus();
-    fetchStatus();
-  };
-
-  const handleAuth = async () => {
-    if (!authEmail.trim() || !authPassword.trim()) {
-      alert("Erro", "Preencha todos os campos", { variant: "danger" });
-      return;
-    }
-    if (isRegister && !authName.trim()) {
-      alert("Erro", "Preencha seu nome", { variant: "danger" });
-      return;
-    }
-    if (isRegister && !isValidPassword(authPassword.trim())) {
-      alert("Erro", PASSWORD_RULE_MESSAGE, { variant: "danger" });
-      return;
-    }
-    setAuthLoading(true);
-    try {
-      if (isRegister) {
-        await register(authName.trim(), authEmail.trim(), authPassword.trim());
-      } else {
-        await login(authEmail.trim(), authPassword.trim());
-      }
-      setLoggedIn(true);
-      setShowAuthModal(false);
-      setAuthName("");
-      setAuthEmail("");
-      setAuthPassword("");
-      clearProCache();
-      fetchStatus();
-    } catch (err) {
-      alert("Erro", err instanceof Error ? err.message : "Falha na autenticação", { variant: "danger" });
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
-  // A compra é validada globalmente (lib/iap → startGlobalPurchaseHandling);
-  // aqui só exibimos o resultado.
-  useEffect(() => {
-    return onPurchaseEvent((event) => {
-      setPurchasing(false);
+  const showPurchaseResult = useCallback(
+    (event: PurchaseEvent) => {
       switch (event.type) {
         case "activated":
-          alert("Sucesso!", "Assinatura PRO ativada com sucesso!", { variant: "success" });
-          fetchStatus();
+          alert("Assinatura ativada", "Bem-vindo ao Kilun Pro!", { variant: "success" });
           break;
         case "pending":
           alert(
             "Pagamento pendente",
-            "Sua assinatura será ativada automaticamente assim que o pagamento for confirmado pela Google Play.",
+            "Sua assinatura será ativada automaticamente assim que a Google Play confirmar o pagamento.",
             { variant: "warning" }
           );
           break;
         case "error":
           alert("Erro na compra", event.message, { variant: "danger" });
           break;
-        case "cancelled":
-          break;
       }
-    });
-  }, [alert, fetchStatus]);
+    },
+    [alert]
+  );
 
-  const handleUpgrade = async () => {
-    try {
-      setPurchasing(true);
-      await requestProSubscription();
-    } catch (err) {
-      setPurchasing(false);
-      const msg = err instanceof Error ? err.message : "Erro ao iniciar compra";
-      if (!msg.toLowerCase().includes("cancel") && !msg.toLowerCase().includes("user")) {
-        alert("Erro", msg, { variant: "danger" });
-      }
+  const { status, loading, refreshing, error, price, purchasing, restoring, refresh, subscribe, openInPlayStore, restore } =
+    useSubscription(showPurchaseResult);
+
+  const priceLabel = `${price ?? PLANS.PRO.priceDisplay}/mês`;
+
+  const handleCancel = () => {
+    if (!status) return;
+    confirm("Cancelar assinatura", getCancelDialogMessage(status), {
+      variant: "danger",
+      confirmText: "Ir para a Google Play",
+      cancelText: "Manter assinatura",
+      onConfirm: () => void openInPlayStore(),
+    });
+  };
+
+  const handleRestore = async () => {
+    const result = await restore();
+    switch (result.type) {
+      case "restored":
+        alert("Assinatura restaurada", "Seu Kilun Pro foi vinculado a esta conta.", { variant: "success" });
+        break;
+      case "pending":
+        alert("Pagamento pendente", "A assinatura será ativada quando a Google Play confirmar o pagamento.", { variant: "warning" });
+        break;
+      case "none":
+        alert("Nenhuma assinatura encontrada", "Não há assinatura do Kilun Pro na conta Google deste aparelho.");
+        break;
+      case "error":
+        alert("Não foi possível restaurar", result.message, { variant: "danger" });
+        break;
     }
   };
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.safe} edges={["left", "right"]}>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
-      </SafeAreaView>
+      <ScreenLayout title="Assinatura">
+        <ActivityIndicator color={colors.primary} size="large" style={styles.loading} />
+      </ScreenLayout>
     );
   }
 
-  const usagePercent = status ? Math.min(100, Math.round((status.usage.used / status.usage.limit) * 100)) : 0;
-  const isPro = status?.plan.code === "PRO";
-  const resetDate = status?.usage.resetsAt
-    ? new Date(status.usage.resetsAt).toLocaleDateString("pt-BR", { day: "2-digit", month: "long" })
-    : "";
-  const usageBarColor = getUsageBarColor(usagePercent);
+  if (!status) {
+    return (
+      <ScreenLayout title="Assinatura">
+        <View style={styles.errorBox}>
+          <Ionicons name="cloud-offline-outline" size={32} color={colors.textMuted} />
+          <Text style={styles.errorText}>{error ?? "Não foi possível carregar a assinatura."}</Text>
+          <Button title="Tentar de novo" onPress={refresh} variant="secondary" />
+        </View>
+      </ScreenLayout>
+    );
+  }
+
+  const headline = describeSubscription(status);
+  const state = status.subscription?.state;
+  const documents = (
+    <>
+      <RowSeparator />
+      <AccountRow icon="document-outline" iconColor={colors.primary} label="Termos de Uso" onPress={() => router.push("/terms" as any)} />
+      <RowSeparator />
+      <AccountRow
+        icon="shield-checkmark-outline"
+        iconColor={colors.success}
+        label="Política de Privacidade"
+        onPress={() => router.push("/privacy" as any)}
+      />
+    </>
+  );
+  const restoreRow = (
+    <AccountRow
+      icon="refresh-outline"
+      iconColor={colors.info}
+      label={restoring ? "Restaurando..." : "Restaurar compra"}
+      subtitle="Trocou de aparelho ou reinstalou o app"
+      onPress={restoring ? undefined : () => void handleRestore()}
+    />
+  );
 
   return (
-    <SafeAreaView style={styles.safe} edges={["left", "right"]}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      >
-        <View>
-          <Text style={styles.title}>Meu Plano</Text>
-          <Text style={styles.subtitle}>Gerencie sua assinatura e uso de IA</Text>
-        </View>
+    <ScreenLayout title="Assinatura" refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} />}>
+      <SubscriptionHeroCard headline={headline} priceLabel={priceLabel} />
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+      {status.offline ? (
+        <Button title="Tentar de novo" onPress={refresh} variant="secondary" />
+      ) : (
+        <UsageSection status={status} />
+      )}
 
-        {/* Show fallback indicator when API is unavailable but we have default data */}
-        {status && !error && status.plan.code === "FREE" && status.usage.used === 0 && (
-          <View style={styles.fallbackCard}>
-            <Ionicons name="information-circle" size={16} color={colors.textMuted} />
-            <Text style={styles.fallbackText}>
-              Usando dados offline. Conecte-se à internet para ver seu plano atual.
+      {!headline.isPro && !status.offline && (
+        <AccountSection title={`Kilun Pro · ${priceLabel}`}>
+          {getProOnlyFeatures().map((feature) => (
+            <AccountRow
+              key={feature.label}
+              icon="checkmark-circle"
+              iconColor={colors.success}
+              label={feature.label}
+              value={typeof feature.pro === "string" ? feature.pro : undefined}
+              chevron={false}
+            />
+          ))}
+          <View style={styles.subscribe}>
+            <Button title="Assinar Kilun Pro" onPress={() => void subscribe()} loading={purchasing} />
+            <Text style={styles.legal}>
+              {PLAY_STORE_TEXTS.autoRenewing} Cobrança mensal pela Google Play; cancele quando quiser nas assinaturas da
+              Google Play.
             </Text>
           </View>
-        )}
+        </AccountSection>
+      )}
 
-        {loggedIn ? (
-          <>
-            {/* Plan card */}
-            <View style={[styles.planCard, isPro && styles.planCardPro]}>
-              <View style={styles.planHeader}>
-                <Ionicons
-                  name={isPro ? "diamond" : "leaf-outline"}
-                  size={24}
-                  color={isPro ? "#fbbf24" : colors.primaryLight}
-                />
-                <Text style={styles.planName}>{status?.plan.name ?? "Grátis"}</Text>
-              </View>
-              <Text style={styles.planLimit}>
-                {status?.plan.tokenLimit.toLocaleString("pt-BR")} tokens/mês
-              </Text>
-            </View>
-
-            {/* Usage */}
-            {status && (
-              <View style={styles.card}>
-                <Text style={styles.sectionTitle}>Uso mensal</Text>
-
-                <View style={styles.barBg}>
-                  <View
-                    style={[
-                      styles.barFill,
-                      {
-                        width: `${usagePercent}%`,
-                        backgroundColor: usageBarColor,
-                      },
-                    ]}
-                  />
-                </View>
-
-                <View style={styles.usageRow}>
-                  <Text style={styles.usageText}>
-                    {status.usage.used.toLocaleString("pt-BR")} / {status.usage.limit.toLocaleString("pt-BR")}
-                  </Text>
-                  <Text style={styles.usagePercent}>{usagePercent}%</Text>
-                </View>
-
-                <Text style={styles.resetText}>
-                  Restam {status.usage.remaining.toLocaleString("pt-BR")} tokens. Renova em {resetDate}.
-                </Text>
-              </View>
-            )}
-
-            {/* Upgrade */}
-            {!isPro && (
-              <View style={[styles.card, { borderColor: PLANS.PRO.color, borderWidth: 1.5 }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                  <Ionicons name="diamond" size={22} color={PLANS.PRO.color} />
-                  <Text style={styles.cardTitle}>{PLAY_STORE_TEXTS.subscriptionTitle}</Text>
-                </View>
-                <Text style={styles.cardText}>
-                  {PLAY_STORE_TEXTS.subscriptionDescription}
-                </Text>
-                <Text style={[styles.cardText, { fontWeight: "700", color: PLANS.PRO.color, fontSize: 20 }]}>
-                  {formatPrice(PLANS.PRO.price)}/mês
-                </Text>
-                <Text style={styles.cardText}>
-                  {getTokenDisplayText(PLANS.PRO.tokenLimit)} tokens/mês • IA ilimitada
-                </Text>
-                <Button title="Assinar agora" onPress={handleUpgrade} loading={purchasing} />
-                <Text style={styles.cardTextSmall}>
-                  {PLAY_STORE_TEXTS.autoRenewing}
-                </Text>
-              </View>
-            )}
-          </>
-        ) : (
-          <AuthPromptCard
-            onLoginPress={() => {
-              setIsRegister(false);
-              setShowAuthModal(true);
-            }}
-            onRegisterPress={() => {
-              setIsRegister(true);
-              setShowAuthModal(true);
-            }}
-            styles={styles}
+      {headline.isPro ? (
+        <AccountSection title="Sua assinatura">
+          {state === "GRACE" && (
+            <>
+              <AccountRow
+                icon="card-outline"
+                iconColor={colors.danger}
+                label="Atualizar forma de pagamento"
+                subtitle="Na Google Play, para não perder o Pro"
+                onPress={() => void openInPlayStore()}
+              />
+              <RowSeparator />
+            </>
+          )}
+          <AccountRow
+            icon="logo-google-playstore"
+            iconColor={colors.primary}
+            label="Gerenciar na Google Play"
+            subtitle="Forma de pagamento, recibos e renovação"
+            onPress={() => void openInPlayStore()}
           />
-        )}
-      </ScrollView>
+          <RowSeparator />
+          {restoreRow}
+          {documents}
+        </AccountSection>
+      ) : (
+        <AccountSection title="Ajuda">
+          {restoreRow}
+          {documents}
+        </AccountSection>
+      )}
 
-      {/* Auth Modal */}
-      <Modal visible={showAuthModal} animationType="slide" onRequestClose={() => setShowAuthModal(false)}>
-        <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
-          <View style={styles.modalHeader}>
-            <Pressable onPress={() => setShowAuthModal(false)} hitSlop={10}>
-              <Ionicons name="close" size={26} color={colors.textPrimary} />
-            </Pressable>
-            <Text style={styles.modalTitle}>{isRegister ? "Criar conta" : "Login"}</Text>
-            <View style={{ width: 26 }} />
-          </View>
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            {isRegister && (
-              <>
-                <Text style={styles.modalLabel}>Nome</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  value={authName}
-                  onChangeText={setAuthName}
-                  placeholder="Seu nome"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                />
-              </>
-            )}
-            <Text style={styles.modalLabel}>E-mail</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={authEmail}
-              onChangeText={setAuthEmail}
-              placeholder="seu@email.com"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
+      {headline.isPro && (
+        <AccountSection title="Cancelamento">
+          {state === "CANCELED_PENDING_END" ? (
+            <AccountRow
+              icon="refresh-circle-outline"
+              iconColor={colors.success}
+              label="Reativar assinatura"
+              subtitle="Continue com o Pro depois do fim do período"
+              onPress={() => void openInPlayStore()}
             />
-            <Text style={styles.modalLabel}>Senha</Text>
-            <TextInput
-              style={styles.modalInput}
-              value={authPassword}
-              onChangeText={setAuthPassword}
-              placeholder={isRegister ? PASSWORD_HINT : "Sua senha"}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
+          ) : (
+            <AccountRow
+              icon="close-circle-outline"
+              iconColor={colors.danger}
+              label="Cancelar assinatura"
+              subtitle="Feito na Google Play; o Pro continua até o fim do período pago"
+              danger
+              onPress={handleCancel}
             />
-            <Button
-              title={isRegister ? "Criar conta" : "Entrar"}
-              onPress={handleAuth}
-              loading={authLoading}
-            />
-            {!isRegister && (
-              <Pressable
-                style={{ alignItems: "center", paddingVertical: spacing.xs }}
-                onPress={() => {
-                  setShowAuthModal(false);
-                  router.push("/forgot-password" as any);
-                }}
-              >
-                <Text style={{ color: colors.primary, fontSize: 13, fontWeight: "600" }}>
-                  Esqueci minha senha
-                </Text>
-              </Pressable>
-            )}
-            <Pressable
-              onPress={() => setIsRegister(!isRegister)}
-              style={{ alignItems: "center", paddingVertical: spacing.md }}
-            >
-              <Text style={{ color: colors.primary, fontSize: 14 }}>
-                {isRegister ? "Já tem conta? Entrar" : "Não tem conta? Criar"}
-              </Text>
-            </Pressable>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
+          )}
+        </AccountSection>
+      )}
+
       {dialog}
-    </SafeAreaView>
-  );
-}
-
-function getUsageBarColor(usagePercent: number) {
-  if (usagePercent > 90) return colors.danger;
-  if (usagePercent > 70) return colors.warning;
-  return colors.primary;
-}
-
-function AuthPromptCard({
-  onLoginPress,
-  onRegisterPress,
-  styles,
-}: Readonly<{
-  onLoginPress: () => void;
-  onRegisterPress: () => void;
-  styles: ReturnType<typeof createStyles>;
-}>) {
-  return (
-    <View style={styles.card}>
-      <Ionicons name="person-circle-outline" size={48} color={colors.textMuted} />
-      <Text style={styles.cardTitle}>Faça login ou crie sua conta</Text>
-      <Text style={styles.cardText}>
-        Para usar a IA e ver seu plano, entre com sua conta ou crie uma nova.
-      </Text>
-      <View style={{ gap: spacing.sm, width: "100%" }}>
-        <Button title="Entrar" onPress={onLoginPress} />
-        <Button title="Criar conta" variant="secondary" onPress={onRegisterPress} />
-      </View>
-    </View>
+    </ScreenLayout>
   );
 }
 
 function createStyles() {
   return StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  content: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing["3xl"] },
-  title: { fontSize: 22, fontWeight: "700", color: colors.textPrimary },
-  subtitle: { fontSize: 13, color: colors.textSecondary, marginTop: 2 },
-  error: {
-    fontSize: 13,
-    color: colors.danger,
-    backgroundColor: colors.expenseBg,
-    padding: spacing.md,
-    borderRadius: radius.md,
-  },
-  fallbackCard: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.info + "1a",
-    padding: spacing.md,
-    borderRadius: radius.md,
-    gap: spacing.sm,
-  },
-  fallbackText: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.textMuted,
-    fontStyle: "italic",
-  },
-  cardTextSmall: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textAlign: "center",
-    marginTop: spacing.sm,
-    fontStyle: "italic",
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: spacing.lg,
-    gap: spacing.md,
-    alignItems: "center",
-  },
-  cardTitle: { fontSize: 16, fontWeight: "700", color: colors.textPrimary },
-  cardText: { fontSize: 13, color: colors.textSecondary, textAlign: "center", lineHeight: 20 },
-  sectionTitle: { fontSize: 15, fontWeight: "600", color: colors.textPrimary, alignSelf: "flex-start" },
-  planCard: {
-    backgroundColor: colors.primaryDark,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    gap: spacing.sm,
-  },
-  planCardPro: { backgroundColor: colors.primaryDark },
-  planHeader: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  planName: { fontSize: 20, fontWeight: "700", color: colors.textInverse },
-  planLimit: { fontSize: 14, color: colors.primaryLight },
-  barBg: {
-    width: "100%",
-    height: 10,
-    backgroundColor: colors.border,
-    borderRadius: radius.full,
-    overflow: "hidden",
-  },
-  barFill: { height: "100%", borderRadius: radius.full },
-  usageRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    width: "100%",
-  },
-  usageText: { fontSize: 13, color: colors.textSecondary },
-  usagePercent: { fontSize: 13, fontWeight: "700", color: colors.textPrimary },
-  resetText: { fontSize: 12, color: colors.textMuted, textAlign: "center" },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  modalTitle: { fontSize: 16, fontWeight: "600", color: colors.textPrimary },
-  modalContent: { padding: spacing.lg, gap: spacing.lg, paddingBottom: spacing["3xl"] },
-  modalLabel: { fontSize: 13, fontWeight: "500", color: colors.textSecondary },
-  modalInput: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    fontSize: 15,
-    color: colors.textPrimary,
-    backgroundColor: colors.surface,
-  },
-});
+    loading: { marginTop: spacing["3xl"] },
+    errorBox: { alignItems: "center", gap: spacing.md, paddingVertical: spacing["3xl"] },
+    errorText: { fontSize: 14, color: colors.textSecondary, textAlign: "center" },
+    subscribe: { gap: spacing.sm, paddingTop: spacing.md },
+    legal: { fontSize: 11, color: colors.textMuted, textAlign: "center", lineHeight: 16 },
+  });
 }

@@ -39,9 +39,11 @@ export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
       throw error;
     }
     
-    // For network errors or other issues, return a default free plan status
+    // Sem conexão: devolve o plano FREE padrão, marcado como offline para a
+    // tela não apresentá-lo como o plano real do usuário
     console.warn("[Subscription] API unavailable, returning default free plan:", error);
     return {
+      offline: true,
       plan: {
         code: "FREE",
         name: "Grátis",
@@ -56,6 +58,19 @@ export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
       },
     };
   }
+}
+
+/**
+ * Revalida a assinatura na Google Play (ex.: o usuário voltou da tela de
+ * gerenciar/cancelar na loja) e devolve o status atualizado.
+ */
+export async function refreshSubscriptionStatus(): Promise<SubscriptionStatus> {
+  const response = await authFetch(`${BACKEND_URL}/subscription/refresh`, { method: "POST" });
+  if (!response.ok) {
+    await handleSubscriptionError(response);
+  }
+  clearProCache();
+  return response.json();
 }
 
 let cachedIsPro: boolean | null = null;

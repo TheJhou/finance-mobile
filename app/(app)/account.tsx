@@ -18,6 +18,7 @@ import { getMe } from "@/lib/backend";
 import { backupThenSignOut, signOutAndClearLocalData } from "@/lib/local-data";
 import { deleteProfilePhoto, getProfilePhotoUri, onProfilePhotoChange, saveProfilePhoto } from "@/lib/profile-photo";
 import { getSubscriptionStatus } from "@/lib/subscription";
+import { describeSubscription } from "@/lib/subscription-display";
 import { colors, radius, spacing } from "@/lib/theme";
 import { useThemedStyles } from "@/lib/theme-context";
 import type { SubscriptionStatus } from "@/lib/types";
@@ -287,6 +288,7 @@ export default function AccountScreen() {
   const buildVersion = String(Constants.expoConfig?.ios?.buildNumber ?? Constants.expoConfig?.android?.versionCode ?? "1");
 
   const isPro = subscription?.plan.code === "PRO";
+  const headline = subscription ? describeSubscription(subscription) : null;
 
   return (
     <SafeAreaView style={styles.safe} edges={["left", "right"]}>
@@ -395,54 +397,17 @@ export default function AccountScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.subscriptionPlan}>
-                  {subscription?.plan.name ?? "Grátis"}
+                  {headline?.title ?? "Plano Gratuito"}
                 </Text>
+                {/* Mesma situação da tela Assinatura (ativa, cancelada, pagamento pendente) */}
                 <Text style={styles.subscriptionStatus}>
-                  {isPro ? "Assinatura ativa" : "Plano gratuito"}
+                  {headline ? headline.detail ?? (isPro ? "Assinatura ativa" : "Plano gratuito") : "Plano gratuito"}
                 </Text>
               </View>
-            </View>
-
-            {isPro && (
-              <View style={styles.subscriptionDetails}>
-                <View style={styles.subscriptionRow}>
-                  <Text style={styles.subscriptionLabel}>Status</Text>
-                  <Text style={styles.subscriptionValue}>Ativo</Text>
-                </View>
-                <View style={styles.subscriptionRow}>
-                  <Text style={styles.subscriptionLabel}>Próxima cobrança</Text>
-                  <Text style={styles.subscriptionValue}>
-                    {subscription?.usage.resetsAt
-                      ? new Date(subscription.usage.resetsAt).toLocaleDateString("pt-BR")
-                      : "—"}
-                  </Text>
-                </View>
-                <View style={styles.subscriptionRow}>
-                  <Text style={styles.subscriptionLabel}>Tokens usados</Text>
-                  <Text style={styles.subscriptionValue}>
-                    {subscription?.usage.used.toLocaleString("pt-BR")} / {subscription?.usage.limit.toLocaleString("pt-BR")}
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            <View style={styles.benefitsList}>
-              <Text style={styles.benefitsTitle}>
-                {isPro ? "Benefícios do seu plano" : "Benefícios do Premium"}
-              </Text>
-              {(isPro
-                ? ["IA ilimitada", "Importação avançada", "Backup automático", "Suporte prioritário"]
-                : ["IA com limite mensal", "Importação básica", "Backup manual", "Suporte comunitário"]
-              ).map((benefit) => (
-                <View key={benefit} style={styles.benefitItem}>
-                  <Ionicons name={isPro ? "checkmark-circle" : "ellipse-outline"} size={16} color={isPro ? colors.success : colors.textMuted} />
-                  <Text style={styles.benefitText}>{benefit}</Text>
-                </View>
-              ))}
             </View>
 
             <Button
-              title={isPro ? "Gerenciar assinatura" : "Fazer Upgrade"}
+              title={isPro ? "Ver assinatura" : "Conhecer o Kilun Pro"}
               onPress={() => router.push("/billing" as any)}
               variant={isPro ? "secondary" : "primary"}
             />
@@ -666,45 +631,6 @@ function createStyles() {
     fontSize: 12,
     color: colors.textMuted,
     marginTop: 2,
-  },
-  subscriptionDetails: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: 6,
-  },
-  subscriptionRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-  },
-  subscriptionLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-  },
-  subscriptionValue: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.textPrimary,
-  },
-  benefitsList: {
-    gap: 6,
-  },
-  benefitsTitle: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.textMuted,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    marginBottom: 4,
-  },
-  benefitItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  benefitText: {
-    fontSize: 13,
-    color: colors.textSecondary,
   },
   syncButton: {
     flexDirection: "row",
